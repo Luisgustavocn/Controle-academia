@@ -1,9 +1,60 @@
 import { MensalidadeStatus, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
+import { logAudit } from "@/lib/audit";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { logAudit } from "@/lib/audit";
+import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
+import { buildVencimentoDate } from "@/lib/services/mensalidades";
+import { isModalidadePersonalizada } from "@/lib/services/modalidades";
+
+const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
+
+function parseMonthDayOrDate(value: unknown, competenciaRef: string, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const parsed = new Date(`${raw}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error(`${fieldName} inválida`);
+    }
+    return parsed;
+  }
+
+  const match = /^(\d{1,2})[-/](\d{1,2})$/.exec(raw);
+  if (match) {
+    const month = Number(match[1]);
+    const day = Number(match[2]);
+    if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+      throw new Error(`${fieldName} inválida`);
+    }
+    const [competenciaYearRaw, competenciaMonthRaw] = competenciaRef.split("-").map(Number);
+    const competenciaYear = Number.isInteger(competenciaYearRaw) ? competenciaYearRaw : new Date().getFullYear();
+    const competenciaMonth = Number.isInteger(competenciaMonthRaw) ? competenciaMonthRaw : new Date().getMonth() + 1;
+    const resolvedYear = month > competenciaMonth ? competenciaYear - 1 : competenciaYear;
+    return new Date(resolvedYear, month - 1, day);
+  }
+
+  throw new Error(`${fieldName} inválida. Use MM-DD`);
+}
+
+function parseStatus(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const normalized = String(value).toUpperCase() as MensalidadeStatus;
+  if (!MENSALIDADE_STATUS_VALUES.has(normalized)) {
+    throw new Error("Status de mensalidade inválido");
+  }
+  return normalized;
+}
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = requireRole(request, UserRole.FINANCEIRO);
@@ -17,34 +68,55 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return fail("Mensalidade não encontrada", 404);
   }
 
-  const status = body.status ? (String(body.status) as MensalidadeStatus) : undefined;
-  const dataPagamento = body.dataPagamento ? new Date(String(body.dataPagamento)) : undefined;
-  const valorPago = body.valorPago ? Number(body.valorPago) : Number(previous.valor);
+  let dataPagamento: Date | null | undefined;
+  let status: MensalidadeStatus | undefined;
+
+  try {
+    dataPagamento =
+      body.dataPagamento === "" ? null : parseMonthDayOrDate(body.dataPagamento, previous.competencia, "dataPagamento") ?? undefined;
+    status = parseStatus(body.status);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Dados inválidos", 400);
+  }
+
+  const statusFinal = status ?? previous.status;
+  if (statusFinal === MensalidadeStatus.PAGO && dataPagamento === undefined && !previous.dataPagamento) {
+    dataPagamento = new Date();
+  }
+
+  const aluno = await prisma.aluno.findUnique({
+    where: { id: previous.alunoId },
+    select: {
+      vencimentoDia: true,
+      modalidade: {
+        select: {
+          nome: true,
+          valorPadrao: true
+        }
+      }
+    }
+  });
+  if (!aluno) {
+    return fail("Aluno da mensalidade não encontrado", 404);
+  }
+
+  const valorCalculado = isModalidadePersonalizada(aluno.modalidade?.nome)
+    ? Number(previous.valor)
+    : Number(aluno.modalidade?.valorPadrao ?? previous.valor);
+
+  const vencimento = buildVencimentoDate(previous.competencia, aluno.vencimentoDia);
 
   const updated = await prisma.mensalidade.update({
     where: { id },
     data: {
-      valor: body.valor ? Number(body.valor) : undefined,
-      vencimento: body.vencimento ? new Date(String(body.vencimento)) : undefined,
-      status,
+      valor: valorCalculado,
+      vencimento,
       dataPagamento,
       formaPagamento: body.formaPagamento === "" ? null : (body.formaPagamento as string | undefined),
+      status,
       observacao: body.observacao === "" ? null : (body.observacao as string | undefined)
     }
   });
-
-  if (status === MensalidadeStatus.PAGO || status === MensalidadeStatus.PARCIAL) {
-    await prisma.pagamento.create({
-      data: {
-        alunoId: updated.alunoId,
-        mensalidadeId: updated.id,
-        valor: valorPago,
-        dataPagamento: dataPagamento ?? new Date(),
-        formaPagamento: String(body.formaPagamento ?? updated.formaPagamento ?? "não informado"),
-        observacao: "Registro automático via mensalidade"
-      }
-    });
-  }
 
   await logAudit({
     userId: auth.id,
@@ -55,6 +127,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     antes: previous,
     depois: updated
   });
+
+  await syncAutomaticEntriesInCaixa(true);
 
   return ok({ item: updated });
 }
@@ -79,6 +153,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     acao: "DELETE",
     antes: previous
   });
+
+  await syncAutomaticEntriesInCaixa(true);
 
   return ok({ ok: true });
 }

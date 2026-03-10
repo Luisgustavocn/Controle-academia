@@ -17,6 +17,8 @@ const MONTH_LABELS: Record<string, number> = {
   dez: 12
 };
 
+const PAID_MARKERS = new Set(["1", "x", "ok", "pago", "sim", "s", "true", "p", "pg"]);
+
 function normalizeKey(value: string) {
   return value
     .normalize("NFD")
@@ -57,6 +59,45 @@ function text(value: unknown) {
   return String(value ?? "").trim();
 }
 
+function monthCellValue(mapped: Record<string, unknown>, monthName: string, importYear: number) {
+  const keys = [
+    monthName,
+    `${monthName}2026`,
+    `${monthName}${importYear}`,
+    `${monthName}${String(importYear).slice(-2)}`
+  ];
+
+  for (const key of keys) {
+    if (mapped[key] !== undefined && mapped[key] !== null && String(mapped[key]).trim() !== "") {
+      return mapped[key];
+    }
+  }
+
+  return undefined;
+}
+
+function isPaidValue(value: unknown) {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return false;
+  if (PAID_MARKERS.has(normalized)) return true;
+  return numberOrZero(value) > 0;
+}
+
+function firstPaymentDateFromRow(mapped: Record<string, unknown>, importYear: number, dayFallback: number) {
+  for (const [monthName, monthNum] of Object.entries(MONTH_LABELS)) {
+    const paidCell = monthCellValue(mapped, monthName, importYear);
+    if (!isPaidValue(paidCell)) continue;
+
+    const baseDay = dayFallback;
+    const maxDay = new Date(importYear, monthNum, 0).getDate();
+    const day = Math.max(1, Math.min(maxDay, baseDay));
+    return new Date(importYear, monthNum - 1, day);
+  }
+
+  return null;
+}
+
 async function findOrCreateModalidade(nome: string, valorPadrao = 0) {
   if (!nome) return null;
   return prisma.modalidade.upsert({
@@ -78,10 +119,12 @@ async function upsertAluno(data: {
   status?: AlunoStatus;
   observacoes?: string;
 }) {
+  const normalizedTelefone = text(data.telefone) || "0";
+
   const existing = await prisma.aluno.findFirst({
     where: {
       nomeCompleto: data.nomeCompleto,
-      telefone: data.telefone || ""
+      telefone: normalizedTelefone
     }
   });
 
@@ -97,7 +140,9 @@ async function upsertAluno(data: {
       data: {
         modalidadeId: modalidadeId ?? existing.modalidadeId,
         vencimentoDia: data.vencimentoDia ?? existing.vencimentoDia,
+        dataInicio: data.dataInicio ?? existing.dataInicio,
         status: data.status ?? existing.status,
+        telefone: normalizedTelefone,
         observacoes: data.observacoes || existing.observacoes
       }
     });
@@ -106,7 +151,7 @@ async function upsertAluno(data: {
   return prisma.aluno.create({
     data: {
       nomeCompleto: data.nomeCompleto,
-      telefone: data.telefone || "",
+      telefone: normalizedTelefone,
       modalidadeId,
       vencimentoDia: data.vencimentoDia ?? 10,
       dataInicio: data.dataInicio ?? new Date(),
@@ -120,7 +165,31 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
   const sheet = workbook.Sheets["Musc"];
   if (!sheet) return { alunos: 0, mensalidades: 0 };
 
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+  const headerIndex = rawRows.findIndex((row) => {
+    const normalized = row.map((cell) => normalizeKey(text(cell)));
+    return normalized.includes("telefone") && normalized.some((cell) => cell.startsWith("venc"));
+  });
+  if (headerIndex < 0) return { alunos: 0, mensalidades: 0 };
+
+  const headerRow = rawRows[headerIndex] ?? [];
+  const headers = headerRow.map((cell, index) => {
+    const normalized = normalizeKey(text(cell));
+    if (normalized) return normalized;
+    return index === 0 ? "nome" : `col${index}`;
+  });
+
+  const rows = rawRows.slice(headerIndex + 1).map((row) => {
+    const mapped: Record<string, unknown> = {};
+    for (let i = 0; i < headers.length; i += 1) {
+      mapped[headers[i]] = row[i];
+    }
+    if (!mapped.nome && row[0] !== undefined && row[0] !== null) {
+      mapped.nome = row[0];
+    }
+    return mapped;
+  });
+
   let alunosCount = 0;
   let mensalidadesCount = 0;
 
@@ -133,16 +202,23 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
     const nome = text(mapped.nome || mapped.nomecompleto || mapped.aluno);
     if (!nome || ["nome", "aluno"].includes(normalizeKey(nome))) continue;
 
-    const telefone = text(mapped.telefone || mapped.fone || mapped.whatsapp);
+    const telefone = text(mapped.telefone || mapped.fone || mapped.whatsapp) || "0";
     const modalidadeNome = text(mapped.modalidade || mapped.plano || mapped.turma);
-    const vencimentoDia = Math.max(1, Math.min(31, Math.trunc(numberOrZero(mapped.vencimento || mapped.dia || 10) || 10)));
+    const vencimentoDia = Math.max(
+      1,
+      Math.min(31, Math.trunc(numberOrZero(mapped.venc || mapped.vencimento || mapped.vence || mapped.dia || 10) || 10))
+    );
+    const dataInicioFromPrimeiroPagamento = firstPaymentDateFromRow(mapped, importYear, vencimentoDia);
 
     const aluno = await upsertAluno({
       nomeCompleto: nome,
       telefone,
       modalidadeNome,
       vencimentoDia,
-      dataInicio: parseDate(mapped.datainicio || mapped.inicio),
+      dataInicio:
+        dataInicioFromPrimeiroPagamento ??
+        parseDate(mapped.datainicio || mapped.inicio) ??
+        new Date(importYear, 0, Math.min(vencimentoDia, new Date(importYear, 1, 0).getDate())),
       status: AlunoStatus.ATIVO,
       observacoes: text(mapped.observacoes || mapped.obs)
     });
@@ -150,12 +226,12 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
     alunosCount += 1;
 
     for (const [monthName, monthNum] of Object.entries(MONTH_LABELS)) {
-      const paidCell = mapped[monthName] ?? mapped[`${monthName}2026`] ?? mapped[`${monthName}${importYear}`];
+      const paidCell = monthCellValue(mapped, monthName, importYear);
       if (paidCell === undefined || paidCell === null || String(paidCell).trim() === "") continue;
 
       const valor = numberOrZero(paidCell) || 0;
       const competencia = `${importYear}-${String(monthNum).padStart(2, "0")}`;
-      const paid = ["1", "x", "ok", "pago", "sim"].includes(String(paidCell).toLowerCase()) || numberOrZero(paidCell) > 0;
+      const paid = isPaidValue(paidCell);
 
       await prisma.mensalidade.upsert({
         where: {
@@ -230,7 +306,7 @@ async function importCaixa(workbook: XLSX.WorkBook, importYear: number) {
   return { movimentos };
 }
 
-async function importDespesas(workbook: XLSX.WorkBook, sheetName: "despesa academia" | "despesa família", isFamily: boolean, importYear: number) {
+async function importDespesas(workbook: XLSX.WorkBook, sheetName: "despesa academia", importYear: number) {
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return { despesas: 0 };
 
@@ -251,42 +327,26 @@ async function importDespesas(workbook: XLSX.WorkBook, sheetName: "despesa acade
     const valorPrevisto = numberOrZero(mapped.valorprevisto || mapped.valor || mapped.previsto);
     const valorPago = numberOrZero(mapped.valorpago || mapped.pago);
 
-    const categoriaNome = text(mapped.categoria || mapped.tipo) || (isFamily ? "Família" : "Academia");
+    const categoriaNome = text(mapped.categoria || mapped.tipo) || "Academia";
     const categoria = await prisma.categoriaFinanceira.upsert({
       where: { nome: categoriaNome },
       update: {},
       create: { nome: categoriaNome }
     });
 
-    if (isFamily) {
-      await prisma.despesaFamilia.create({
-        data: {
-          dataVencimento: vencimento,
-          competencia,
-          descricao,
-          categoriaId: categoria.id,
-          valorPrevisto,
-          valorPago,
-          status: valorPago >= valorPrevisto && valorPrevisto > 0 ? "PAGO" : valorPago > 0 ? "PARCIAL" : "PENDENTE",
-          dataPagamento: valorPago > 0 ? vencimento : null,
-          observacao: "Importado da planilha despesa família"
-        }
-      });
-    } else {
-      await prisma.despesaAcademia.create({
-        data: {
-          dataVencimento: vencimento,
-          competencia,
-          descricao,
-          categoriaId: categoria.id,
-          valorPrevisto,
-          valorPago,
-          status: valorPago >= valorPrevisto && valorPrevisto > 0 ? "PAGO" : valorPago > 0 ? "PARCIAL" : "PENDENTE",
-          dataPagamento: valorPago > 0 ? vencimento : null,
-          observacao: "Importado da planilha despesa academia"
-        }
-      });
-    }
+    await prisma.despesaAcademia.create({
+      data: {
+        dataVencimento: vencimento,
+        competencia,
+        descricao,
+        categoriaId: categoria.id,
+        valorPrevisto,
+        valorPago,
+        status: valorPago >= valorPrevisto && valorPrevisto > 0 ? "PAGO" : valorPago > 0 ? "PARCIAL" : "PENDENTE",
+        dataPagamento: valorPago > 0 ? vencimento : null,
+        observacao: "Importado da planilha despesa academia"
+      }
+    });
 
     despesas += 1;
   }
@@ -467,12 +527,17 @@ export async function importFromExcelBuffer(fileBuffer: Buffer, importYear = new
   const result = {
     musc: await importMusc(workbook, importYear),
     caixa: await importCaixa(workbook, importYear),
-    despesaAcademia: await importDespesas(workbook, "despesa academia", false, importYear),
-    despesaFamilia: await importDespesas(workbook, "despesa família", true, importYear),
+    despesaAcademia: await importDespesas(workbook, "despesa academia", importYear),
     agenda: await importAgenda(workbook),
     presencas: await importPresencas(workbook, importYear),
     produtosPedidos: await importProdutosPedidos(workbook, importYear)
   };
 
   return result;
+}
+
+export async function importOnlyMuscFromExcelBuffer(fileBuffer: Buffer, importYear = new Date().getFullYear()) {
+  const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
+  const musc = await importMusc(workbook, importYear);
+  return { musc };
 }

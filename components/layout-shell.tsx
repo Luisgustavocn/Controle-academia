@@ -1,28 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { PropsWithChildren } from "react";
+import { ComponentType, PropsWithChildren } from "react";
 import { usePathname } from "next/navigation";
+import {
+  BarChart3,
+  CalendarCheck2,
+  CalendarClock,
+  CreditCard,
+  LayoutDashboard,
+  Package,
+  Settings,
+  ShoppingBag,
+  Users2,
+  Wallet,
+  Building2
+} from "lucide-react";
 import { SessionUser } from "@/lib/auth/session";
 import { LogoutButton } from "@/components/logout-button";
+import { BrandingConfig } from "@/lib/services/branding";
 
-const links = [
-  ["/dashboard", "Dashboard"],
-  ["/alunos", "Alunos"],
-  ["/mensalidades", "Mensalidades"],
-  ["/caixa", "Caixa"],
-  ["/despesas-academia", "Despesas academia"],
-  ["/despesas-familia", "Despesas família"],
-  ["/frequencia", "Frequência"],
-  ["/agenda-personal", "Agenda personal"],
-  ["/produtos", "Produtos"],
-  ["/pedidos", "Pedidos"],
-  ["/relatorios", "Relatórios"],
-  ["/configuracoes", "Configurações"]
+type NavItem = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+};
+
+const links: NavItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/alunos", label: "Alunos", icon: Users2 },
+  { href: "/mensalidades", label: "Mensalidades", icon: CreditCard },
+  { href: "/caixa", label: "Caixa", icon: Wallet },
+  { href: "/despesas-academia", label: "Despesas academia", icon: Building2 },
+  { href: "/frequencia", label: "Frequência", icon: CalendarCheck2 },
+  { href: "/agenda-personal", label: "Agenda personal", icon: CalendarClock },
+  { href: "/produtos", label: "Produtos", icon: Package },
+  { href: "/pedidos", label: "Pedidos", icon: ShoppingBag },
+  { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/configuracoes", label: "Configurações", icon: Settings }
 ];
 
-export function LayoutShell({ children, user }: PropsWithChildren<{ user: SessionUser }>) {
+export function LayoutShell({ children, user, branding }: PropsWithChildren<{ user: SessionUser; branding: BrandingConfig }>) {
   const pathname = usePathname();
 
   if (pathname === "/login") {
@@ -30,25 +48,46 @@ export function LayoutShell({ children, user }: PropsWithChildren<{ user: Sessio
   }
 
   return (
-    <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_1fr]">
-      <aside className="border-r border-line bg-card p-4">
-        <div className="mb-3 flex justify-center">
-          <Image src="/logo.jpeg" alt="Power Life Academia" width={86} height={86} className="h-[86px] w-[86px] rounded-full object-cover" priority />
+    <div className="min-h-screen bg-transparent">
+      <aside className="relative overflow-hidden border-b border-sidebarLine bg-sidebar p-4 text-white md:fixed md:inset-y-0 md:left-0 md:z-40 md:w-[260px] md:overflow-y-auto md:border-b-0 md:border-r">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[rgba(255,80,97,0.25)] blur-2xl" />
+        <div className="pointer-events-none absolute -left-10 bottom-20 h-24 w-24 rounded-full bg-[rgba(255,176,183,0.14)] blur-2xl" />
+
+        <div className="mb-5 flex justify-center">
+          <img
+            src={branding.logoUrl}
+            alt={branding.academyName}
+            className="h-[98px] w-[98px] rounded-full border border-white/30 object-cover shadow-[0_10px_24px_rgba(0,0,0,0.35)]"
+          />
         </div>
-        <nav className="mt-4 flex flex-col gap-1">
-          {links.map(([href, label]) => (
-            <Link key={href} href={href} className="rounded-md px-3 py-2 text-sm text-muted transition hover:bg-accentSoft hover:text-accentDark">
-              {label}
-            </Link>
-          ))}
+
+        <nav className="flex flex-col gap-1.5">
+          {links.map(({ href, label, icon: Icon }) => {
+            const active = pathname === href || pathname.startsWith(`${href}/`);
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={
+                  active
+                    ? "flex items-center gap-2.5 rounded-xl border border-white/20 bg-[rgba(255,255,255,0.12)] px-3 py-2.5 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(0,0,0,0.24)]"
+                    : "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-white/75 transition hover:bg-[rgba(255,255,255,0.1)] hover:text-white"
+                }
+              >
+                <Icon className="h-4 w-4" />
+                <span>{label}</span>
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
-      <main className="p-4 md:p-6">
-        <header className="mb-6 flex items-center justify-between rounded-xl border border-line bg-card p-3">
+      <main className="p-4 md:ml-[260px] md:p-6">
+        <header className="mb-6 flex items-center justify-between rounded-2xl border border-white/75 bg-[rgba(255,255,255,0.82)] p-4 shadow-[0_10px_30px_rgba(49,20,25,0.09)] backdrop-blur-sm">
           <div>
-            <p className="text-sm font-semibold text-ink">{user.name}</p>
-            <p className="text-xs text-muted">{user.email} · {user.role}</p>
+            <p className="text-sm font-bold tracking-tight text-ink">{user.name}</p>
+            <p className="text-xs font-medium text-muted">{user.email} · {user.role}</p>
           </div>
           <LogoutButton />
         </header>

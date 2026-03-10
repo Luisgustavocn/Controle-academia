@@ -3,14 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f0eded;
+  --bg: #f5f1f0;
   --card: #ffffff;
-  --ink: #1b1417;
-  --muted: #6f6668;
-  --accent: #cf1621;
-  --accent-dark: #8d0f16;
-  --line: #d9d2d4;
-  --accent-soft: #fbe7ea;
+  --ink: #1f1718;
+  --muted: #6f6466;
+  --accent: #c51623;
+  --accent-dark: #8e1018;
+  --line: #ddd2d4;
+  --accent-soft: #fbeaec;
+  --sidebar: #181113;
+  --sidebar-line: #2e2025;
 }
 
 * {
@@ -20,8 +22,25 @@
 body {
   margin: 0;
   font-family: "Space Grotesk", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at 12% 8%, #ffe3e7 0%, var(--bg) 38%, #ebe7e8 100%);
+  background:
+    radial-gradient(circle at 0% 0%, #ffe1e5 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, #f0e6e8 0%, transparent 42%),
+    linear-gradient(135deg, #f6f2f2 0%, var(--bg) 50%, #ece7e8 100%);
   color: var(--ink);
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(170, 30, 41, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(170, 30, 41, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.8), transparent 80%);
+  z-index: -1;
 }
 
 a {
@@ -38,19 +57,52 @@ button {
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 th,
 td {
-  border-bottom: 1px solid var(--line);
-  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid rgba(222, 215, 217, 0.8);
+  padding: 0.68rem 0.7rem;
   text-align: left;
-  font-size: 0.9rem;
+  font-size: 0.87rem;
 }
 
 th {
-  color: var(--ink);
-  background: var(--accent-soft);
+  color: #2d1f24;
+  background: linear-gradient(180deg, #fff3f5 0%, #fce7eb 100%);
   font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+tbody tr {
+  transition: background 0.18s ease;
+}
+
+tbody tr:hover {
+  background: #fff5f7;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #e9e3e4;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #bb8f96;
+  border-radius: 10px;
+  border: 2px solid #e9e3e4;
 }

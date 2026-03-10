@@ -18,7 +18,6 @@ Tabelas implementadas:
 - `movimentacoes_caixa`
 - `categorias_financeiras`
 - `despesas_academia`
-- `despesas_familia`
 - `presencas`
 - `controle_mensal_alunos`
 - `agenda_personal`
@@ -33,7 +32,7 @@ Tabelas implementadas:
 - Aluno `CANCELADO`/`TRANCADO` não gera mensalidade automática.
 - Presença é controlada por aluno e data.
 - Caixa mensal com fechamento e resumo persistido em configurações.
-- Despesas de academia e família segregadas.
+- Despesas da academia segregadas por categoria.
 - Dashboard consolidado com KPIs e séries financeiras.
 - Logs de auditoria em operações financeiras.
 - Controle de início/entrou/saiu/total final calculado automaticamente.
@@ -70,7 +69,6 @@ Telas implementadas:
 - mensalidades
 - caixa
 - despesas academia
-- despesas família
 - frequência
 - agenda personal
 - produtos

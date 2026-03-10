@@ -1,9 +1,58 @@
-import { AlunoStatus, Prisma, UserRole } from "@prisma/client";
+import { AlunoStatus, MensalidadeStatus, Prisma, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { toCompetencia } from "@/lib/competencia";
+import { currentCompetencia, toCompetencia } from "@/lib/competencia";
+import {
+  buildVencimentoDate,
+  cancelarMensalidadesFuturasDoAluno,
+  generateMensalidadesAteCompetencia
+} from "@/lib/services/mensalidades";
+import { isModalidadePersonalizada } from "@/lib/services/modalidades";
+
+const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
+
+function toDateInputValue(date: Date | null | undefined) {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseOptionalDate(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${fieldName} inválida`);
+  }
+  return parsed;
+}
+
+function parseOptionalNumber(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`${fieldName} inválido`);
+  }
+  return parsed;
+}
+
+function parseOptionalMensalidadeStatus(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  const parsed = String(value).toUpperCase() as MensalidadeStatus;
+  if (!MENSALIDADE_STATUS_VALUES.has(parsed)) {
+    throw new Error("status da mensalidade inválido");
+  }
+  return parsed;
+}
 
 export async function GET(request: NextRequest) {
   const auth = requireRole(request, UserRole.RECEPCAO);
@@ -56,7 +105,18 @@ export async function GET(request: NextRequest) {
         valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
         inadimplente: inadimplencia > 0,
         mensalidadeAtual: aluno.mensalidades[0] ?? null,
-        proximoVencimento: new Date(new Date().getFullYear(), new Date().getMonth(), Math.min(28, aluno.vencimentoDia))
+        mensalidadeValor: aluno.mensalidades[0] ? Number(aluno.mensalidades[0].valor) : "",
+        mensalidadeStatus: aluno.mensalidades[0]?.status ?? "",
+        mensalidadeDataPagamento: aluno.mensalidades[0]?.dataPagamento
+          ? toDateInputValue(aluno.mensalidades[0].dataPagamento)
+          : "",
+        mensalidadeFormaPagamento: aluno.mensalidades[0]?.formaPagamento ?? "",
+        mensalidadeObservacao: aluno.mensalidades[0]?.observacao ?? "",
+        proximoVencimento: (() => {
+          const hoje = new Date();
+          const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+          return new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(ultimoDia, aluno.vencimentoDia));
+        })()
       };
     })
   );
@@ -74,18 +134,96 @@ export async function POST(request: NextRequest) {
     return fail("Campos obrigatórios: nomeCompleto, telefone, vencimentoDia, dataInicio", 400);
   }
 
-  const created = await prisma.aluno.create({
-    data: {
-      nomeCompleto: String(body.nomeCompleto),
-      telefone: String(body.telefone),
-      modalidadeId: body.modalidadeId ? String(body.modalidadeId) : null,
-      vencimentoDia: Math.min(31, Math.max(1, Number(body.vencimentoDia))),
-      status: body.status ? (String(body.status) as AlunoStatus) : AlunoStatus.ATIVO,
-      dataInicio: new Date(String(body.dataInicio)),
-      dataSaidaCancelamento: body.dataSaidaCancelamento ? new Date(String(body.dataSaidaCancelamento)) : null,
-      observacoes: body.observacoes ? String(body.observacoes) : null
+  const vencimentoDia = Math.min(31, Math.max(1, Number(body.vencimentoDia)));
+  const statusInformado = body.status ? (String(body.status) as AlunoStatus) : AlunoStatus.ATIVO;
+  let mensalidadeValor: number | null = null;
+  let mensalidadeDataPagamento: Date | null = null;
+  let mensalidadeStatus: MensalidadeStatus | null = null;
+  let dataSaidaCancelamento: Date | null = null;
+
+  try {
+    mensalidadeValor = parseOptionalNumber(body.mensalidadeValor, "valor da mensalidade");
+    mensalidadeDataPagamento = parseOptionalDate(body.mensalidadeDataPagamento, "data de pagamento da mensalidade");
+    mensalidadeStatus = parseOptionalMensalidadeStatus(body.mensalidadeStatus);
+    dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
+  }
+  const status = dataSaidaCancelamento ? AlunoStatus.CANCELADO : statusInformado;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const aluno = await tx.aluno.create({
+      data: {
+        nomeCompleto: String(body.nomeCompleto),
+        telefone: String(body.telefone),
+        modalidadeId: body.modalidadeId ? String(body.modalidadeId) : null,
+        vencimentoDia,
+        status,
+        dataInicio: new Date(String(body.dataInicio)),
+        dataSaidaCancelamento,
+        observacoes: body.observacoes ? String(body.observacoes) : null
+      }
+    });
+
+    if (aluno.status === AlunoStatus.ATIVO) {
+      const competencia = toCompetencia(new Date());
+
+      const modalidade = aluno.modalidadeId
+        ? await tx.modalidade.findUnique({
+            where: { id: aluno.modalidadeId },
+            select: { nome: true, valorPadrao: true }
+          })
+        : null;
+      const valorPadrao = Number(modalidade?.valorPadrao ?? 0);
+      const modalidadePersonalizada = isModalidadePersonalizada(modalidade?.nome);
+
+      const competenciaMensalidade = competencia;
+      const vencimentoPadrao = buildVencimentoDate(competenciaMensalidade, aluno.vencimentoDia);
+      const statusMensalidade = mensalidadeStatus ?? MensalidadeStatus.PENDENTE;
+      const dataPagamento =
+        mensalidadeDataPagamento ??
+        ((statusMensalidade === MensalidadeStatus.PAGO || statusMensalidade === MensalidadeStatus.PARCIAL) ? new Date() : null);
+      const valorMensalidade = modalidadePersonalizada ? mensalidadeValor ?? valorPadrao : valorPadrao;
+      const vencimentoMensalidade = vencimentoPadrao;
+
+      await tx.mensalidade.upsert({
+        where: {
+          alunoId_competencia: {
+            alunoId: aluno.id,
+            competencia: competenciaMensalidade
+          }
+        },
+        create: {
+          alunoId: aluno.id,
+          competencia: competenciaMensalidade,
+          valor: valorMensalidade,
+          vencimento: vencimentoMensalidade,
+          status: statusMensalidade,
+          dataPagamento,
+          formaPagamento: body.mensalidadeFormaPagamento ? String(body.mensalidadeFormaPagamento) : null,
+          observacao: body.mensalidadeObservacao ? String(body.mensalidadeObservacao) : null
+        },
+        update: {
+          valor: valorMensalidade,
+          vencimento: vencimentoMensalidade,
+          status: statusMensalidade,
+          dataPagamento,
+          formaPagamento: body.mensalidadeFormaPagamento === "" ? null : (body.mensalidadeFormaPagamento as string | undefined),
+          observacao: body.mensalidadeObservacao === "" ? null : (body.mensalidadeObservacao as string | undefined)
+        }
+      });
     }
+
+    return aluno;
   });
+
+  if (created.status === AlunoStatus.ATIVO) {
+    await generateMensalidadesAteCompetencia(currentCompetencia(), [created.id]);
+  }
+
+  if (created.dataSaidaCancelamento) {
+    await cancelarMensalidadesFuturasDoAluno(created.id, created.dataSaidaCancelamento);
+  }
 
   return ok({ item: created }, 201);
 }

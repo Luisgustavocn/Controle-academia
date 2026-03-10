@@ -1,15 +1,22 @@
 import { TipoMovimentacao, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
-import { ok } from "@/lib/http";
+import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia } from "@/lib/competencia";
+import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireRole(request, UserRole.RECEPCAO);
   if (auth instanceof Response) return auth;
 
-  const competencia = request.nextUrl.searchParams.get("competencia") || currentCompetencia();
+  await syncAutomaticEntriesInCaixa();
+
+  const competenciaParam = request.nextUrl.searchParams.get("competencia");
+  if (competenciaParam && !/^\d{4}-\d{2}$/.test(competenciaParam)) {
+    return fail("competencia inválida. Use yyyy-mm", 400);
+  }
+  const competencia = competenciaParam || currentCompetencia();
   const items = await prisma.movimentacaoCaixa.findMany({
     where: { competencia },
     include: {

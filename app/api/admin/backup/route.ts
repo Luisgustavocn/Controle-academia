@@ -7,12 +7,11 @@ export async function GET(request: NextRequest) {
   const auth = requireRole(request, UserRole.ADMIN);
   if (auth instanceof Response) return auth;
 
-  const [alunos, mensalidades, caixa, despesasA, despesasF, presencas, agenda, produtos, pedidos] = await Promise.all([
+  const [alunos, mensalidades, caixa, despesasA, presencas, agenda, produtos, pedidos] = await Promise.all([
     prisma.aluno.findMany(),
     prisma.mensalidade.findMany(),
     prisma.movimentacaoCaixa.findMany(),
     prisma.despesaAcademia.findMany(),
-    prisma.despesaFamilia.findMany(),
     prisma.presenca.findMany(),
     prisma.agendaPersonal.findMany(),
     prisma.produto.findMany(),
@@ -25,7 +24,6 @@ export async function GET(request: NextRequest) {
     mensalidades,
     caixa,
     despesasAcademia: despesasA,
-    despesasFamilia: despesasF,
     presencas,
     agendaPersonal: agenda,
     produtos,

@@ -16,14 +16,13 @@ Sistema web completo para gestão de academia, construído para substituir e evo
 2. Mensalidades e pagamentos
 3. Livro-caixa
 4. Despesas da academia
-5. Despesas da família
-6. Frequência mensal
-7. Agenda de personal
-8. Produtos e pedidos
-9. Dashboard gerencial
-10. Configurações, usuários e permissões
-11. Relatórios e exportações CSV
-12. Rotina de importação da planilha antiga
+5. Frequência mensal
+6. Agenda de personal
+7. Produtos e pedidos
+8. Dashboard gerencial
+9. Configurações, usuários e permissões
+10. Relatórios e exportações CSV
+11. Rotina de importação da planilha antiga
 
 ## Requisitos
 - Node.js 20+
@@ -66,7 +65,6 @@ npm run dev
 - `GET/POST /api/mensalidades`
 - `GET/POST /api/caixa`
 - `GET/POST /api/despesas-academia`
-- `GET/POST /api/despesas-familia`
 - `GET/POST /api/presencas`
 - `GET/POST /api/agenda-personal`
 - `GET/POST /api/produtos`
@@ -85,7 +83,6 @@ Mapeamento implementado:
 - `Musc` -> `alunos` + `mensalidades`
 - `caixa` -> `movimentacoes_caixa`
 - `despesa academia` -> `despesas_academia`
-- `despesa família` -> `despesas_familia`
 - `Personal` -> `agenda_personal`
 - `Jan..Dez` -> `presencas`
 - `Pedido` + `roupas` -> `pedidos_produto` + `produtos`

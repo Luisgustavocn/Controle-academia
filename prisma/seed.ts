@@ -148,20 +148,6 @@ async function main() {
     skipDuplicates: true
   });
 
-  await prisma.despesaFamilia.createMany({
-    data: [
-      {
-        dataVencimento: new Date("2026-03-10"),
-        competencia: "2026-03",
-        descricao: "net+cel",
-        valorPrevisto: 260,
-        valorPago: 260,
-        status: "PAGO"
-      }
-    ],
-    skipDuplicates: true
-  });
-
   await prisma.presenca.createMany({
     data: [
       {

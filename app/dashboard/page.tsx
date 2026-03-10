@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { FinanceEvolutionChart } from "@/components/charts/finance-evolution-chart";
 import { currentCompetencia } from "@/lib/competencia";
 import { getDashboardSummary } from "@/lib/services/dashboard";
+import { LayoutDashboard } from "lucide-react";
 
 function currency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -17,8 +18,17 @@ export default async function DashboardPage() {
   const summary = await getDashboardSummary(currentCompetencia());
 
   return (
-    <div>
-      <ModuleHeader title="Dashboard" description="Visão gerencial com KPIs de receita, despesas, alunos e frequência." />
+    <div className="space-y-4">
+      <ModuleHeader
+        title="Dashboard"
+        description="Visão gerencial com KPIs de receita, despesas, alunos e frequência."
+        icon={LayoutDashboard}
+        badges={["Visão executiva", "Atualização automática", "Últimos 12 meses"]}
+        stats={[
+          { label: "Competência", value: currentCompetencia() },
+          { label: "Saldo do mês", value: currency(summary.kpis.saldo_mes) }
+        ]}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Alunos ativos" value={String(summary.kpis.alunos_ativos)} />
@@ -31,14 +41,15 @@ export default async function DashboardPage() {
         <KpiCard title="Frequência total" value={String(summary.kpis.frequencia_total_mes)} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card>
-          <h2 className="mb-2 text-lg font-semibold">Evolução financeira (12 meses)</h2>
+      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+        <Card className="p-5">
+          <h2 className="mb-1 text-xl font-black text-ink">Evolução financeira</h2>
+          <p className="mb-3 text-xs font-medium uppercase tracking-[0.14em] text-muted">Últimos 12 meses</p>
           <FinanceEvolutionChart data={summary.series} />
         </Card>
 
-        <Card>
-          <h2 className="mb-2 text-lg font-semibold">Indicadores</h2>
+        <Card className="p-5">
+          <h2 className="mb-2 text-xl font-black text-ink">Indicadores</h2>
           <ul className="space-y-2 text-sm">
             <li>Ticket médio: <strong>{currency(summary.kpis.ticket_medio)}</strong></li>
             <li>Taxa inadimplência: <strong>{percent(summary.kpis.taxa_inadimplencia)}</strong></li>

@@ -17,6 +17,8 @@ const config: Config = {
         accent: "#cf1621",
         accentDark: "#8d0f16",
         accentSoft: "#fbe7ea",
+        sidebar: "#1b1417",
+        sidebarLine: "#2f2228",
         neutralDark: "#2a2024",
         danger: "#0f0d0e",
         warning: "#7f1118"

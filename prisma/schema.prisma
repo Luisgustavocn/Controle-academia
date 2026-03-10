@@ -158,7 +158,6 @@ model CategoriaFinanceira {
 
   movimentacoes MovimentacaoCaixa[]
   despesasAcademia DespesaAcademia[]
-  despesasFamilia DespesaFamilia[]
 }
 
 model MovimentacaoCaixa {
@@ -183,25 +182,6 @@ model MovimentacaoCaixa {
 }
 
 model DespesaAcademia {
-  id              String        @id @default(cuid())
-  dataVencimento  DateTime
-  competencia     String
-  descricao       String
-  categoriaId     String?
-  valorPrevisto   Decimal       @db.Decimal(10, 2)
-  valorPago       Decimal       @default(0) @db.Decimal(10, 2)
-  status          DespesaStatus @default(PENDENTE)
-  dataPagamento   DateTime?
-  observacao      String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  categoria       CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-
-  @@index([competencia, status])
-}
-
-model DespesaFamilia {
   id              String        @id @default(cuid())
   dataVencimento  DateTime
   competencia     String

@@ -1,12 +1,71 @@
-import { UserRole } from "@prisma/client";
-import { createListCreateHandlers } from "@/lib/api/crud";
+import { Prisma, UserRole } from "@prisma/client";
+import { NextRequest } from "next/server";
+import { requireRole } from "@/lib/auth/guards";
+import { fail, ok } from "@/lib/http";
+import { prisma } from "@/lib/prisma";
+import { ensureModalidadePersonalizada } from "@/lib/services/modalidades";
 
-export const { GET, POST } = createListCreateHandlers({
-  model: "modalidade",
-  module: "modalidades",
-  requiredRole: UserRole.RECEPCAO,
-  searchFields: ["nome"],
-  numericFields: ["valorPadrao"],
-  booleanFields: ["ativa"],
-  orderBy: { nome: "asc" }
-});
+function parseBoolean(value: unknown, fallback: boolean) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "sim", "yes"].includes(normalized)) return true;
+  if (["false", "0", "nao", "não", "no"].includes(normalized)) return false;
+  return fallback;
+}
+
+export async function GET(request: NextRequest) {
+  const auth = requireRole(request, UserRole.RECEPCAO);
+  if (auth instanceof Response) return auth;
+
+  await ensureModalidadePersonalizada();
+
+  const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  const where = q
+    ? {
+        nome: {
+          contains: q,
+          mode: Prisma.QueryMode.insensitive
+        }
+      }
+    : undefined;
+
+  const items = await prisma.modalidade.findMany({
+    where,
+    orderBy: { nome: "asc" }
+  });
+
+  return ok({ items });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = requireRole(request, UserRole.RECEPCAO);
+  if (auth instanceof Response) return auth;
+
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const nome = String(body.nome ?? "").trim();
+  if (!nome) {
+    return fail("Nome da modalidade é obrigatório", 400);
+  }
+
+  const valorPadrao = Number(body.valorPadrao);
+  if (!Number.isFinite(valorPadrao)) {
+    return fail("Valor padrão inválido", 400);
+  }
+
+  try {
+    const item = await prisma.modalidade.create({
+      data: {
+        nome,
+        valorPadrao,
+        ativa: parseBoolean(body.ativa, true)
+      }
+    });
+    return ok({ item }, 201);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return fail("Já existe uma modalidade com esse nome", 400);
+    }
+    return fail("Erro ao criar modalidade", 500);
+  }
+}

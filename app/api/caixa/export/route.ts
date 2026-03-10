@@ -3,10 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia } from "@/lib/competencia";
+import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 
 export async function GET(request: NextRequest) {
   const auth = requireRole(request, UserRole.FINANCEIRO);
   if (auth instanceof Response) return auth;
+
+  await syncAutomaticEntriesInCaixa();
 
   const competencia = request.nextUrl.searchParams.get("competencia") || currentCompetencia();
   const items = await prisma.movimentacaoCaixa.findMany({

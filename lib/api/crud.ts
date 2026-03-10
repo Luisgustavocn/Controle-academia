@@ -18,32 +18,75 @@ type CrudConfig = {
   booleanFields?: string[];
   defaultValues?: Record<string, unknown>;
   queryFilters?: (request: NextRequest) => Record<string, unknown>;
+  validate?: (data: Record<string, unknown>, mode: "create" | "update") => string | null;
 };
 
 function normalizePayload(payload: Record<string, unknown>, config: CrudConfig) {
   const data = { ...config.defaultValues, ...payload } as Record<string, unknown>;
 
+  for (const [field, value] of Object.entries(data)) {
+    if (value !== "") {
+      continue;
+    }
+
+    // Empty relation keys should clear the relation on updates.
+    if (field.endsWith("Id")) {
+      data[field] = null;
+      continue;
+    }
+
+    // Empty strings in generic handlers should not overwrite persisted data.
+    delete data[field];
+  }
+
   for (const field of config.numericFields ?? []) {
     const value = data[field];
-    if (value === undefined || value === null || value === "") continue;
-    data[field] = Number(value);
+    if (value === undefined || value === null || value === "") {
+      delete data[field];
+      continue;
+    }
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      delete data[field];
+      continue;
+    }
+    data[field] = parsed;
   }
 
   for (const field of config.intFields ?? []) {
     const value = data[field];
-    if (value === undefined || value === null || value === "") continue;
-    data[field] = Math.trunc(Number(value));
+    if (value === undefined || value === null || value === "") {
+      delete data[field];
+      continue;
+    }
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      delete data[field];
+      continue;
+    }
+    data[field] = Math.trunc(parsed);
   }
 
   for (const field of config.dateFields ?? []) {
     const value = data[field];
-    if (value === undefined || value === null || value === "") continue;
-    data[field] = new Date(String(value));
+    if (value === undefined || value === null || value === "") {
+      delete data[field];
+      continue;
+    }
+    const parsed = new Date(String(value));
+    if (Number.isNaN(parsed.getTime())) {
+      delete data[field];
+      continue;
+    }
+    data[field] = parsed;
   }
 
   for (const field of config.booleanFields ?? []) {
     const value = data[field];
-    if (value === undefined || value === null || value === "") continue;
+    if (value === undefined || value === null || value === "") {
+      delete data[field];
+      continue;
+    }
     if (typeof value === "boolean") continue;
     data[field] = ["true", "1", "sim", "yes"].includes(String(value).toLowerCase());
   }
@@ -109,11 +152,15 @@ export function createListCreateHandlers(config: CrudConfig) {
 
     const body = (await request.json()) as Record<string, unknown>;
     const data = normalizePayload(body, config);
+    const validationError = config.validate?.(data, "create");
+    if (validationError) {
+      return fail(validationError, 400);
+    }
 
     try {
       const delegate = getDelegate(config.model);
       const created = await delegate.create({ data });
-      if (["caixa", "mensalidades", "despesas-academia", "despesas-familia", "pagamentos"].includes(config.module)) {
+      if (["caixa", "mensalidades", "despesas-academia", "pagamentos"].includes(config.module)) {
         await logAudit({
           userId: auth.id,
           modulo: config.module,
@@ -145,6 +192,10 @@ export function createByIdHandlers(config: CrudConfig) {
     const { id } = await context.params;
     const body = (await request.json()) as Record<string, unknown>;
     const data = normalizePayload(body, config);
+    const validationError = config.validate?.(data, "update");
+    if (validationError) {
+      return fail(validationError, 400);
+    }
 
     const delegate = getDelegate(config.model);
     const previous = await delegate.findUnique({ where: { id } });
@@ -154,7 +205,7 @@ export function createByIdHandlers(config: CrudConfig) {
 
     const updated = await delegate.update({ where: { id }, data });
 
-    if (["caixa", "mensalidades", "despesas-academia", "despesas-familia", "pagamentos"].includes(config.module)) {
+    if (["caixa", "mensalidades", "despesas-academia", "pagamentos"].includes(config.module)) {
       await logAudit({
         userId: auth.id,
         modulo: config.module,
@@ -182,7 +233,7 @@ export function createByIdHandlers(config: CrudConfig) {
 
     await delegate.delete({ where: { id } });
 
-    if (["caixa", "mensalidades", "despesas-academia", "despesas-familia", "pagamentos"].includes(config.module)) {
+    if (["caixa", "mensalidades", "despesas-academia", "pagamentos"].includes(config.module)) {
       await logAudit({
         userId: auth.id,
         modulo: config.module,

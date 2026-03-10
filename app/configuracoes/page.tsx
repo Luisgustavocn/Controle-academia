@@ -1,12 +1,156 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Settings } from "lucide-react";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { CrudModule } from "@/components/forms/crud-module";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+
+type BrandingForm = {
+  academyName: string;
+  logoUrl: string;
+  colors: {
+    bg: string;
+    ink: string;
+    muted: string;
+    line: string;
+    accent: string;
+    accentDark: string;
+    accentSoft: string;
+    sidebar: string;
+    sidebarLine: string;
+  };
+};
+
+const DEFAULT_BRANDING: BrandingForm = {
+  academyName: "Forja Prime Academia",
+  logoUrl: "/logo-forja.svg",
+  colors: {
+    bg: "#f5f1f0",
+    ink: "#1f1718",
+    muted: "#6f6466",
+    line: "#ddd2d4",
+    accent: "#c51623",
+    accentDark: "#8e1018",
+    accentSoft: "#fbeaec",
+    sidebar: "#181113",
+    sidebarLine: "#2e2025"
+  }
+};
 
 export default function ConfiguracoesPage() {
+  const router = useRouter();
   const [importing, setImporting] = useState(false);
+  const [brandingLoading, setBrandingLoading] = useState(false);
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [branding, setBranding] = useState<BrandingForm>(DEFAULT_BRANDING);
+
+  useEffect(() => {
+    void loadBranding();
+  }, []);
+
+  async function loadBranding() {
+    setBrandingLoading(true);
+    try {
+      const res = await fetch("/api/branding", { cache: "no-store" });
+      const payload = (await res.json().catch(() => ({}))) as { item?: Partial<BrandingForm>; error?: string };
+
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao carregar branding");
+      }
+
+      setBranding({
+        academyName: payload.item?.academyName ?? DEFAULT_BRANDING.academyName,
+        logoUrl: payload.item?.logoUrl ?? DEFAULT_BRANDING.logoUrl,
+        colors: {
+          ...DEFAULT_BRANDING.colors,
+          ...(payload.item?.colors ?? {})
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar branding";
+      alert(message);
+      setBranding(DEFAULT_BRANDING);
+    } finally {
+      setBrandingLoading(false);
+    }
+  }
+
+  async function persistBranding(nextBranding: BrandingForm, successMessage?: string) {
+    setBrandingSaving(true);
+    try {
+      const res = await fetch("/api/branding", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(nextBranding)
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as { item?: BrandingForm; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao salvar branding");
+      }
+
+      if (payload.item) {
+        setBranding(payload.item);
+      } else {
+        setBranding(nextBranding);
+      }
+      router.refresh();
+      if (successMessage) {
+        alert(successMessage);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao salvar branding";
+      alert(message);
+    } finally {
+      setBrandingSaving(false);
+    }
+  }
+
+  async function saveBranding() {
+    await persistBranding(branding, "Branding atualizado com sucesso.");
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+
+      const res = await fetch("/api/branding/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as { logoUrl?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao enviar logo");
+      }
+
+      const logoUrl = String(payload.logoUrl ?? "").trim();
+      if (!logoUrl) {
+        throw new Error("Upload concluído, mas sem URL de logo");
+      }
+
+      const nextBranding: BrandingForm = {
+        ...branding,
+        logoUrl
+      };
+      setBranding(nextBranding);
+      await persistBranding(nextBranding, "Logo enviada e aplicada com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar logo";
+      alert(message);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
 
   async function importExcel(file: File) {
     setImporting(true);
@@ -32,10 +176,197 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="space-y-4">
-      <ModuleHeader title="Configurações" description="Usuários, perfis, parâmetros do sistema e importação da planilha antiga." />
+      <ModuleHeader
+        title="Configurações"
+        description="Usuários, perfis, parâmetros do sistema e importação da planilha antiga."
+        icon={Settings}
+        badges={["Administração", "Permissões", "Importação Excel"]}
+        stats={[
+          { label: "Segurança", value: "Perfis de acesso" },
+          { label: "Migração", value: "Planilha legada" }
+        ]}
+      />
+
+      <Card className="space-y-3">
+        <h2 className="text-lg font-black text-ink">Nome, logo e cores</h2>
+
+        {brandingLoading ? <p className="text-sm text-muted">Carregando branding...</p> : null}
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="text-sm font-medium text-ink md:col-span-2">
+            Nome da academia
+            <Input
+              value={branding.academyName}
+              onChange={(event) => setBranding((prev) => ({ ...prev, academyName: event.target.value }))}
+              placeholder="Nome exibido no sistema"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Logo (path/URL)
+            <Input
+              value={branding.logoUrl}
+              onChange={(event) => setBranding((prev) => ({ ...prev, logoUrl: event.target.value }))}
+              placeholder="/logo-forja.svg"
+            />
+          </label>
+
+          <div className="space-y-2 rounded-xl border border-line/80 bg-white/80 p-3 md:col-span-2">
+            <p className="text-sm font-semibold text-ink">Enviar logo do computador</p>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              disabled={logoUploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void uploadLogo(file);
+                }
+                event.currentTarget.value = "";
+              }}
+            />
+            <p className="text-xs text-muted">Formatos: PNG, JPG, WEBP ou SVG. Tamanho máximo: 4MB.</p>
+          </div>
+
+          <div className="rounded-xl border border-line/80 bg-white/80 p-3">
+            <p className="mb-2 text-sm font-semibold text-ink">Pré-visualização da logo</p>
+            <img
+              src={branding.logoUrl}
+              alt={branding.academyName}
+              className="h-20 w-20 rounded-full border border-line bg-white object-cover"
+            />
+          </div>
+
+          <label className="text-sm font-medium text-ink">
+            Cor destaque
+            <Input
+              value={branding.colors.accent}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, accent: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor destaque escura
+            <Input
+              value={branding.colors.accentDark}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, accentDark: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor destaque suave
+            <Input
+              value={branding.colors.accentSoft}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, accentSoft: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor fundo
+            <Input
+              value={branding.colors.bg}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, bg: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor texto
+            <Input
+              value={branding.colors.ink}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, ink: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor texto secundário
+            <Input
+              value={branding.colors.muted}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, muted: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor bordas
+            <Input
+              value={branding.colors.line}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, line: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor sidebar
+            <Input
+              value={branding.colors.sidebar}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, sidebar: event.target.value }
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Cor borda sidebar
+            <Input
+              value={branding.colors.sidebarLine}
+              onChange={(event) =>
+                setBranding((prev) => ({
+                  ...prev,
+                  colors: { ...prev.colors, sidebarLine: event.target.value }
+                }))
+              }
+            />
+          </label>
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={() => void saveBranding()} disabled={brandingSaving || logoUploading}>
+            {brandingSaving ? "Salvando..." : logoUploading ? "Enviando logo..." : "Salvar branding"}
+          </Button>
+          <Button variant="secondary" onClick={() => void loadBranding()} disabled={brandingLoading || logoUploading}>
+            Recarregar
+          </Button>
+        </div>
+      </Card>
 
       <Card>
-        <h2 className="mb-2 text-lg font-semibold">Importar planilha antiga</h2>
+        <h2 className="mb-2 text-lg font-black text-ink">Importar planilha antiga</h2>
         <p className="mb-3 text-sm text-muted">Mapeamento automático: Musc, caixa, despesas, presença, personal e pedidos.</p>
         <input
           type="file"
@@ -47,13 +378,20 @@ export default function ConfiguracoesPage() {
             }
           }}
         />
-        {importing ? <p className="mt-2 text-sm">Importando...</p> : null}
+        {importing ? <p className="mt-2 text-sm text-muted">Importando...</p> : null}
       </Card>
 
       <CrudModule
         endpoint="/api/users"
         title="Usuários e perfis"
-        listFields={["name", "email", "role", "active", "createdAt"]}
+        createLabel="Novo usuário"
+        listFields={[
+          { key: "name", label: "Nome" },
+          { key: "email", label: "E-mail" },
+          { key: "role", label: "Perfil" },
+          { key: "active", label: "Ativo" },
+          { key: "createdAt", label: "Criado em" }
+        ]}
         fields={[
           { key: "name", label: "Nome", required: true },
           { key: "email", label: "E-mail", required: true },
@@ -85,11 +423,17 @@ export default function ConfiguracoesPage() {
       <CrudModule
         endpoint="/api/configuracoes"
         title="Parâmetros do sistema"
-        listFields={["chave", "valor", "descricao", "updatedAt"]}
+        createLabel="Novo parâmetro"
+        listFields={[
+          { key: "chave", label: "Chave" },
+          { key: "valor", label: "Valor" },
+          { key: "descricao", label: "Descrição" },
+          { key: "updatedAt", label: "Atualizado em" }
+        ]}
         fields={[
           { key: "chave", label: "Chave", required: true },
           { key: "valor", label: "Valor", required: true },
-          { key: "descricao", label: "Descrição" }
+          { key: "descricao", label: "Descrição", type: "textarea" }
         ]}
       />
     </div>
