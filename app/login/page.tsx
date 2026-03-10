@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -38,14 +39,17 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
-        <h1 className="text-2xl font-bold">Entrar</h1>
-        <p className="text-sm text-slate-600">Acesso ao sistema de gestão da academia</p>
+        <div className="mb-3 flex justify-center">
+          <Image src="/logo.jpeg" alt="Power Life Academia" width={96} height={96} className="h-24 w-24 rounded-full object-cover" priority />
+        </div>
+        <h1 className="text-2xl font-bold text-ink">Entrar</h1>
+        <p className="text-sm text-muted">Acesso ao sistema de gestão da academia</p>
         <form className="mt-4 space-y-3" onSubmit={submit}>
-          <label className="text-sm font-medium text-slate-700">
+          <label className="text-sm font-medium text-ink">
             E-mail
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </label>
-          <label className="text-sm font-medium text-slate-700">
+          <label className="text-sm font-medium text-ink">
             Senha
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>

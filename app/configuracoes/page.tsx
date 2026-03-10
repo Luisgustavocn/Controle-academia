@@ -36,7 +36,7 @@ export default function ConfiguracoesPage() {
 
       <Card>
         <h2 className="mb-2 text-lg font-semibold">Importar planilha antiga</h2>
-        <p className="mb-3 text-sm text-slate-600">Mapeamento automático: Musc, caixa, despesas, presença, personal e pedidos.</p>
+        <p className="mb-3 text-sm text-muted">Mapeamento automático: Musc, caixa, despesas, presença, personal e pedidos.</p>
         <input
           type="file"
           accept=".xlsx,.xls"

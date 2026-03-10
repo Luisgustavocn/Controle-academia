@@ -1,5 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import Image from "next/image";
 import { PropsWithChildren } from "react";
+import { usePathname } from "next/navigation";
 import { SessionUser } from "@/lib/auth/session";
 import { LogoutButton } from "@/components/logout-button";
 
@@ -19,13 +23,19 @@ const links = [
 ];
 
 export function LayoutShell({ children, user }: PropsWithChildren<{ user: SessionUser }>) {
+  const pathname = usePathname();
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="grid min-h-screen grid-cols-1 md:grid-cols-[230px_1fr]">
       <aside className="border-r border-line bg-card p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-accent">Controle Academia</p>
-        <h1 className="mt-1 text-lg font-bold text-ink">Gestão 2026</h1>
-
-        <nav className="mt-6 flex flex-col gap-1">
+        <div className="mb-3 flex justify-center">
+          <Image src="/logo.jpeg" alt="Power Life Academia" width={86} height={86} className="h-[86px] w-[86px] rounded-full object-cover" priority />
+        </div>
+        <nav className="mt-4 flex flex-col gap-1">
           {links.map(([href, label]) => (
             <Link key={href} href={href} className="rounded-md px-3 py-2 text-sm text-muted transition hover:bg-accentSoft hover:text-accentDark">
               {label}

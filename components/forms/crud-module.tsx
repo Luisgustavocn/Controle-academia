@@ -156,7 +156,7 @@ export function CrudModule({ endpoint, title, fields, listFields, defaultValues,
         <h3 className="mb-3 text-base font-semibold">{editingId ? "Editar registro" : "Novo registro"}</h3>
         <div className="grid gap-3 md:grid-cols-3">
           {fields.map((field) => (
-            <label key={field.key} className="text-sm font-medium text-slate-700">
+            <label key={field.key} className="text-sm font-medium text-ink">
               {field.label}
               {field.type === "select" ? (
                 <Select

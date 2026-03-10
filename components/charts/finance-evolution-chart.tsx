@@ -14,14 +14,14 @@ export function FinanceEvolutionChart({ data }: { data: Point[] }) {
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#d9d2d4" />
           <XAxis dataKey="competencia" />
           <YAxis />
           <Tooltip />
           <Legend />
-          <Line type="monotone" dataKey="receita" stroke="#0d9488" strokeWidth={2} />
-          <Line type="monotone" dataKey="despesa" stroke="#dc2626" strokeWidth={2} />
-          <Line type="monotone" dataKey="saldo" stroke="#1d4ed8" strokeWidth={2} />
+          <Line type="monotone" dataKey="receita" stroke="#cf1621" strokeWidth={2} />
+          <Line type="monotone" dataKey="despesa" stroke="#8d0f16" strokeWidth={2} />
+          <Line type="monotone" dataKey="saldo" stroke="#2a2024" strokeWidth={2} />
         </LineChart>
       </ResponsiveContainer>
     </div>
