@@ -1,0 +1,346 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FINANCEIRO
+  RECEPCAO
+  PERSONAL
+}
+
+enum AlunoStatus {
+  ATIVO
+  INATIVO
+  CANCELADO
+  TRANCADO
+}
+
+enum MensalidadeStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+  ISENTO
+  PARCIAL
+}
+
+enum PagamentoStatus {
+  CONFIRMADO
+  ESTORNADO
+  PENDENTE
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+}
+
+enum DespesaStatus {
+  PENDENTE
+  PAGO
+  PARCIAL
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String
+  role          UserRole
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  logsAuditoria LogAuditoria[]
+}
+
+model Modalidade {
+  id          String   @id @default(cuid())
+  nome        String   @unique
+  valorPadrao Decimal  @db.Decimal(10, 2)
+  ativa       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  alunos      Aluno[]
+}
+
+model Aluno {
+  id                     String                 @id @default(cuid())
+  nomeCompleto           String
+  telefone               String
+  vencimentoDia          Int
+  status                 AlunoStatus           @default(ATIVO)
+  dataInicio             DateTime
+  dataSaidaCancelamento  DateTime?
+  observacoes            String?
+  modalidadeId           String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  modalidade             Modalidade?            @relation(fields: [modalidadeId], references: [id])
+  mensalidades           Mensalidade[]
+  pagamentos             Pagamento[]
+  presencas              Presenca[]
+  movimentacoesCaixa     MovimentacaoCaixa[]
+  agendaPersonal         AgendaPersonal[]
+  pedidosProduto         PedidoProduto[]
+  historicoPlanos        HistoricoPlano[]
+
+  @@index([nomeCompleto])
+  @@index([telefone])
+  @@index([status])
+}
+
+model HistoricoPlano {
+  id                String   @id @default(cuid())
+  alunoId           String
+  modalidadeAnterior String?
+  modalidadeNova    String
+  valorAnterior     Decimal? @db.Decimal(10, 2)
+  valorNovo         Decimal? @db.Decimal(10, 2)
+  dataMudanca       DateTime @default(now())
+  observacao        String?
+
+  aluno             Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@index([alunoId, dataMudanca])
+}
+
+model Mensalidade {
+  id             String            @id @default(cuid())
+  alunoId        String
+  competencia    String
+  valor          Decimal           @db.Decimal(10, 2)
+  vencimento     DateTime
+  dataPagamento  DateTime?
+  formaPagamento String?
+  status         MensalidadeStatus @default(PENDENTE)
+  observacao     String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  aluno          Aluno             @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  pagamentos     Pagamento[]
+
+  @@unique([alunoId, competencia])
+  @@index([competencia, status])
+}
+
+model Pagamento {
+  id                String          @id @default(cuid())
+  alunoId           String
+  mensalidadeId     String?
+  valor             Decimal         @db.Decimal(10, 2)
+  dataPagamento     DateTime
+  formaPagamento    String
+  status            PagamentoStatus @default(CONFIRMADO)
+  observacao        String?
+  createdAt         DateTime        @default(now())
+
+  aluno             Aluno           @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  mensalidade       Mensalidade?    @relation(fields: [mensalidadeId], references: [id], onDelete: SetNull)
+
+  @@index([dataPagamento])
+}
+
+model CategoriaFinanceira {
+  id         String   @id @default(cuid())
+  nome       String   @unique
+  tipo       TipoMovimentacao?
+  descricao  String?
+  ativa      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  movimentacoes MovimentacaoCaixa[]
+  despesasAcademia DespesaAcademia[]
+  despesasFamilia DespesaFamilia[]
+}
+
+model MovimentacaoCaixa {
+  id              String           @id @default(cuid())
+  data            DateTime
+  tipo            TipoMovimentacao
+  categoriaId     String?
+  descricao       String
+  valor           Decimal          @db.Decimal(10, 2)
+  origemDestino   String?
+  alunoId         String?
+  formaPagamento  String?
+  competencia     String
+  observacao      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  categoria       CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  aluno           Aluno?               @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+
+  @@index([competencia, tipo])
+}
+
+model DespesaAcademia {
+  id              String        @id @default(cuid())
+  dataVencimento  DateTime
+  competencia     String
+  descricao       String
+  categoriaId     String?
+  valorPrevisto   Decimal       @db.Decimal(10, 2)
+  valorPago       Decimal       @default(0) @db.Decimal(10, 2)
+  status          DespesaStatus @default(PENDENTE)
+  dataPagamento   DateTime?
+  observacao      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  categoria       CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  @@index([competencia, status])
+}
+
+model DespesaFamilia {
+  id              String        @id @default(cuid())
+  dataVencimento  DateTime
+  competencia     String
+  descricao       String
+  categoriaId     String?
+  valorPrevisto   Decimal       @db.Decimal(10, 2)
+  valorPago       Decimal       @default(0) @db.Decimal(10, 2)
+  status          DespesaStatus @default(PENDENTE)
+  dataPagamento   DateTime?
+  observacao      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  categoria       CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  @@index([competencia, status])
+}
+
+model Presenca {
+  id          String   @id @default(cuid())
+  alunoId     String
+  data        DateTime
+  horario     String?
+  tipoAula    String
+  presente    Boolean  @default(true)
+  observacao  String?
+  createdAt   DateTime @default(now())
+
+  aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+
+  @@unique([alunoId, data, horario])
+  @@index([data])
+}
+
+model ControleMensalAlunos {
+  id            String   @id @default(cuid())
+  competencia   String   @unique
+  inicioMes     Int
+  entrou        Int
+  saiu          Int
+  totalFinal    Int
+  ajusteManual  Boolean  @default(false)
+  observacao    String?
+  updatedAt     DateTime @updatedAt
+}
+
+model AgendaPersonal {
+  id          String   @id @default(cuid())
+  professor   String
+  diaSemana   Int
+  horario     String
+  alunoId     String?
+  alunoNome   String?
+  tipoAula    String
+  observacao  String?
+  ativo       Boolean  @default(true)
+  semanaRef   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  aluno       Aluno?   @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+
+  @@index([professor, semanaRef, diaSemana])
+}
+
+model Produto {
+  id          String   @id @default(cuid())
+  nome        String
+  categoria   String
+  tamanho     String?
+  cor         String?
+  preco       Decimal  @db.Decimal(10, 2)
+  estoque     Int      @default(0)
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  itensPedido PedidoItem[]
+
+  @@index([nome])
+}
+
+model PedidoProduto {
+  id            String      @id @default(cuid())
+  clienteNome   String
+  alunoId       String?
+  modelo        String?
+  cor           String?
+  tamanho       String?
+  quantidade    Int         @default(1)
+  valorUnitario Decimal     @db.Decimal(10, 2)
+  valorTotal    Decimal     @db.Decimal(10, 2)
+  pago          Decimal     @default(0) @db.Decimal(10, 2)
+  dataPedido    DateTime    @default(now())
+  observacao    String?
+  createdAt     DateTime    @default(now())
+
+  aluno         Aluno?      @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+  itens         PedidoItem[]
+
+  @@index([dataPedido])
+}
+
+model PedidoItem {
+  id              String      @id @default(cuid())
+  pedidoId        String
+  produtoId       String?
+  descricaoManual String?
+  modelo          String?
+  cor             String?
+  tamanho         String?
+  quantidade      Int
+  valorUnitario   Decimal     @db.Decimal(10, 2)
+  valorTotal      Decimal     @db.Decimal(10, 2)
+
+  pedido          PedidoProduto @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto         Produto?      @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+}
+
+model Configuracao {
+  id          String   @id @default(cuid())
+  chave       String   @unique
+  valor       String
+  descricao   String?
+  updatedAt   DateTime @updatedAt
+}
+
+model LogAuditoria {
+  id          String   @id @default(cuid())
+  userId      String?
+  modulo      String
+  entidade    String
+  entidadeId  String
+  acao        String
+  antes       Json?
+  depois      Json?
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([modulo, createdAt])
+}
