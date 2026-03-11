@@ -6,11 +6,13 @@ import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { garantirMensalidadesDoMesAtual } from "@/lib/services/mensalidades";
 
+const MONTH_SHORT_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
+
 function formatMonthDay(date: Date | null | undefined) {
   if (!date) return "";
-  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${month}-${day}`;
+  const month = MONTH_SHORT_PT[date.getMonth()] ?? String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
 }
 
 function formatCompetenciaLabel(competencia: string) {

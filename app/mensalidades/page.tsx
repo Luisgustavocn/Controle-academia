@@ -71,11 +71,13 @@ const statusOptions: Array<{ label: string; value: MensalidadeStatus }> = [
   { label: "Isento", value: "ISENTO" }
 ];
 
-function todayMonthDay() {
+const MONTH_SHORT_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
+
+function todayDayMonth() {
   const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
-  return `${month}-${day}`;
+  const month = MONTH_SHORT_PT[now.getMonth()] ?? String(now.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
 }
 
 function toCurrency(value: number) {
@@ -180,9 +182,10 @@ export default function MensalidadesPage() {
         })
       });
 
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        throw new Error(data.error ?? "Não foi possível salvar");
+        const fallback = `Não foi possível salvar (${res.status})`;
+        throw new Error(data?.error ?? fallback);
       }
 
       closeEdit();
@@ -204,13 +207,14 @@ export default function MensalidadesPage() {
         },
         body: JSON.stringify({
           status: "PAGO",
-          dataPagamento: todayMonthDay()
+          dataPagamento: todayDayMonth()
         })
       });
 
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        throw new Error(data.error ?? "Não foi possível marcar como pago");
+        const fallback = `Não foi possível marcar como pago (${res.status})`;
+        throw new Error(data?.error ?? fallback);
       }
 
       await fetchBoard();
@@ -233,9 +237,9 @@ export default function MensalidadesPage() {
     <div className="space-y-4">
       <ModuleHeader
         title="Mensalidades"
-        description="Cobrança adiantada por mês de referência, com atraso acumulado por aluno/mês."
+        description="Cobrança mensal por mês de referência, com atraso acumulado por aluno/mês."
         icon={CreditCard}
-        badges={["Cobrança adiantada", "Pagas", "Atrasadas"]}
+        badges={["Cobrança mensal", "Pagas", "Atrasadas"]}
         stats={stats}
       />
 
@@ -522,7 +526,7 @@ export default function MensalidadesPage() {
                         ...prev,
                         status: event.target.value as MensalidadeStatus,
                         dataPagamento:
-                          event.target.value === "PAGO" && !prev.dataPagamento ? todayMonthDay() : prev.dataPagamento
+                          event.target.value === "PAGO" && !prev.dataPagamento ? todayDayMonth() : prev.dataPagamento
                       }))
                     }
                   >
@@ -535,11 +539,11 @@ export default function MensalidadesPage() {
                 </label>
 
                 <label className="text-sm font-medium text-ink">
-                  Data de pagamento (MM-DD)
+                  Data de pagamento (DD/mmm)
                   <Input
                     value={editForm.dataPagamento}
                     onChange={(event) => setEditForm((prev) => ({ ...prev, dataPagamento: event.target.value }))}
-                    placeholder="03-10"
+                    placeholder="10/mar"
                   />
                 </label>
 

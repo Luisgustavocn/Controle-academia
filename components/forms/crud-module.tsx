@@ -209,10 +209,41 @@ function normalizeCellValue(key: string, value: unknown, label?: string, row?: R
   return normalizeValue(value);
 }
 
-function toFormState(item: Record<string, unknown>, allowedKeys: string[]) {
-  return allowedKeys.reduce<Record<string, string>>((acc, key) => {
-    const value = item[key];
-    acc[key] = value === null || value === undefined ? "" : String(value);
+function normalizeFormFieldValue(value: unknown, type?: Field["type"]) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const raw = String(value);
+  if (type === "date") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return raw;
+    }
+    if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+      return raw.slice(0, 10);
+    }
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+  }
+
+  if (type === "datetime-local") {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) {
+      return raw.slice(0, 16);
+    }
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 16);
+    }
+  }
+
+  return raw;
+}
+
+function toFormState(item: Record<string, unknown>, fields: Field[]) {
+  return fields.reduce<Record<string, string>>((acc, field) => {
+    acc[field.key] = normalizeFormFieldValue(item[field.key], field.type);
     return acc;
   }, {});
 }
@@ -333,6 +364,9 @@ export function CrudModule({
       if (search) {
         url.searchParams.set("q", search);
       }
+      if (localStatusFilter) {
+        url.searchParams.set("status", localStatusFilter);
+      }
       const res = await fetch(`${url.pathname}${url.search}`);
       const raw = await res.text();
       let data: { items?: Record<string, unknown>[]; error?: string } = {};
@@ -370,7 +404,7 @@ export function CrudModule({
     }, 250);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, localStatusFilter]);
 
   useEffect(() => {
     if (refreshKey === undefined) {
@@ -539,7 +573,6 @@ export function CrudModule({
     () => fields.filter((field) => field.type === "multi-select").map((field) => field.key),
     [fields]
   );
-  const editableFieldKeys = useMemo(() => fields.map((field) => field.key), [fields]);
 
   useEffect(() => {
     if (relationFieldKeys.length === 0 || !formOpen) {
@@ -758,7 +791,7 @@ export function CrudModule({
   function startEdit(item: Record<string, unknown>) {
     const itemId = item.id === undefined || item.id === null ? null : String(item.id);
     setEditingId(itemId);
-    setForm(toFormState(item, editableFieldKeys));
+    setForm(toFormState(item, fields));
     setFormOpen(true);
     setOpenActions(null);
   }
@@ -793,6 +826,36 @@ export function CrudModule({
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       alert(payload.error ?? "Não foi possível atualizar o registro");
+      return;
+    }
+
+    await fetchItems();
+    await notifyDataChanged();
+    setOpenActions(null);
+  }
+
+  async function reativarComoNovoCadastro(item: Record<string, unknown>) {
+    const id = String(item.id ?? "");
+    if (!id) return;
+
+    const status = String(item.status ?? "").toUpperCase();
+    if (status !== "CANCELADO" && status !== "TRANCADO") {
+      alert("A ação de reativar como novo cadastro é apenas para alunos cancelados ou trancados.");
+      return;
+    }
+
+    const confirmed = window.confirm("Criar um novo cadastro ativo com os mesmos dados deste aluno?");
+    if (!confirmed) {
+      return;
+    }
+
+    const res = await fetch(`${endpoint}/${id}/reativar`, {
+      method: "POST"
+    });
+
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(payload.error ?? "Não foi possível criar o novo cadastro");
       return;
     }
 
@@ -1023,6 +1086,19 @@ export function CrudModule({
                       : quickBooleanField === "presente"
                         ? "Marcar presente"
                         : "Ativar"}
+                  </Button>
+                ) : null}
+
+                {endpoint === "/api/alunos" &&
+                ["CANCELADO", "TRANCADO"].includes(String(openActions.item.status ?? "").toUpperCase()) &&
+                openActions.item.id !== undefined ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => void reativarComoNovoCadastro(openActions.item)}
+                  >
+                    Reativar como novo
                   </Button>
                 ) : null}
 

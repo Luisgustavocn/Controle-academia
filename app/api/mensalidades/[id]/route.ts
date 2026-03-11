@@ -9,6 +9,20 @@ import { buildVencimentoDate } from "@/lib/services/mensalidades";
 import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
+const MONTH_BY_PT_SHORT: Record<string, number> = {
+  jan: 1,
+  fev: 2,
+  mar: 3,
+  abr: 4,
+  mai: 5,
+  jun: 6,
+  jul: 7,
+  ago: 8,
+  set: 9,
+  out: 10,
+  nov: 11,
+  dez: 12
+};
 
 function parseMonthDayOrDate(value: unknown, competenciaRef: string, fieldName: string) {
   if (value === undefined || value === null || value === "") {
@@ -30,9 +44,35 @@ function parseMonthDayOrDate(value: unknown, competenciaRef: string, fieldName: 
 
   const match = /^(\d{1,2})[-/](\d{1,2})$/.exec(raw);
   if (match) {
-    const month = Number(match[1]);
-    const day = Number(match[2]);
-    if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    if (!Number.isInteger(first) || !Number.isInteger(second) || first < 1 || first > 31 || second < 1 || second > 31) {
+      throw new Error(`${fieldName} inválida`);
+    }
+
+    // Padrão principal: DD-MM. Compatibilidade: MM-DD quando o primeiro campo <= 12 e o segundo > 12.
+    let day = first;
+    let month = second;
+    if (first <= 12 && second > 12) {
+      day = second;
+      month = first;
+    }
+    if (month < 1 || month > 12) {
+      throw new Error(`${fieldName} inválida`);
+    }
+
+    const [competenciaYearRaw, competenciaMonthRaw] = competenciaRef.split("-").map(Number);
+    const competenciaYear = Number.isInteger(competenciaYearRaw) ? competenciaYearRaw : new Date().getFullYear();
+    const competenciaMonth = Number.isInteger(competenciaMonthRaw) ? competenciaMonthRaw : new Date().getMonth() + 1;
+    const resolvedYear = month > competenciaMonth ? competenciaYear - 1 : competenciaYear;
+    return new Date(resolvedYear, month - 1, day);
+  }
+
+  const textMonthMatch = /^(\d{1,2})[-/](jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)$/i.exec(raw);
+  if (textMonthMatch) {
+    const day = Number(textMonthMatch[1]);
+    const month = MONTH_BY_PT_SHORT[textMonthMatch[2].toLowerCase()];
+    if (!Number.isInteger(day) || day < 1 || day > 31 || !month) {
       throw new Error(`${fieldName} inválida`);
     }
     const [competenciaYearRaw, competenciaMonthRaw] = competenciaRef.split("-").map(Number);
@@ -42,7 +82,7 @@ function parseMonthDayOrDate(value: unknown, competenciaRef: string, fieldName: 
     return new Date(resolvedYear, month - 1, day);
   }
 
-  throw new Error(`${fieldName} inválida. Use MM-DD`);
+  throw new Error(`${fieldName} inválida. Use DD/mmm (ex.: 02/fev)`);
 }
 
 function parseStatus(value: unknown) {

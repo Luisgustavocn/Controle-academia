@@ -15,10 +15,7 @@ const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(Mensa
 
 function toDateInputValue(date: Date | null | undefined) {
   if (!date) return "";
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return date.toISOString().slice(0, 10);
 }
 
 function parseOptionalDate(value: unknown, fieldName: string) {
@@ -63,7 +60,24 @@ export async function GET(request: NextRequest) {
   const modalidadeId = request.nextUrl.searchParams.get("modalidadeId") ?? "";
 
   const where: Prisma.AlunoWhereInput = {
-    ...(status ? { status: status as never } : {}),
+    ...(status
+      ? { status: status as never }
+      : {
+          OR: [
+            { status: { in: [AlunoStatus.ATIVO, AlunoStatus.INATIVO] } },
+            {
+              status: { in: [AlunoStatus.CANCELADO, AlunoStatus.TRANCADO] },
+              dataSaidaCancelamento: {
+                gte: (() => {
+                  const d = new Date();
+                  d.setHours(0, 0, 0, 0);
+                  d.setDate(1);
+                  return d;
+                })()
+              }
+            }
+          ]
+        }),
     ...(modalidadeId ? { modalidadeId } : {}),
     ...(q
       ? {
@@ -101,6 +115,8 @@ export async function GET(request: NextRequest) {
 
       return {
         ...aluno,
+        dataInicio: toDateInputValue(aluno.dataInicio),
+        dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
         modalidadeNome: aluno.modalidade?.nome ?? "",
         valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
         inadimplente: inadimplencia > 0,
@@ -149,7 +165,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
   }
+  const inicioMesAtual = new Date();
+  inicioMesAtual.setHours(0, 0, 0, 0);
+  inicioMesAtual.setDate(1);
   const status = dataSaidaCancelamento ? AlunoStatus.CANCELADO : statusInformado;
+  const dataSaidaFinal =
+    dataSaidaCancelamento ??
+    (status === AlunoStatus.CANCELADO || status === AlunoStatus.TRANCADO ? inicioMesAtual : null);
 
   const created = await prisma.$transaction(async (tx) => {
     const aluno = await tx.aluno.create({
@@ -160,7 +182,7 @@ export async function POST(request: NextRequest) {
         vencimentoDia,
         status,
         dataInicio: new Date(String(body.dataInicio)),
-        dataSaidaCancelamento,
+        dataSaidaCancelamento: dataSaidaFinal,
         observacoes: body.observacoes ? String(body.observacoes) : null
       }
     });
@@ -221,8 +243,8 @@ export async function POST(request: NextRequest) {
     await generateMensalidadesAteCompetencia(currentCompetencia(), [created.id]);
   }
 
-  if (created.dataSaidaCancelamento) {
-    await cancelarMensalidadesFuturasDoAluno(created.id, created.dataSaidaCancelamento);
+  if (created.dataSaidaCancelamento || created.status === AlunoStatus.TRANCADO) {
+    await cancelarMensalidadesFuturasDoAluno(created.id, created.dataSaidaCancelamento ?? inicioMesAtual);
   }
 
   return ok({ item: created }, 201);

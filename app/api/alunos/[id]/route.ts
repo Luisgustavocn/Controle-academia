@@ -8,6 +8,8 @@ import {
   buildVencimentoDate,
   cancelarMensalidadesFuturasDoAluno,
   generateMensalidadesAteCompetencia,
+  competenciaFromUtcDate,
+  sincronizarMensalidadesComDataInicio,
   sincronizarVencimentoMensalidadesPorAluno
 } from "@/lib/services/mensalidades";
 import { isModalidadePersonalizada } from "@/lib/services/modalidades";
@@ -64,7 +66,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   let mensalidadeDataPagamento: Date | null = null;
   let mensalidadeStatus: MensalidadeStatus | null = null;
   let dataSaidaCancelamento: Date | null | undefined = undefined;
-  const statusInformado = body.status ? (String(body.status) as AlunoStatus) : undefined;
+  const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : undefined;
 
   try {
     mensalidadeValor = parseOptionalNumber(body.mensalidadeValor, "valor da mensalidade");
@@ -77,8 +79,6 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
   }
 
-  const statusFinal = dataSaidaCancelamento ? AlunoStatus.CANCELADO : statusInformado;
-
   const previous = await prisma.aluno.findUnique({
     where: { id },
     include: { modalidade: true }
@@ -86,6 +86,31 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   if (!previous) {
     return fail("Aluno não encontrado", 404);
+  }
+
+  const inicioMesAtual = new Date();
+  inicioMesAtual.setHours(0, 0, 0, 0);
+  inicioMesAtual.setDate(1);
+
+  let statusFinal = statusInformado ?? previous.status;
+  let dataSaidaFinal = dataSaidaCancelamento;
+  const hasDataSaidaPayload = "dataSaidaCancelamento" in body;
+
+  if (dataSaidaCancelamento) {
+    statusFinal = AlunoStatus.CANCELADO;
+  }
+
+  if (statusFinal === AlunoStatus.ATIVO) {
+    dataSaidaFinal = null;
+  } else if (statusFinal === AlunoStatus.CANCELADO || statusFinal === AlunoStatus.TRANCADO) {
+    if (dataSaidaFinal === undefined) {
+      dataSaidaFinal = previous.dataSaidaCancelamento ?? inicioMesAtual;
+    }
+    if (hasDataSaidaPayload && dataSaidaFinal === null) {
+      dataSaidaFinal = inicioMesAtual;
+    }
+  } else if (!hasDataSaidaPayload) {
+    dataSaidaFinal = undefined;
   }
 
   const updated = await prisma.aluno.update({
@@ -97,7 +122,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       vencimentoDia: body.vencimentoDia ? Math.min(31, Math.max(1, Number(body.vencimentoDia))) : undefined,
       status: statusFinal,
       dataInicio: body.dataInicio ? new Date(String(body.dataInicio)) : undefined,
-      dataSaidaCancelamento,
+      dataSaidaCancelamento: dataSaidaFinal,
       observacoes: body.observacoes === "" ? null : (body.observacoes as string | undefined)
     },
     include: { modalidade: true }
@@ -185,7 +210,16 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     await sincronizarVencimentoMensalidadesPorAluno(id);
   }
 
-  if (updated.dataSaidaCancelamento) {
+  const competenciaAnteriorInicio = competenciaFromUtcDate(previous.dataInicio);
+  const competenciaAtualInicio = competenciaFromUtcDate(updated.dataInicio);
+  if (competenciaAnteriorInicio !== competenciaAtualInicio) {
+    await sincronizarMensalidadesComDataInicio(id, updated.dataInicio);
+  }
+
+  if (updated.status === AlunoStatus.CANCELADO || updated.status === AlunoStatus.TRANCADO) {
+    const referenciaSaida = updated.dataSaidaCancelamento ?? inicioMesAtual;
+    await cancelarMensalidadesFuturasDoAluno(id, referenciaSaida);
+  } else if (updated.dataSaidaCancelamento) {
     await cancelarMensalidadesFuturasDoAluno(id, updated.dataSaidaCancelamento);
   }
 

@@ -11,9 +11,21 @@ type AuditPayload = {
 };
 
 export async function logAudit(payload: AuditPayload) {
+  let safeUserId: string | null = payload.userId ?? null;
+
+  if (safeUserId) {
+    const userExists = await prisma.user.findUnique({
+      where: { id: safeUserId },
+      select: { id: true }
+    });
+    if (!userExists) {
+      safeUserId = null;
+    }
+  }
+
   await prisma.logAuditoria.create({
     data: {
-      userId: payload.userId,
+      userId: safeUserId,
       modulo: payload.modulo,
       entidade: payload.entidade,
       entidadeId: payload.entidadeId,

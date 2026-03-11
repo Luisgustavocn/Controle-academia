@@ -6,8 +6,8 @@ import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 export function buildVencimentoDate(competencia: string, vencimentoDia: number) {
   const [year, month] = competencia.split("-").map(Number);
-  const ultimoDiaMesAnterior = new Date(year, month - 1, 0).getDate();
-  return new Date(year, month - 2, Math.min(ultimoDiaMesAnterior, Math.max(1, vencimentoDia)));
+  const ultimoDiaDoMes = new Date(year, month, 0).getDate();
+  return new Date(year, month - 1, Math.min(ultimoDiaDoMes, Math.max(1, vencimentoDia)));
 }
 
 function competenciasBetween(startCompetencia: string, endCompetencia: string) {
@@ -224,7 +224,20 @@ export async function generateMensalidadesAteCompetencia(
 
 export async function atualizarStatusMensalidadesAtrasadas() {
   const inicioDoDia = startOfDay(new Date());
-  const result = await prisma.mensalidade.updateMany({
+  const voltaramPendentes = await prisma.mensalidade.updateMany({
+    where: {
+      status: MensalidadeStatus.ATRASADO,
+      dataPagamento: null,
+      vencimento: {
+        gte: inicioDoDia
+      }
+    },
+    data: {
+      status: MensalidadeStatus.PENDENTE
+    }
+  });
+
+  const ficaramAtrasadas = await prisma.mensalidade.updateMany({
     where: {
       status: MensalidadeStatus.PENDENTE,
       vencimento: {
@@ -236,7 +249,7 @@ export async function atualizarStatusMensalidadesAtrasadas() {
     }
   });
 
-  return result.count;
+  return ficaramAtrasadas.count + voltaramPendentes.count;
 }
 
 export async function sincronizarVencimentoMensalidadesPorAluno(alunoId?: string) {
@@ -266,6 +279,24 @@ export async function sincronizarVencimentoMensalidadesPorAluno(alunoId?: string
   }
 
   return atualizadas;
+}
+
+export async function sincronizarMensalidadesComDataInicio(alunoId: string, dataInicio: Date) {
+  const competenciaInicio = competenciaFromUtcDate(dataInicio);
+
+  const removidas = await prisma.mensalidade.deleteMany({
+    where: {
+      alunoId,
+      competencia: {
+        lt: competenciaInicio
+      }
+    }
+  });
+
+  return {
+    competenciaInicio,
+    removidas: removidas.count
+  };
 }
 
 export async function garantirMensalidadesDoMesAtual(competencia = currentCompetencia()) {
