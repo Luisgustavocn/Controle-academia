@@ -45,21 +45,32 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error ?? "Falha no login");
+      let data: { error?: string } | null = null;
+      try {
+        data = (await res.json()) as { error?: string };
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        setError(data?.error ?? "Falha no login");
+        setLoading(false);
+        return;
+      }
+
+      router.replace("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Nao foi possivel conectar ao servidor");
       setLoading(false);
-      return;
     }
-
-    router.replace("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -73,16 +84,16 @@ export default function LoginPage() {
             <div className="mb-6 inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/90">
               {academyName}
             </div>
-            <h1 className="text-4xl font-black leading-tight">Gestão completa da academia em uma única plataforma.</h1>
+            <h1 className="text-4xl font-black leading-tight">Gestao completa da academia em uma unica plataforma.</h1>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-white/75">
-              Controle financeiro, frequência, agenda personal e relatórios gerenciais com uma experiência rápida e visual profissional.
+              Controle financeiro, frequencia, agenda personal e relatorios gerenciais com uma experiencia rapida e visual profissional.
             </p>
           </div>
 
           <ul className="mt-8 space-y-3 text-sm">
             <li className="flex items-center gap-2 text-white/90"><ShieldCheck className="h-4 w-4 text-[#ff828c]" /> Controle por perfil de acesso</li>
-            <li className="flex items-center gap-2 text-white/90"><Zap className="h-4 w-4 text-[#ff828c]" /> Lançamentos rápidos para rotina diária</li>
-            <li className="flex items-center gap-2 text-white/90"><Trophy className="h-4 w-4 text-[#ff828c]" /> Dashboard com indicadores estratégicos</li>
+            <li className="flex items-center gap-2 text-white/90"><Zap className="h-4 w-4 text-[#ff828c]" /> Lancamentos rapidos para rotina diaria</li>
+            <li className="flex items-center gap-2 text-white/90"><Trophy className="h-4 w-4 text-[#ff828c]" /> Dashboard com indicadores estrategicos</li>
           </ul>
         </section>
 
@@ -95,7 +106,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <p className="text-sm text-muted">Acesso ao sistema de gestão da academia</p>
+          <p className="text-sm text-muted">Acesso ao sistema de gestao da academia</p>
 
           <form className="mt-4 space-y-3" onSubmit={submit}>
             <label className="text-sm font-medium text-ink">

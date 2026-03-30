@@ -1,34 +1,13 @@
 import { UserRole } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
+import { buildBackupPayload } from "@/lib/services/backup";
 
 export async function GET(request: NextRequest) {
   const auth = requireRole(request, UserRole.ADMIN);
   if (auth instanceof Response) return auth;
 
-  const [alunos, mensalidades, caixa, despesasA, presencas, agenda, produtos, pedidos] = await Promise.all([
-    prisma.aluno.findMany(),
-    prisma.mensalidade.findMany(),
-    prisma.movimentacaoCaixa.findMany(),
-    prisma.despesaAcademia.findMany(),
-    prisma.presenca.findMany(),
-    prisma.agendaPersonal.findMany(),
-    prisma.produto.findMany(),
-    prisma.pedidoProduto.findMany({ include: { itens: true } })
-  ]);
-
-  const payload = {
-    generatedAt: new Date().toISOString(),
-    alunos,
-    mensalidades,
-    caixa,
-    despesasAcademia: despesasA,
-    presencas,
-    agendaPersonal: agenda,
-    produtos,
-    pedidos
-  };
+  const payload = await buildBackupPayload();
 
   return new NextResponse(JSON.stringify(payload), {
     status: 200,

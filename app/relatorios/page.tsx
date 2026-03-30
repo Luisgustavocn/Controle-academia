@@ -70,6 +70,56 @@ type FrequenciaRanking = {
   total: number;
 };
 
+type VencimentoItem = {
+  id: string;
+  competencia: string;
+  valor: number;
+  vencimento: string;
+  status: string;
+  dataPagamento?: string | null;
+  aluno: {
+    nomeCompleto: string;
+    telefone: string;
+    vencimentoDia: number;
+    modalidade?: {
+      nome: string;
+    } | null;
+  };
+};
+
+type DespesaCategoriaItem = {
+  categoria: string;
+  quantidade: number;
+  valorPrevisto: number;
+  valorPago: number;
+  pendentes: number;
+};
+
+type PedidoResumoItem = {
+  id: string;
+  clienteNome: string;
+  valorTotal: number;
+  pago: number;
+  dataPedido: string;
+  aluno?: {
+    nomeCompleto: string;
+  } | null;
+};
+
+type ProdutoResumo = {
+  produto: string;
+  quantidade: number;
+  faturamento: number;
+};
+
+type AlunoMovimentoSerie = {
+  competencia: string;
+  inicioMes: number;
+  entrou: number;
+  saiu: number;
+  totalFinal: number;
+};
+
 type MensalidadesResumo = {
   pagas: number;
   pendentes: number;
@@ -96,6 +146,7 @@ type DashboardKpis = {
 type RelatoriosState = {
   ativos: AlunoAtivo[];
   inadimplentes: Inadimplente[];
+  vencimentos: VencimentoItem[];
   caixa: {
     competencia: string;
     totalEntradas: number;
@@ -108,6 +159,23 @@ type RelatoriosState = {
     totalPresencasMes: number;
     ranking: FrequenciaRanking[];
     baixaFrequencia: FrequenciaRanking[];
+  };
+  despesasCategorias: {
+    totalPrevisto: number;
+    totalPago: number;
+    items: DespesaCategoriaItem[];
+  };
+  pedidos: {
+    totalPedidos: number;
+    totalFaturado: number;
+    totalRecebido: number;
+    totalEmAberto: number;
+    items: PedidoResumoItem[];
+    topProdutos: ProdutoResumo[];
+  };
+  alunosMovimento: {
+    atual: AlunoMovimentoSerie | null;
+    series: AlunoMovimentoSerie[];
   };
   mensalidadesResumo: MensalidadesResumo;
 };
@@ -140,6 +208,7 @@ const EMPTY_KPIS: DashboardKpis = {
 const EMPTY_STATE: RelatoriosState = {
   ativos: [],
   inadimplentes: [],
+  vencimentos: [],
   caixa: {
     competencia: "",
     totalEntradas: 0,
@@ -152,6 +221,23 @@ const EMPTY_STATE: RelatoriosState = {
     totalPresencasMes: 0,
     ranking: [],
     baixaFrequencia: []
+  },
+  despesasCategorias: {
+    totalPrevisto: 0,
+    totalPago: 0,
+    items: []
+  },
+  pedidos: {
+    totalPedidos: 0,
+    totalFaturado: 0,
+    totalRecebido: 0,
+    totalEmAberto: 0,
+    items: [],
+    topProdutos: []
+  },
+  alunosMovimento: {
+    atual: null,
+    series: []
   },
   mensalidadesResumo: EMPTY_MENSALIDADES_RESUMO
 };
@@ -218,6 +304,30 @@ function normalizeKpis(payload: unknown): DashboardKpis {
   };
 }
 
+async function exportRows(filename: string, rows: Array<Record<string, unknown>>) {
+  const res = await fetch("/api/relatorios/export", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ filename, rows })
+  });
+
+  if (!res.ok) {
+    throw new Error("Falha ao exportar CSV");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${filename}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export default function RelatoriosPage() {
   const [competencia, setCompetencia] = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(false);
@@ -240,8 +350,12 @@ export default function RelatoriosPage() {
       const [
         ativosRes,
         inadimplentesRes,
+        vencimentosRes,
         caixaRes,
         frequenciaRes,
+        despesasCategoriasRes,
+        pedidosRes,
+        alunosMovimentoRes,
         mensalidadesResumoRes,
         summaryAtualRes,
         mensalidadesResumoAnteriorRes,
@@ -249,8 +363,12 @@ export default function RelatoriosPage() {
       ] = await Promise.all([
         fetch("/api/relatorios/ativos", { cache: "no-store" }),
         fetch(`/api/relatorios/inadimplentes?${query}`, { cache: "no-store" }),
+        fetch(`/api/relatorios/vencimentos?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/caixa-mensal?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/frequencia?${query}`, { cache: "no-store" }),
+        fetch(`/api/relatorios/despesas-categorias?${query}`, { cache: "no-store" }),
+        fetch(`/api/relatorios/pedidos?${query}`, { cache: "no-store" }),
+        fetch(`/api/relatorios/alunos-movimento?${query}`, { cache: "no-store" }),
         fetch(`/api/mensalidades/colunas?${query}`, { cache: "no-store" }),
         fetch(`/api/dashboard/summary?${query}`, { cache: "no-store" }),
         fetch(`/api/mensalidades/colunas?${prevQuery}`, { cache: "no-store" }),
@@ -260,8 +378,12 @@ export default function RelatoriosPage() {
       const [
         ativosPayload,
         inadimplentesPayload,
+        vencimentosPayload,
         caixaPayload,
         frequenciaPayload,
+        despesasCategoriasPayload,
+        pedidosPayload,
+        alunosMovimentoPayload,
         mensalidadesResumoPayload,
         summaryAtualPayload,
         mensalidadesResumoAnteriorPayload,
@@ -269,8 +391,12 @@ export default function RelatoriosPage() {
       ] = await Promise.all([
         ativosRes.json().catch(() => ({})),
         inadimplentesRes.json().catch(() => ({})),
+        vencimentosRes.json().catch(() => ({})),
         caixaRes.json().catch(() => ({})),
         frequenciaRes.json().catch(() => ({})),
+        despesasCategoriasRes.json().catch(() => ({})),
+        pedidosRes.json().catch(() => ({})),
+        alunosMovimentoRes.json().catch(() => ({})),
         mensalidadesResumoRes.json().catch(() => ({})),
         summaryAtualRes.json().catch(() => ({})),
         mensalidadesResumoAnteriorRes.json().catch(() => ({})),
@@ -280,8 +406,12 @@ export default function RelatoriosPage() {
       if (
         !ativosRes.ok ||
         !inadimplentesRes.ok ||
+        !vencimentosRes.ok ||
         !caixaRes.ok ||
         !frequenciaRes.ok ||
+        !despesasCategoriasRes.ok ||
+        !pedidosRes.ok ||
+        !alunosMovimentoRes.ok ||
         !mensalidadesResumoRes.ok ||
         !summaryAtualRes.ok ||
         !mensalidadesResumoAnteriorRes.ok ||
@@ -290,8 +420,12 @@ export default function RelatoriosPage() {
         const message =
           (ativosPayload as { error?: string }).error ||
           (inadimplentesPayload as { error?: string }).error ||
+          (vencimentosPayload as { error?: string }).error ||
           (caixaPayload as { error?: string }).error ||
           (frequenciaPayload as { error?: string }).error ||
+          (despesasCategoriasPayload as { error?: string }).error ||
+          (pedidosPayload as { error?: string }).error ||
+          (alunosMovimentoPayload as { error?: string }).error ||
           (mensalidadesResumoPayload as { error?: string }).error ||
           (summaryAtualPayload as { error?: string }).error ||
           (mensalidadesResumoAnteriorPayload as { error?: string }).error ||
@@ -306,6 +440,9 @@ export default function RelatoriosPage() {
           : [],
         inadimplentes: Array.isArray((inadimplentesPayload as { items?: unknown[] }).items)
           ? ((inadimplentesPayload as { items: Inadimplente[] }).items ?? [])
+          : [],
+        vencimentos: Array.isArray((vencimentosPayload as { items?: unknown[] }).items)
+          ? ((vencimentosPayload as { items: VencimentoItem[] }).items ?? [])
           : [],
         caixa: {
           competencia: String((caixaPayload as { competencia?: string }).competencia ?? competencia),
@@ -324,6 +461,31 @@ export default function RelatoriosPage() {
             : [],
           baixaFrequencia: Array.isArray((frequenciaPayload as { baixaFrequencia?: unknown[] }).baixaFrequencia)
             ? ((frequenciaPayload as { baixaFrequencia: FrequenciaRanking[] }).baixaFrequencia ?? [])
+            : []
+        },
+        despesasCategorias: {
+          totalPrevisto: Number((despesasCategoriasPayload as { totalPrevisto?: number }).totalPrevisto ?? 0),
+          totalPago: Number((despesasCategoriasPayload as { totalPago?: number }).totalPago ?? 0),
+          items: Array.isArray((despesasCategoriasPayload as { items?: unknown[] }).items)
+            ? ((despesasCategoriasPayload as { items: DespesaCategoriaItem[] }).items ?? [])
+            : []
+        },
+        pedidos: {
+          totalPedidos: Number((pedidosPayload as { totalPedidos?: number }).totalPedidos ?? 0),
+          totalFaturado: Number((pedidosPayload as { totalFaturado?: number }).totalFaturado ?? 0),
+          totalRecebido: Number((pedidosPayload as { totalRecebido?: number }).totalRecebido ?? 0),
+          totalEmAberto: Number((pedidosPayload as { totalEmAberto?: number }).totalEmAberto ?? 0),
+          items: Array.isArray((pedidosPayload as { items?: unknown[] }).items)
+            ? ((pedidosPayload as { items: PedidoResumoItem[] }).items ?? [])
+            : [],
+          topProdutos: Array.isArray((pedidosPayload as { topProdutos?: unknown[] }).topProdutos)
+            ? ((pedidosPayload as { topProdutos: ProdutoResumo[] }).topProdutos ?? [])
+            : []
+        },
+        alunosMovimento: {
+          atual: ((alunosMovimentoPayload as { atual?: AlunoMovimentoSerie | null }).atual ?? null),
+          series: Array.isArray((alunosMovimentoPayload as { series?: unknown[] }).series)
+            ? ((alunosMovimentoPayload as { series: AlunoMovimentoSerie[] }).series ?? [])
             : []
         },
         mensalidadesResumo: normalizeResumo(mensalidadesResumoPayload)
@@ -653,6 +815,272 @@ export default function RelatoriosPage() {
           </div>
         ) : null}
       </Card>
+
+      <Card className="space-y-3">
+        <h2 className="text-lg font-black text-ink">Movimento de alunos</h2>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-line bg-white/80 p-3 text-sm font-semibold text-ink">
+            Inicio do mes: {data.alunosMovimento.atual?.inicioMes ?? 0}
+          </div>
+          <div className="rounded-xl border border-[rgba(34,136,83,0.22)] bg-[rgba(230,249,239,0.85)] p-3 text-sm font-semibold text-[#1f6d44]">
+            Entraram: {data.alunosMovimento.atual?.entrou ?? 0}
+          </div>
+          <div className="rounded-xl border border-[rgba(159,16,24,0.22)] bg-[rgba(253,236,239,0.88)] p-3 text-sm font-semibold text-accentDark">
+            Sairam: {data.alunosMovimento.atual?.saiu ?? 0}
+          </div>
+          <div className="rounded-xl border border-[rgba(30,63,139,0.22)] bg-[rgba(236,242,255,0.88)] p-3 text-sm font-semibold text-[#1d3f8b]">
+            Total final: {data.alunosMovimento.atual?.totalFinal ?? 0}
+          </div>
+        </div>
+
+        <div className="max-h-[320px] overflow-auto rounded-xl border border-line/80 bg-white/85">
+          <table>
+            <thead>
+              <tr>
+                <th>Competencia</th>
+                <th>Inicio</th>
+                <th>Entraram</th>
+                <th>Sairam</th>
+                <th>Total final</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.alunosMovimento.series.length === 0 ? (
+                <tr>
+                  <td colSpan={5}>{loading ? "Carregando..." : "Sem dados de movimento."}</td>
+                </tr>
+              ) : (
+                data.alunosMovimento.series.map((item) => (
+                  <tr key={item.competencia}>
+                    <td>{item.competencia}</td>
+                    <td>{item.inicioMes}</td>
+                    <td>{item.entrou}</td>
+                    <td>{item.saiu}</td>
+                    <td>{item.totalFinal}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-ink">Vencimentos do mês ({competencia})</h2>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void exportRows(
+                  `vencimentos-${competencia}`,
+                  data.vencimentos.map((item) => ({
+                    aluno: item.aluno.nomeCompleto,
+                    telefone: item.aluno.telefone,
+                    modalidade: item.aluno.modalidade?.nome ?? "",
+                    vencimento: formatDate(item.vencimento),
+                    valor: Number(item.valor),
+                    status: item.status,
+                    pagamento: item.dataPagamento ? formatDate(item.dataPagamento) : ""
+                  }))
+                )
+              }
+            >
+              Exportar CSV
+            </Button>
+          </div>
+          <div className="max-h-[360px] overflow-auto rounded-xl border border-line/80 bg-white/85">
+            <table>
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Telefone</th>
+                  <th>Modalidade</th>
+                  <th>Venc.</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.vencimentos.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>{loading ? "Carregando..." : "Sem vencimentos."}</td>
+                  </tr>
+                ) : (
+                  data.vencimentos.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.aluno.nomeCompleto}</td>
+                      <td>{item.aluno.telefone}</td>
+                      <td>{item.aluno.modalidade?.nome ?? "-"}</td>
+                      <td>{formatDate(item.vencimento)}</td>
+                      <td>{currency(Number(item.valor))}</td>
+                      <td>{item.status}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-ink">Despesas por categoria ({competencia})</h2>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void exportRows(
+                  `despesas-categorias-${competencia}`,
+                  data.despesasCategorias.items.map((item) => ({
+                    categoria: item.categoria,
+                    quantidade: item.quantidade,
+                    valor_previsto: item.valorPrevisto,
+                    valor_pago: item.valorPago,
+                    pendentes: item.pendentes
+                  }))
+                )
+              }
+            >
+              Exportar CSV
+            </Button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-[rgba(190,104,18,0.22)] bg-[rgba(255,242,228,0.84)] p-2.5 text-sm font-semibold text-[#95510f]">
+              Previsto: {currency(data.despesasCategorias.totalPrevisto)}
+            </div>
+            <div className="rounded-xl border border-[rgba(34,136,83,0.22)] bg-[rgba(230,249,239,0.85)] p-2.5 text-sm font-semibold text-[#1f6d44]">
+              Pago: {currency(data.despesasCategorias.totalPago)}
+            </div>
+          </div>
+          <div className="max-h-[320px] overflow-auto rounded-xl border border-line/80 bg-white/85">
+            <table>
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th>Qtd.</th>
+                  <th>Previsto</th>
+                  <th>Pago</th>
+                  <th>Pendentes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.despesasCategorias.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>{loading ? "Carregando..." : "Sem despesas."}</td>
+                  </tr>
+                ) : (
+                  data.despesasCategorias.items.map((item) => (
+                    <tr key={item.categoria}>
+                      <td>{item.categoria}</td>
+                      <td>{item.quantidade}</td>
+                      <td>{currency(item.valorPrevisto)}</td>
+                      <td>{currency(item.valorPago)}</td>
+                      <td>{item.pendentes}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-ink">Pedidos do mês ({competencia})</h2>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                void exportRows(
+                  `pedidos-${competencia}`,
+                  data.pedidos.items.map((item) => ({
+                    cliente: item.clienteNome,
+                    aluno: item.aluno?.nomeCompleto ?? "",
+                    data: formatDate(item.dataPedido),
+                    valor_total: item.valorTotal,
+                    pago: item.pago,
+                    em_aberto: Number(item.valorTotal) - Number(item.pago)
+                  }))
+                )
+              }
+            >
+              Exportar CSV
+            </Button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-line bg-white/80 p-2.5 text-sm font-semibold text-ink">
+              Pedidos: {data.pedidos.totalPedidos}
+            </div>
+            <div className="rounded-xl border border-[rgba(34,136,83,0.22)] bg-[rgba(230,249,239,0.85)] p-2.5 text-sm font-semibold text-[#1f6d44]">
+              Recebido: {currency(data.pedidos.totalRecebido)}
+            </div>
+            <div className="rounded-xl border border-[rgba(159,16,24,0.22)] bg-[rgba(253,236,239,0.88)] p-2.5 text-sm font-semibold text-accentDark">
+              Em aberto: {currency(data.pedidos.totalEmAberto)}
+            </div>
+          </div>
+          <div className="max-h-[320px] overflow-auto rounded-xl border border-line/80 bg-white/85">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Cliente</th>
+                  <th>Aluno</th>
+                  <th>Total</th>
+                  <th>Pago</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.pedidos.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={5}>{loading ? "Carregando..." : "Sem pedidos."}</td>
+                  </tr>
+                ) : (
+                  data.pedidos.items.map((item) => (
+                    <tr key={item.id}>
+                      <td>{formatDate(item.dataPedido)}</td>
+                      <td>{item.clienteNome}</td>
+                      <td>{item.aluno?.nomeCompleto ?? "-"}</td>
+                      <td>{currency(Number(item.valorTotal))}</td>
+                      <td>{currency(Number(item.pago))}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="space-y-3">
+          <h2 className="text-lg font-black text-ink">Top produtos vendidos</h2>
+          <div className="max-h-[430px] overflow-auto rounded-xl border border-line/80 bg-white/85">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Qtd.</th>
+                  <th>Faturamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.pedidos.topProdutos.length === 0 ? (
+                  <tr>
+                    <td colSpan={3}>{loading ? "Carregando..." : "Sem produtos vendidos."}</td>
+                  </tr>
+                ) : (
+                  data.pedidos.topProdutos.map((item) => (
+                    <tr key={item.produto}>
+                      <td>{item.produto}</td>
+                      <td>{item.quantidade}</td>
+                      <td>{currency(item.faturamento)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="space-y-3">

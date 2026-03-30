@@ -1,0 +1,458 @@
+{
+  "generatedAt": "2026-03-30T20:43:52.347Z",
+  "users": [
+    {
+      "id": "cmndmetss0000lwag1jmvtura",
+      "name": "Administrador",
+      "email": "admin@academia.local",
+      "passwordHash": "$2a$10$Tmh.TB4hh4.Bb7xda/Tni.wRevPqQiSBGRXIHMzIn4irg5/lq.2cS",
+      "role": "ADMIN",
+      "active": true,
+      "createdAt": "2026-03-30T20:08:27.484Z",
+      "updatedAt": "2026-03-30T20:08:27.484Z"
+    }
+  ],
+  "configuracoes": [
+    {
+      "id": "cmndmetud000qlwag3qab0f9d",
+      "chave": "empresa.nome",
+      "valor": "Academia Exemplo",
+      "descricao": "Nome exibido no cabeçalho",
+      "updatedAt": "2026-03-30T20:08:27.542Z"
+    },
+    {
+      "id": "cmndmfs5x0000lw04qkglrwci",
+      "chave": "branding.academyName",
+      "valor": "Forja Prime Academia",
+      "descricao": "Nome exibido no sistema",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0001lw04zgfwfb4c",
+      "chave": "branding.logoUrl",
+      "valor": "/logo-forja.svg",
+      "descricao": "Logo da academia (path em /public ou URL)",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0002lw046vepepqs",
+      "chave": "branding.bg",
+      "valor": "#f5f1f0",
+      "descricao": "Cor de fundo principal",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0003lw044fzs2bxn",
+      "chave": "branding.ink",
+      "valor": "#1f1718",
+      "descricao": "Cor de texto principal",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0004lw04mscf4zeb",
+      "chave": "branding.muted",
+      "valor": "#6f6466",
+      "descricao": "Cor de texto secundário",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0005lw04wndb2xny",
+      "chave": "branding.line",
+      "valor": "#ddd2d4",
+      "descricao": "Cor de bordas",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0006lw04fjeddgto",
+      "chave": "branding.accent",
+      "valor": "#c51623",
+      "descricao": "Cor de destaque principal",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0007lw04gj05lt17",
+      "chave": "branding.accentDark",
+      "valor": "#8e1018",
+      "descricao": "Cor de destaque escura",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0008lw0415qhv81b",
+      "chave": "branding.accentSoft",
+      "valor": "#fbeaec",
+      "descricao": "Cor de destaque suave",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x0009lw04t0lg2lz6",
+      "chave": "branding.sidebar",
+      "valor": "#181113",
+      "descricao": "Cor da barra lateral",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndmfs5x000alw0432xszxgc",
+      "chave": "branding.sidebarLine",
+      "valor": "#2e2025",
+      "descricao": "Cor de borda da barra lateral",
+      "updatedAt": "2026-03-30T20:09:12.021Z"
+    },
+    {
+      "id": "cmndnczi0000mlwc0orkdlkcs",
+      "chave": "backup.exportDir",
+      "valor": "c:\\Users\\luisg\\OneDrive\\Ambiente de Trabalho\\Dev\\Controle-academia-1\\backups-cloud-test",
+      "descricao": "Pasta usada para salvar backups JSON do sistema",
+      "updatedAt": "2026-03-30T20:35:01.177Z"
+    },
+    {
+      "id": "cmndnod7o0000lwa8zln6zlwq",
+      "chave": "fechamento:2026-03",
+      "valor": "{\"entradas\":490,\"saidas\":320,\"saldo\":170,\"fechadoEm\":\"2026-03-30T20:43:52.163Z\"}",
+      "descricao": "Resumo automático de fechamento mensal do caixa",
+      "updatedAt": "2026-03-30T20:43:52.165Z"
+    }
+  ],
+  "categoriasFinanceiras": [
+    {
+      "id": "cmndmggaq003olwioicfx6jlx",
+      "nome": "Mensalidades",
+      "tipo": "ENTRADA",
+      "descricao": null,
+      "ativa": true,
+      "createdAt": "2026-03-30T20:09:43.298Z"
+    },
+    {
+      "id": "cmndmggaq003plwiokgfkgvvg",
+      "nome": "Vendas de produtos",
+      "tipo": "ENTRADA",
+      "descricao": null,
+      "ativa": true,
+      "createdAt": "2026-03-30T20:09:43.298Z"
+    }
+  ],
+  "modalidades": [
+    {
+      "id": "cmndmett00001lwag29eje0g3",
+      "nome": "todos os dias",
+      "valorPadrao": "180",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.493Z",
+      "updatedAt": "2026-03-30T20:08:27.493Z"
+    },
+    {
+      "id": "cmndmett50002lwag89avghgl",
+      "nome": "3xmusc",
+      "valorPadrao": "150",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.497Z",
+      "updatedAt": "2026-03-30T20:08:27.497Z"
+    },
+    {
+      "id": "cmndmett60003lwagfxoatkiu",
+      "nome": "2xpersonal",
+      "valorPadrao": "300",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.498Z",
+      "updatedAt": "2026-03-30T20:08:27.498Z"
+    },
+    {
+      "id": "cmndmett60004lwagwfjgkbgf",
+      "nome": "3xpersonal",
+      "valorPadrao": "420",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.499Z",
+      "updatedAt": "2026-03-30T20:08:27.499Z"
+    },
+    {
+      "id": "cmndmett70005lwagzyko6aig",
+      "nome": "2xpersonal+1sozinho",
+      "valorPadrao": "340",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.499Z",
+      "updatedAt": "2026-03-30T20:08:27.499Z"
+    },
+    {
+      "id": "cmndmett80006lwagz0sq2ohu",
+      "nome": "3xpersonal2xsozinha",
+      "valorPadrao": "490",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.500Z",
+      "updatedAt": "2026-03-30T20:08:27.500Z"
+    },
+    {
+      "id": "cmndmett80007lwag79kqu9rf",
+      "nome": "1xfuncional",
+      "valorPadrao": "120",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.501Z",
+      "updatedAt": "2026-03-30T20:08:27.501Z"
+    },
+    {
+      "id": "cmndmett90008lwagpnl7vv86",
+      "nome": "funcional kids",
+      "valorPadrao": "130",
+      "ativa": true,
+      "createdAt": "2026-03-30T20:08:27.501Z",
+      "updatedAt": "2026-03-30T20:08:27.501Z"
+    }
+  ],
+  "alunos": [
+    {
+      "id": "cl_seed_aluno_ana",
+      "nomeCompleto": "Ana Martins",
+      "telefone": "11999990001",
+      "vencimentoDia": 10,
+      "status": "ATIVO",
+      "dataInicio": "2025-11-05T00:00:00.000Z",
+      "dataSaidaCancelamento": null,
+      "observacoes": null,
+      "modalidadeId": "cmndmett00001lwag29eje0g3",
+      "createdAt": "2026-03-30T20:08:27.505Z",
+      "updatedAt": "2026-03-30T20:08:27.505Z"
+    },
+    {
+      "id": "cl_seed_aluno_bruno",
+      "nomeCompleto": "Bruno Alves",
+      "telefone": "11999990002",
+      "vencimentoDia": 15,
+      "status": "ATIVO",
+      "dataInicio": "2026-01-03T00:00:00.000Z",
+      "dataSaidaCancelamento": null,
+      "observacoes": null,
+      "modalidadeId": "cmndmett80007lwag79kqu9rf",
+      "createdAt": "2026-03-30T20:08:27.511Z",
+      "updatedAt": "2026-03-30T20:08:27.511Z"
+    }
+  ],
+  "historicoPlanos": [],
+  "mensalidades": [
+    {
+      "id": "cmndmettk000alwagszmpmvfs",
+      "alunoId": "cl_seed_aluno_ana",
+      "competencia": "2026-03",
+      "valor": "180",
+      "vencimento": "2026-03-10T00:00:00.000Z",
+      "dataPagamento": "2026-03-08T00:00:00.000Z",
+      "formaPagamento": "pix",
+      "status": "PAGO",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.513Z",
+      "updatedAt": "2026-03-30T20:08:27.513Z"
+    },
+    {
+      "id": "cmndmettp000clwag8009r6sm",
+      "alunoId": "cl_seed_aluno_bruno",
+      "competencia": "2026-03",
+      "valor": "120",
+      "vencimento": "2026-03-15T00:00:00.000Z",
+      "dataPagamento": null,
+      "formaPagamento": null,
+      "status": "PENDENTE",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.517Z",
+      "updatedAt": "2026-03-30T20:08:27.517Z"
+    }
+  ],
+  "pagamentos": [],
+  "caixa": [
+    {
+      "id": "cmndmetts000dlwagasw00bka",
+      "data": "2026-03-08T00:00:00.000Z",
+      "tipo": "ENTRADA",
+      "categoriaId": null,
+      "descricao": "Mensalidade Ana",
+      "valor": "180",
+      "origemDestino": null,
+      "alunoId": null,
+      "formaPagamento": "pix",
+      "competencia": "2026-03",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.520Z",
+      "updatedAt": "2026-03-30T20:08:27.520Z"
+    },
+    {
+      "id": "cmndmetts000elwagy4lb1mjv",
+      "data": "2026-03-09T00:00:00.000Z",
+      "tipo": "SAIDA",
+      "categoriaId": null,
+      "descricao": "Conta de luz",
+      "valor": "320",
+      "origemDestino": null,
+      "alunoId": null,
+      "formaPagamento": "boleto",
+      "competencia": "2026-03",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.520Z",
+      "updatedAt": "2026-03-30T20:08:27.520Z"
+    },
+    {
+      "id": "auto_mensalidade_cmndmettk000alwagszmpmvfs",
+      "data": "2026-03-08T00:00:00.000Z",
+      "tipo": "ENTRADA",
+      "categoriaId": "cmndmggaq003olwioicfx6jlx",
+      "descricao": "Mensalidade 2026-03 - Ana Martins",
+      "valor": "180",
+      "origemDestino": "Ana Martins",
+      "alunoId": "cl_seed_aluno_ana",
+      "formaPagamento": "pix",
+      "competencia": "2026-03",
+      "observacao": "Lançamento automático (mensalidade)",
+      "createdAt": "2026-03-30T20:09:43.304Z",
+      "updatedAt": "2026-03-30T20:39:36.389Z"
+    },
+    {
+      "id": "auto_pedido_cmndmetu8000nlwagc22z1h81",
+      "data": "2026-03-30T20:08:27.537Z",
+      "tipo": "ENTRADA",
+      "categoriaId": "cmndmggaq003plwiokgfkgvvg",
+      "descricao": "Pedido de produto - Ana Martins",
+      "valor": "130",
+      "origemDestino": "Ana Martins",
+      "alunoId": "cl_seed_aluno_ana",
+      "formaPagamento": null,
+      "competencia": "2026-03",
+      "observacao": "Lançamento automático (pedido)",
+      "createdAt": "2026-03-30T20:09:43.347Z",
+      "updatedAt": "2026-03-30T20:39:36.401Z"
+    }
+  ],
+  "despesasAcademia": [
+    {
+      "id": "cmndmettv000flwagb7r39vn8",
+      "dataVencimento": "2026-03-10T00:00:00.000Z",
+      "competencia": "2026-03",
+      "descricao": "luz/água academia",
+      "categoriaId": null,
+      "valorPrevisto": "320",
+      "valorPago": "320",
+      "status": "PAGO",
+      "dataPagamento": "2026-03-09T00:00:00.000Z",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.524Z",
+      "updatedAt": "2026-03-30T20:08:27.524Z"
+    },
+    {
+      "id": "cmndmettv000glwagd7vomd84",
+      "dataVencimento": "2026-03-12T00:00:00.000Z",
+      "competencia": "2026-03",
+      "descricao": "aluguel",
+      "categoriaId": null,
+      "valorPrevisto": "2500",
+      "valorPago": "0",
+      "status": "PENDENTE",
+      "dataPagamento": null,
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.524Z",
+      "updatedAt": "2026-03-30T20:08:27.524Z"
+    }
+  ],
+  "presencas": [
+    {
+      "id": "cmndmetty000hlwagty8dcv8x",
+      "alunoId": "cl_seed_aluno_ana",
+      "data": "2026-03-03T00:00:00.000Z",
+      "horario": "07:00",
+      "tipoAula": "musculação",
+      "presente": true,
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.527Z"
+    },
+    {
+      "id": "cmndmetty000ilwag83heg5vy",
+      "alunoId": "cl_seed_aluno_ana",
+      "data": "2026-03-05T00:00:00.000Z",
+      "horario": "07:00",
+      "tipoAula": "musculação",
+      "presente": true,
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.527Z"
+    },
+    {
+      "id": "cmndmetty000jlwag8ncmz001",
+      "alunoId": "cl_seed_aluno_bruno",
+      "data": "2026-03-06T00:00:00.000Z",
+      "horario": "18:00",
+      "tipoAula": "funcional",
+      "presente": true,
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.527Z"
+    }
+  ],
+  "agendaPersonal": [
+    {
+      "id": "cmndmetu2000klwagcjx2cyk3",
+      "professor": "Carlos",
+      "diaSemana": 1,
+      "horario": "07:00",
+      "alunoId": "cl_seed_aluno_ana",
+      "alunoNome": null,
+      "tipoAula": "personal",
+      "observacao": null,
+      "ativo": true,
+      "semanaRef": "2026-W11",
+      "createdAt": "2026-03-30T20:08:27.530Z",
+      "updatedAt": "2026-03-30T20:08:27.530Z"
+    },
+    {
+      "id": "cmndmetu2000llwagcz2o2ya1",
+      "professor": "Carlos",
+      "diaSemana": 3,
+      "horario": "18:00",
+      "alunoId": "cl_seed_aluno_bruno",
+      "alunoNome": null,
+      "tipoAula": "funcional",
+      "observacao": null,
+      "ativo": true,
+      "semanaRef": "2026-W11",
+      "createdAt": "2026-03-30T20:08:27.530Z",
+      "updatedAt": "2026-03-30T20:08:27.530Z"
+    }
+  ],
+  "produtos": [
+    {
+      "id": "cl_seed_produto_camisa",
+      "nome": "Camiseta Dry Fit",
+      "categoria": "roupas",
+      "tamanho": "M",
+      "cor": "preta",
+      "preco": "65",
+      "estoque": 20,
+      "ativo": true,
+      "createdAt": "2026-03-30T20:08:27.533Z",
+      "updatedAt": "2026-03-30T20:08:27.533Z"
+    }
+  ],
+  "pedidos": [
+    {
+      "id": "cmndmetu8000nlwagc22z1h81",
+      "clienteNome": "Ana Martins",
+      "alunoId": "cl_seed_aluno_ana",
+      "modelo": "Camiseta Dry Fit",
+      "cor": "preta",
+      "tamanho": "M",
+      "quantidade": 2,
+      "valorUnitario": "65",
+      "valorTotal": "130",
+      "pago": "130",
+      "dataPedido": "2026-03-30T20:08:27.537Z",
+      "observacao": null,
+      "createdAt": "2026-03-30T20:08:27.537Z",
+      "itens": [
+        {
+          "id": "cmndmetu8000plwagdxw1zzjo",
+          "pedidoId": "cmndmetu8000nlwagc22z1h81",
+          "produtoId": "cl_seed_produto_camisa",
+          "descricaoManual": null,
+          "modelo": null,
+          "cor": null,
+          "tamanho": null,
+          "quantidade": 2,
+          "valorUnitario": "65",
+          "valorTotal": "130"
+        }
+      ]
+    }
+  ],
+  "controleMensal": [],
+  "logsAuditoria": []
+}

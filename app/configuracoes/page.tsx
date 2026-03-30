@@ -47,10 +47,15 @@ export default function ConfiguracoesPage() {
   const [brandingLoading, setBrandingLoading] = useState(false);
   const [brandingSaving, setBrandingSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [backupDir, setBackupDir] = useState("");
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupSaving, setBackupSaving] = useState(false);
+  const [backupMessage, setBackupMessage] = useState("");
   const [branding, setBranding] = useState<BrandingForm>(DEFAULT_BRANDING);
 
   useEffect(() => {
     void loadBranding();
+    void loadBackupSettings();
   }, []);
 
   async function loadBranding() {
@@ -77,6 +82,26 @@ export default function ConfiguracoesPage() {
       setBranding(DEFAULT_BRANDING);
     } finally {
       setBrandingLoading(false);
+    }
+  }
+
+  async function loadBackupSettings() {
+    setBackupLoading(true);
+    setBackupMessage("");
+    try {
+      const res = await fetch("/api/admin/backup/save", { cache: "no-store" });
+      const payload = (await res.json().catch(() => ({}))) as { backupDir?: string; error?: string };
+
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao carregar pasta de backup");
+      }
+
+      setBackupDir(String(payload.backupDir ?? ""));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar pasta de backup";
+      setBackupMessage(message);
+    } finally {
+      setBackupLoading(false);
     }
   }
 
@@ -135,7 +160,7 @@ export default function ConfiguracoesPage() {
 
       const logoUrl = String(payload.logoUrl ?? "").trim();
       if (!logoUrl) {
-        throw new Error("Upload concluído, mas sem URL de logo");
+        throw new Error("Upload concluido, mas sem URL de logo");
       }
 
       const nextBranding: BrandingForm = {
@@ -149,6 +174,36 @@ export default function ConfiguracoesPage() {
       alert(message);
     } finally {
       setLogoUploading(false);
+    }
+  }
+
+  async function saveBackupNow() {
+    setBackupSaving(true);
+    setBackupMessage("");
+
+    try {
+      const res = await fetch("/api/admin/backup/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          backupDir,
+          savePath: true
+        })
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as { filePath?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao salvar backup");
+      }
+
+      setBackupMessage(`Backup salvo em: ${payload.filePath ?? backupDir}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao salvar backup";
+      setBackupMessage(message);
+    } finally {
+      setBackupSaving(false);
     }
   }
 
@@ -167,23 +222,23 @@ export default function ConfiguracoesPage() {
     setImporting(false);
 
     if (!res.ok) {
-      alert(data.error ?? "Falha na importação");
+      alert(data.error ?? "Falha na importacao");
       return;
     }
 
-    alert("Importação concluída. Verifique os módulos.");
+    alert("Importacao concluida. Verifique os modulos.");
   }
 
   return (
     <div className="space-y-4">
       <ModuleHeader
-        title="Configurações"
-        description="Usuários, perfis, parâmetros do sistema e importação da planilha antiga."
+        title="Configuracoes"
+        description="Usuarios, perfis, parametros do sistema, backup manual e importacao da planilha antiga."
         icon={Settings}
-        badges={["Administração", "Permissões", "Importação Excel"]}
+        badges={["Administracao", "Permissoes", "Backup manual", "Importacao Excel"]}
         stats={[
-          { label: "Segurança", value: "Perfis de acesso" },
-          { label: "Migração", value: "Planilha legada" }
+          { label: "Seguranca", value: "Perfis de acesso" },
+          { label: "Backup", value: "JSON em pasta nuvem" }
         ]}
       />
 
@@ -225,11 +280,11 @@ export default function ConfiguracoesPage() {
                 event.currentTarget.value = "";
               }}
             />
-            <p className="text-xs text-muted">Formatos: PNG, JPG, WEBP ou SVG. Tamanho máximo: 4MB.</p>
+            <p className="text-xs text-muted">Formatos: PNG, JPG, WEBP ou SVG. Tamanho maximo: 4MB.</p>
           </div>
 
           <div className="rounded-xl border border-line/80 bg-white/80 p-3">
-            <p className="mb-2 text-sm font-semibold text-ink">Pré-visualização da logo</p>
+            <p className="mb-2 text-sm font-semibold text-ink">Pre-visualizacao da logo</p>
             <img
               src={branding.logoUrl}
               alt={branding.academyName}
@@ -303,7 +358,7 @@ export default function ConfiguracoesPage() {
           </label>
 
           <label className="text-sm font-medium text-ink">
-            Cor texto secundário
+            Cor texto secundario
             <Input
               value={branding.colors.muted}
               onChange={(event) =>
@@ -365,9 +420,40 @@ export default function ConfiguracoesPage() {
         </div>
       </Card>
 
+      <Card className="space-y-3">
+        <h2 className="text-lg font-black text-ink">Backup manual para pasta sincronizada</h2>
+        <p className="text-sm text-muted">
+          O sistema continua usando o banco local. Quando voce clicar no botao abaixo, ele gera uma copia JSON completa
+          em outra pasta, como OneDrive, Google Drive ou Dropbox.
+        </p>
+
+        <label className="text-sm font-medium text-ink">
+          Pasta de backup
+          <Input
+            value={backupDir}
+            onChange={(event) => setBackupDir(event.target.value)}
+            placeholder="C:\\Users\\SeuUsuario\\OneDrive\\Backups\\Academia"
+          />
+        </label>
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => void saveBackupNow()} disabled={backupSaving || backupLoading || !backupDir.trim()}>
+            {backupSaving ? "Salvando backup..." : "Salvar copia agora"}
+          </Button>
+          <Button variant="secondary" onClick={() => void loadBackupSettings()} disabled={backupLoading || backupSaving}>
+            {backupLoading ? "Carregando..." : "Recarregar pasta"}
+          </Button>
+          <a href="/api/admin/backup" target="_blank" rel="noreferrer" className="inline-flex">
+            <Button type="button" variant="ghost">Baixar JSON</Button>
+          </a>
+        </div>
+
+        {backupMessage ? <p className="text-sm text-muted">{backupMessage}</p> : null}
+      </Card>
+
       <Card>
         <h2 className="mb-2 text-lg font-black text-ink">Importar planilha antiga</h2>
-        <p className="mb-3 text-sm text-muted">Mapeamento automático: Musc, caixa, despesas, presença, personal e pedidos.</p>
+        <p className="mb-3 text-sm text-muted">Mapeamento automatico: Musc, caixa, despesas, presenca, personal e pedidos.</p>
         <input
           type="file"
           accept=".xlsx,.xls"
@@ -383,8 +469,8 @@ export default function ConfiguracoesPage() {
 
       <CrudModule
         endpoint="/api/users"
-        title="Usuários e perfis"
-        createLabel="Novo usuário"
+        title="Usuarios e perfis"
+        createLabel="Novo usuario"
         listFields={[
           { key: "name", label: "Nome" },
           { key: "email", label: "E-mail" },
@@ -403,7 +489,7 @@ export default function ConfiguracoesPage() {
             options: [
               { label: "Administrador", value: "ADMIN" },
               { label: "Financeiro", value: "FINANCEIRO" },
-              { label: "Recepção", value: "RECEPCAO" },
+              { label: "Recepcao", value: "RECEPCAO" },
               { label: "Personal", value: "PERSONAL" }
             ]
           },
@@ -413,7 +499,7 @@ export default function ConfiguracoesPage() {
             type: "select",
             options: [
               { label: "Sim", value: "true" },
-              { label: "Não", value: "false" }
+              { label: "Nao", value: "false" }
             ]
           }
         ]}
@@ -422,18 +508,18 @@ export default function ConfiguracoesPage() {
 
       <CrudModule
         endpoint="/api/configuracoes"
-        title="Parâmetros do sistema"
-        createLabel="Novo parâmetro"
+        title="Parametros do sistema"
+        createLabel="Novo parametro"
         listFields={[
           { key: "chave", label: "Chave" },
           { key: "valor", label: "Valor" },
-          { key: "descricao", label: "Descrição" },
+          { key: "descricao", label: "Descricao" },
           { key: "updatedAt", label: "Atualizado em" }
         ]}
         fields={[
           { key: "chave", label: "Chave", required: true },
           { key: "valor", label: "Valor", required: true },
-          { key: "descricao", label: "Descrição", type: "textarea" }
+          { key: "descricao", label: "Descricao", type: "textarea" }
         ]}
       />
     </div>

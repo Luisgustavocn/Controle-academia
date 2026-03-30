@@ -110,9 +110,33 @@ export default function CaixaPage() {
         <p className="text-sm text-muted">Execute o fechamento para consolidar o saldo do mês.</p>
         <Button
           onClick={async () => {
-            await fetch("/api/jobs/fechamento-caixa", {
+            const res = await fetch("/api/jobs/fechamento-caixa", {
               method: "POST"
             });
+            const payload = (await res.json().catch(() => ({}))) as {
+              result?: {
+                backupSaved?: boolean;
+                backupFilePath?: string;
+                backupError?: string;
+              };
+              error?: string;
+            };
+
+            if (!res.ok) {
+              alert(payload.error ?? "Falha ao executar fechamento.");
+              return;
+            }
+
+            if (payload.result?.backupSaved) {
+              alert(`Fechamento executado e backup salvo em: ${payload.result.backupFilePath}`);
+              return;
+            }
+
+            if (payload.result?.backupError) {
+              alert(`Fechamento executado, mas o backup automatico falhou: ${payload.result.backupError}`);
+              return;
+            }
+
             alert("Fechamento executado.");
           }}
         >

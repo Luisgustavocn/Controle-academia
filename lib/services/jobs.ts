@@ -2,6 +2,7 @@ import { DespesaStatus, MensalidadeStatus, TipoMovimentacao } from "@prisma/clie
 import { addDays } from "date-fns";
 import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
+import { createBackupFile } from "@/lib/services/backup";
 import { buildMonthlyStudentControl, generateMensalidadesCompetencia } from "@/lib/services/mensalidades";
 
 export async function runMonthlyGeneration(competencia = currentCompetencia()) {
@@ -41,12 +42,28 @@ export async function runCashClosing(competencia = currentCompetencia()) {
     }
   });
 
-  return {
-    competencia,
-    entradas,
-    saidas,
-    saldo
-  };
+  try {
+    const backup = await createBackupFile();
+
+    return {
+      competencia,
+      entradas,
+      saidas,
+      saldo,
+      backupSaved: true,
+      backupFilePath: backup.filePath,
+      backupGeneratedAt: backup.generatedAt
+    };
+  } catch (error) {
+    return {
+      competencia,
+      entradas,
+      saidas,
+      saldo,
+      backupSaved: false,
+      backupError: error instanceof Error ? error.message : "Falha ao salvar backup automatico"
+    };
+  }
 }
 
 export async function getAlerts(referenceDate = new Date()) {
