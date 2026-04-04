@@ -74,6 +74,9 @@ npm run dev
 - `POST /api/jobs/gerar-mensalidades`
 - `POST /api/jobs/fechamento-caixa`
 - `GET /api/jobs/alertas`
+- `GET/POST /api/jobs/alertas/whatsapp`
+- `GET/PUT /api/whatsapp`
+- `POST /api/whatsapp/test`
 - `GET /api/admin/backup`
 
 ## Importação da planilha antiga
@@ -101,6 +104,18 @@ npm run jobs:mensalidades -- 2026-03
 npm run jobs:fechamento -- 2026-03
 ```
 
+- Disparo de lembretes de WhatsApp:
+
+```bash
+npm run jobs:whatsapp-alertas
+```
+
+Para apenas simular sem enviar:
+
+```bash
+npm run jobs:whatsapp-alertas -- --dry-run
+```
+
 ## Permissões
 - `ADMIN`
 - `FINANCEIRO`
@@ -109,5 +124,6 @@ npm run jobs:fechamento -- 2026-03
 
 ## Observações
 - Alterações financeiras geram log em `logs_auditoria`.
+- O WhatsApp foi preparado para provedores compatíveis com Evolution API usando `baseUrl`, `instanceName` e `apiKey`.
 - Exportações foram implementadas em CSV (compatível com Excel e impressão em PDF pelo navegador).
 - O projeto está pronto para deploy em Vercel/Node + Postgres gerenciado.

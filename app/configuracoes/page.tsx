@@ -25,6 +25,28 @@ type BrandingForm = {
   };
 };
 
+type WhatsAppForm = {
+  enabled: boolean;
+  baseUrl: string;
+  instanceName: string;
+  apiKey: string;
+  countryCode: string;
+  daysBeforeDue: number;
+  testPhone: string;
+  templates: {
+    dueSoon: string;
+    overdue: string;
+  };
+};
+
+type WhatsAppPreview = {
+  enabled: boolean;
+  configValid: boolean;
+  reason?: string;
+  dueSoonCandidates: Array<{ id: string }>;
+  overdueCandidates: Array<{ id: string }>;
+};
+
 const DEFAULT_BRANDING: BrandingForm = {
   academyName: "Forja Prime Academia",
   logoUrl: "/logo-forja.svg",
@@ -41,6 +63,22 @@ const DEFAULT_BRANDING: BrandingForm = {
   }
 };
 
+const DEFAULT_WHATSAPP: WhatsAppForm = {
+  enabled: false,
+  baseUrl: "",
+  instanceName: "",
+  apiKey: "",
+  countryCode: "55",
+  daysBeforeDue: 3,
+  testPhone: "",
+  templates: {
+    dueSoon:
+      "Oi, {nome}! Sua mensalidade da {academia} vence em {vencimento}. Valor: {valor}. Se ja pagou, desconsidere esta mensagem.",
+    overdue:
+      "Oi, {nome}! Sua mensalidade da {academia} venceu em {vencimento}. Valor pendente: {valor}. Se precisar, fale com a recepcao para regularizar."
+  }
+};
+
 export default function ConfiguracoesPage() {
   const router = useRouter();
   const [importing, setImporting] = useState(false);
@@ -52,10 +90,17 @@ export default function ConfiguracoesPage() {
   const [backupSaving, setBackupSaving] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
   const [branding, setBranding] = useState<BrandingForm>(DEFAULT_BRANDING);
+  const [whatsAppLoading, setWhatsAppLoading] = useState(false);
+  const [whatsAppSaving, setWhatsAppSaving] = useState(false);
+  const [whatsAppTesting, setWhatsAppTesting] = useState(false);
+  const [whatsAppDispatching, setWhatsAppDispatching] = useState(false);
+  const [whatsApp, setWhatsApp] = useState<WhatsAppForm>(DEFAULT_WHATSAPP);
+  const [whatsAppPreview, setWhatsAppPreview] = useState<WhatsAppPreview | null>(null);
 
   useEffect(() => {
     void loadBranding();
     void loadBackupSettings();
+    void loadWhatsApp();
   }, []);
 
   async function loadBranding() {
@@ -140,6 +185,154 @@ export default function ConfiguracoesPage() {
 
   async function saveBranding() {
     await persistBranding(branding, "Branding atualizado com sucesso.");
+  }
+
+  async function loadWhatsApp() {
+    setWhatsAppLoading(true);
+    try {
+      const res = await fetch("/api/whatsapp", { cache: "no-store" });
+      const payload = (await res.json().catch(() => ({}))) as {
+        item?: Partial<WhatsAppForm>;
+        preview?: WhatsAppPreview;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao carregar configuracao do WhatsApp");
+      }
+
+      setWhatsApp({
+        enabled: Boolean(payload.item?.enabled ?? DEFAULT_WHATSAPP.enabled),
+        baseUrl: payload.item?.baseUrl ?? DEFAULT_WHATSAPP.baseUrl,
+        instanceName: payload.item?.instanceName ?? DEFAULT_WHATSAPP.instanceName,
+        apiKey: payload.item?.apiKey ?? DEFAULT_WHATSAPP.apiKey,
+        countryCode: payload.item?.countryCode ?? DEFAULT_WHATSAPP.countryCode,
+        daysBeforeDue: Number(payload.item?.daysBeforeDue ?? DEFAULT_WHATSAPP.daysBeforeDue),
+        testPhone: payload.item?.testPhone ?? DEFAULT_WHATSAPP.testPhone,
+        templates: {
+          dueSoon: payload.item?.templates?.dueSoon ?? DEFAULT_WHATSAPP.templates.dueSoon,
+          overdue: payload.item?.templates?.overdue ?? DEFAULT_WHATSAPP.templates.overdue
+        }
+      });
+      setWhatsAppPreview(payload.preview ?? null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao carregar configuracao do WhatsApp";
+      alert(message);
+      setWhatsApp(DEFAULT_WHATSAPP);
+      setWhatsAppPreview(null);
+    } finally {
+      setWhatsAppLoading(false);
+    }
+  }
+
+  async function saveWhatsApp() {
+    setWhatsAppSaving(true);
+    try {
+      const res = await fetch("/api/whatsapp", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(whatsApp)
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        item?: WhatsAppForm;
+        preview?: WhatsAppPreview;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao salvar configuracao do WhatsApp");
+      }
+
+      if (payload.item) {
+        setWhatsApp(payload.item);
+      }
+      setWhatsAppPreview(payload.preview ?? null);
+      alert("Configuracao de WhatsApp atualizada com sucesso.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao salvar configuracao do WhatsApp";
+      alert(message);
+    } finally {
+      setWhatsAppSaving(false);
+    }
+  }
+
+  async function sendWhatsAppTest() {
+    setWhatsAppTesting(true);
+    try {
+      const res = await fetch("/api/whatsapp/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          phone: whatsApp.testPhone
+        })
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as { phone?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao enviar teste de WhatsApp");
+      }
+
+      alert(`Mensagem de teste enviada para ${payload.phone ?? whatsApp.testPhone}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao enviar teste de WhatsApp";
+      alert(message);
+    } finally {
+      setWhatsAppTesting(false);
+    }
+  }
+
+  async function dispatchWhatsAppReminders() {
+    setWhatsAppDispatching(true);
+    try {
+      const res = await fetch("/api/jobs/alertas/whatsapp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({})
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        configValid?: boolean;
+        reason?: string;
+        sent?: Array<{ mensalidadeId: string }>;
+        errors?: Array<{ error: string }>;
+        dueSoonCandidates?: Array<{ id: string }>;
+        overdueCandidates?: Array<{ id: string }>;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(payload.error ?? "Falha ao disparar lembretes de WhatsApp");
+      }
+
+      setWhatsAppPreview({
+        enabled: whatsApp.enabled,
+        configValid: Boolean(payload.configValid),
+        reason: payload.reason,
+        dueSoonCandidates: payload.dueSoonCandidates ?? [],
+        overdueCandidates: payload.overdueCandidates ?? []
+      });
+
+      if (payload.reason) {
+        alert(payload.reason);
+        return;
+      }
+
+      alert(
+        `Envio concluido. ${payload.sent?.length ?? 0} mensagem(ns) enviada(s) e ${payload.errors?.length ?? 0} erro(s).`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao disparar lembretes de WhatsApp";
+      alert(message);
+    } finally {
+      setWhatsAppDispatching(false);
+    }
   }
 
   async function uploadLogo(file: File) {
@@ -449,6 +642,172 @@ export default function ConfiguracoesPage() {
         </div>
 
         {backupMessage ? <p className="text-sm text-muted">{backupMessage}</p> : null}
+      </Card>
+
+      <Card className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black text-ink">WhatsApp de mensalidades</h2>
+            <p className="text-sm text-muted">
+              Dispare avisos antes do vencimento e quando a mensalidade ficar vencida.
+            </p>
+          </div>
+          {whatsAppPreview ? (
+            <div className="rounded-xl border border-line/80 bg-white/80 px-3 py-2 text-xs text-muted">
+              <div>Proximas: {whatsAppPreview.dueSoonCandidates.length}</div>
+              <div>Vencidas: {whatsAppPreview.overdueCandidates.length}</div>
+            </div>
+          ) : null}
+        </div>
+
+        {whatsAppLoading ? <p className="text-sm text-muted">Carregando configuracao do WhatsApp...</p> : null}
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="text-sm font-medium text-ink">
+            Integração ativa
+            <select
+              value={whatsApp.enabled ? "true" : "false"}
+              onChange={(event) =>
+                setWhatsApp((prev) => ({
+                  ...prev,
+                  enabled: event.target.value === "true"
+                }))
+              }
+              className="w-full rounded-xl border border-line/90 bg-white/95 px-3 py-2 text-sm text-ink outline-none ring-accent transition focus:border-accent/60 focus:ring-2"
+            >
+              <option value="false">Nao</option>
+              <option value="true">Sim</option>
+            </select>
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Base URL da API
+            <Input
+              value={whatsApp.baseUrl}
+              onChange={(event) => setWhatsApp((prev) => ({ ...prev, baseUrl: event.target.value }))}
+              placeholder="http://localhost:8080"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Instancia
+            <Input
+              value={whatsApp.instanceName}
+              onChange={(event) => setWhatsApp((prev) => ({ ...prev, instanceName: event.target.value }))}
+              placeholder="academia"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            API key
+            <Input
+              value={whatsApp.apiKey}
+              onChange={(event) => setWhatsApp((prev) => ({ ...prev, apiKey: event.target.value }))}
+              placeholder="apikey"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            DDI padrao
+            <Input
+              value={whatsApp.countryCode}
+              onChange={(event) => setWhatsApp((prev) => ({ ...prev, countryCode: event.target.value }))}
+              placeholder="55"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink">
+            Dias antes do vencimento
+            <Input
+              type="number"
+              min={1}
+              max={30}
+              value={String(whatsApp.daysBeforeDue)}
+              onChange={(event) =>
+                setWhatsApp((prev) => ({
+                  ...prev,
+                  daysBeforeDue: Number(event.target.value || DEFAULT_WHATSAPP.daysBeforeDue)
+                }))
+              }
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink md:col-span-2">
+            Telefone de teste
+            <Input
+              value={whatsApp.testPhone}
+              onChange={(event) => setWhatsApp((prev) => ({ ...prev, testPhone: event.target.value }))}
+              placeholder="11999999999"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink md:col-span-2 xl:col-span-3">
+            Mensagem antes do vencimento
+            <textarea
+              value={whatsApp.templates.dueSoon}
+              onChange={(event) =>
+                setWhatsApp((prev) => ({
+                  ...prev,
+                  templates: { ...prev.templates, dueSoon: event.target.value }
+                }))
+              }
+              rows={4}
+              className="w-full rounded-xl border border-line/90 bg-white/95 px-3 py-2 text-sm text-ink outline-none ring-accent transition focus:border-accent/60 focus:ring-2"
+            />
+          </label>
+
+          <label className="text-sm font-medium text-ink md:col-span-2 xl:col-span-3">
+            Mensagem vencida
+            <textarea
+              value={whatsApp.templates.overdue}
+              onChange={(event) =>
+                setWhatsApp((prev) => ({
+                  ...prev,
+                  templates: { ...prev.templates, overdue: event.target.value }
+                }))
+              }
+              rows={4}
+              className="w-full rounded-xl border border-line/90 bg-white/95 px-3 py-2 text-sm text-ink outline-none ring-accent transition focus:border-accent/60 focus:ring-2"
+            />
+          </label>
+        </div>
+
+        <p className="text-xs text-muted">
+          Variaveis disponiveis nos templates: {"{nome}"}, {"{academia}"}, {"{valor}"}, {"{vencimento}"}, {"{competencia}"}, {"{telefone}"} e {"{dias}"}.
+        </p>
+
+        {whatsAppPreview?.reason ? (
+          <p className="rounded-lg border border-[#f1c5ca] bg-[#fff0f2] px-3 py-2 text-sm text-[#a21b25]">
+            {whatsAppPreview.reason}
+          </p>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => void saveWhatsApp()} disabled={whatsAppSaving || whatsAppTesting || whatsAppDispatching}>
+            {whatsAppSaving ? "Salvando..." : "Salvar WhatsApp"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void loadWhatsApp()}
+            disabled={whatsAppLoading || whatsAppSaving || whatsAppTesting || whatsAppDispatching}
+          >
+            Recarregar
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void sendWhatsAppTest()}
+            disabled={whatsAppTesting || whatsAppSaving || whatsAppDispatching}
+          >
+            {whatsAppTesting ? "Enviando teste..." : "Enviar teste"}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void dispatchWhatsAppReminders()}
+            disabled={whatsAppDispatching || whatsAppSaving || whatsAppTesting}
+          >
+            {whatsAppDispatching ? "Disparando..." : "Disparar lembretes agora"}
+          </Button>
+        </div>
       </Card>
 
       <Card>

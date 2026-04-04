@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ShieldCheck, Zap, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,13 +15,17 @@ type BrandingPayload = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("admin@academia.local");
   const [password, setPassword] = useState("admin123");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [academyName, setAcademyName] = useState("Forja Prime Academia");
   const [logoUrl, setLogoUrl] = useState("/logo-forja.svg");
+  const redirectTo = useMemo(() => {
+    const from = searchParams.get("from");
+    return from && from.startsWith("/") ? from : "/dashboard";
+  }, [searchParams]);
 
   useEffect(() => {
     void fetch("/api/branding", { cache: "no-store" })
@@ -49,26 +53,29 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        credentials: "same-origin"
       });
 
-      let data: { error?: string } | null = null;
-      try {
-        data = (await res.json()) as { error?: string };
-      } catch {
-        data = null;
-      }
-
       if (!res.ok) {
-        setError(data?.error ?? "Falha no login");
-        setLoading(false);
+        let message = "Falha no login";
+
+        try {
+          const data = (await res.json()) as { error?: string };
+          message = data.error ?? message;
+        } catch {
+          message = "Não foi possível concluir o login.";
+        }
+
+        setError(message);
         return;
       }
 
-      router.replace("/dashboard");
-      router.refresh();
+      // Force a full navigation so middleware/server components see the fresh session cookie.
+      window.location.assign(redirectTo);
     } catch {
-      setError("Nao foi possivel conectar ao servidor");
+      setError("Não foi possível conectar ao servidor.");
+    } finally {
       setLoading(false);
     }
   }
@@ -118,7 +125,7 @@ export default function LoginPage() {
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </label>
             {error ? <p className="rounded-lg border border-[#f1c5ca] bg-[#fff0f2] px-3 py-2 text-sm text-[#a21b25]">{error}</p> : null}
-            <Button disabled={loading} className="mt-1 w-full">
+            <Button type="submit" disabled={loading} className="mt-1 w-full">
               {loading ? "Entrando..." : "Entrar"}
             </Button>
           </form>

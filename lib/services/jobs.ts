@@ -4,6 +4,7 @@ import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
 import { createBackupFile } from "@/lib/services/backup";
 import { buildMonthlyStudentControl, generateMensalidadesCompetencia } from "@/lib/services/mensalidades";
+export { dispatchWhatsAppBillingReminders, getWhatsAppReminderPreview } from "@/lib/services/whatsapp";
 
 export async function runMonthlyGeneration(competencia = currentCompetencia()) {
   const mensalidades = await generateMensalidadesCompetencia(competencia);

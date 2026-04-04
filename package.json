@@ -12,7 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
     "jobs:mensalidades": "tsx scripts/run-generate-monthly.ts",
-    "jobs:fechamento": "tsx scripts/run-close-cash-month.ts"
+    "jobs:fechamento": "tsx scripts/run-close-cash-month.ts",
+    "jobs:whatsapp-alertas": "tsx scripts/run-whatsapp-reminders.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
