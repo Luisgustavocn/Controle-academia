@@ -12,7 +12,8 @@ function runCommand(command, args, label) {
 
     const child = spawn(command, args, {
       stdio: "inherit",
-      shell: false
+      shell: true,
+      env: { ...process.env }
     });
 
     child.on("error", reject);
