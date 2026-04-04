@@ -6,5 +6,6 @@ export const { PUT, DELETE } = createByIdHandlers({
   module: "pagamentos",
   requiredRole: UserRole.FINANCEIRO,
   numericFields: ["valor"],
-  dateFields: ["dataPagamento"]
+  dateFields: ["dataPagamento"],
+  deleteBlockedReason: "Exclusão física de pagamentos está bloqueada para proteger o histórico. Use estorno, ajuste ou observação."
 });

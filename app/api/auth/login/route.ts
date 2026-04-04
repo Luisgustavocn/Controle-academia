@@ -2,7 +2,8 @@ import { compare } from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fail } from "@/lib/http";
-import { sessionCookie, signSessionToken } from "@/lib/auth/session";
+import { getSessionCookieOptions, sessionCookie, signSessionToken } from "@/lib/auth/session";
+import { isFirstAccessPending } from "@/lib/auth/first-access";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +13,12 @@ export async function POST(request: NextRequest) {
 
     if (!email || !password) {
       return fail("Informe e-mail e senha", 400);
+    }
+
+    if (await isFirstAccessPending()) {
+      return fail("Primeiro acesso pendente. Defina o e-mail e a senha do administrador.", 403, {
+        setupRequired: true
+      });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
@@ -32,13 +39,7 @@ export async function POST(request: NextRequest) {
     });
 
     const response = NextResponse.json({ ok: true });
-    response.cookies.set(sessionCookie, token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 12
-    });
+    response.cookies.set(sessionCookie, token, getSessionCookieOptions(request));
 
     return response;
   } catch (error) {

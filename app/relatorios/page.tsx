@@ -5,7 +5,6 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   BarChart3,
-  Calendar,
   Minus,
   TrendingDown,
   TrendingUp
@@ -25,8 +24,8 @@ import {
 } from "recharts";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 
 type AlunoAtivo = {
   id: string;
@@ -635,15 +634,7 @@ export default function RelatoriosPage() {
       <Card className="space-y-3">
         <label className="max-w-[230px] text-sm font-semibold text-ink">
           Mês de referência
-          <div className="relative">
-            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <Input
-              type="month"
-              value={competencia}
-              onChange={(event) => setCompetencia(event.target.value)}
-              className="pl-9"
-            />
-          </div>
+          <MonthYearPicker value={competencia} onChange={setCompetencia} />
         </label>
 
         <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted">

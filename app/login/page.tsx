@@ -14,10 +14,20 @@ type BrandingPayload = {
   };
 };
 
+type SetupStatusPayload = {
+  setupRequired?: boolean;
+  email?: string | null;
+};
+
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("admin@academia.local");
-  const [password, setPassword] = useState("admin123");
+  const [password, setPassword] = useState("");
+  const [setupRequired, setSetupRequired] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(true);
+  const [setupEmail, setSetupEmail] = useState("admin@academia.local");
+  const [setupPassword, setSetupPassword] = useState("");
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [academyName, setAcademyName] = useState("Forja Prime Academia");
@@ -42,6 +52,23 @@ export default function LoginPage() {
         setAcademyName("Forja Prime Academia");
         setLogoUrl("/logo-forja.svg");
       });
+
+    void fetch("/api/auth/setup", { cache: "no-store" })
+      .then((res) => res.json() as Promise<SetupStatusPayload>)
+      .then((payload) => {
+        const nextSetupRequired = Boolean(payload.setupRequired);
+        setSetupRequired(nextSetupRequired);
+        if (payload.email) {
+          setEmail(payload.email);
+          setSetupEmail(payload.email);
+        }
+      })
+      .catch(() => {
+        setSetupRequired(false);
+      })
+      .finally(() => {
+        setSetupLoading(false);
+      });
   }, []);
 
   async function submit(event: FormEvent) {
@@ -59,19 +86,64 @@ export default function LoginPage() {
 
       if (!res.ok) {
         let message = "Falha no login";
+        let shouldOpenSetup = false;
+
+        try {
+          const data = (await res.json()) as { error?: string; setupRequired?: boolean };
+          message = data.error ?? message;
+          shouldOpenSetup = Boolean(data.setupRequired);
+        } catch {
+          message = "Não foi possível concluir o login.";
+        }
+
+        if (shouldOpenSetup) {
+          setSetupRequired(true);
+          setSetupEmail(email || "admin@academia.local");
+        }
+        setError(message);
+        return;
+      }
+
+      // Force a full navigation so middleware/server components see the fresh session cookie.
+      window.location.assign(redirectTo);
+    } catch {
+      setError("Não foi possível conectar ao servidor.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitFirstAccess(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/auth/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: setupEmail,
+          password: setupPassword,
+          confirmPassword: setupConfirmPassword
+        }),
+        credentials: "same-origin"
+      });
+
+      if (!res.ok) {
+        let message = "Falha ao concluir o primeiro acesso";
 
         try {
           const data = (await res.json()) as { error?: string };
           message = data.error ?? message;
         } catch {
-          message = "Não foi possível concluir o login.";
+          message = "Não foi possível concluir a configuração inicial.";
         }
 
         setError(message);
         return;
       }
 
-      // Force a full navigation so middleware/server components see the fresh session cookie.
       window.location.assign(redirectTo);
     } catch {
       setError("Não foi possível conectar ao servidor.");
@@ -113,22 +185,49 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <p className="text-sm text-muted">Acesso ao sistema de gestao da academia</p>
+          <p className="text-sm text-muted">
+            {setupLoading
+              ? "Verificando configuração inicial..."
+              : setupRequired
+                ? "Primeiro acesso: defina o e-mail e a senha do administrador."
+                : "Acesso ao sistema de gestao da academia"}
+          </p>
 
-          <form className="mt-4 space-y-3" onSubmit={submit}>
-            <label className="text-sm font-medium text-ink">
-              E-mail
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </label>
-            <label className="text-sm font-medium text-ink">
-              Senha
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </label>
-            {error ? <p className="rounded-lg border border-[#f1c5ca] bg-[#fff0f2] px-3 py-2 text-sm text-[#a21b25]">{error}</p> : null}
-            <Button type="submit" disabled={loading} className="mt-1 w-full">
-              {loading ? "Entrando..." : "Entrar"}
-            </Button>
-          </form>
+          {setupRequired ? (
+            <form className="mt-4 space-y-3" onSubmit={submitFirstAccess}>
+              <label className="text-sm font-medium text-ink">
+                E-mail do administrador
+                <Input type="email" value={setupEmail} onChange={(e) => setSetupEmail(e.target.value)} required />
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Nova senha
+                <Input type="password" value={setupPassword} onChange={(e) => setSetupPassword(e.target.value)} required />
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Confirmar senha
+                <Input type="password" value={setupConfirmPassword} onChange={(e) => setSetupConfirmPassword(e.target.value)} required />
+              </label>
+              {error ? <p className="rounded-lg border border-[#f1c5ca] bg-[#fff0f2] px-3 py-2 text-sm text-[#a21b25]">{error}</p> : null}
+              <Button type="submit" disabled={loading || setupLoading} className="mt-1 w-full">
+                {loading ? "Salvando..." : "Criar acesso inicial"}
+              </Button>
+            </form>
+          ) : (
+            <form className="mt-4 space-y-3" onSubmit={submit}>
+              <label className="text-sm font-medium text-ink">
+                E-mail
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Senha
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              </label>
+              {error ? <p className="rounded-lg border border-[#f1c5ca] bg-[#fff0f2] px-3 py-2 text-sm text-[#a21b25]">{error}</p> : null}
+              <Button type="submit" disabled={loading || setupLoading} className="mt-1 w-full">
+                {loading ? "Entrando..." : "Entrar"}
+              </Button>
+            </form>
+          )}
         </Card>
       </div>
     </main>

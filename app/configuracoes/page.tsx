@@ -9,6 +9,22 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+type DirectoryHandle = {
+  name: string;
+  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<{
+    createWritable: () => Promise<{
+      write: (data: Blob | string) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
+  }>;
+};
+
+declare global {
+  interface Window {
+    showDirectoryPicker?: () => Promise<DirectoryHandle>;
+  }
+}
+
 type BrandingForm = {
   academyName: string;
   logoUrl: string;
@@ -89,6 +105,7 @@ export default function ConfiguracoesPage() {
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupSaving, setBackupSaving] = useState(false);
   const [backupMessage, setBackupMessage] = useState("");
+  const [backupPickerSupported, setBackupPickerSupported] = useState(false);
   const [branding, setBranding] = useState<BrandingForm>(DEFAULT_BRANDING);
   const [whatsAppLoading, setWhatsAppLoading] = useState(false);
   const [whatsAppSaving, setWhatsAppSaving] = useState(false);
@@ -98,10 +115,50 @@ export default function ConfiguracoesPage() {
   const [whatsAppPreview, setWhatsAppPreview] = useState<WhatsAppPreview | null>(null);
 
   useEffect(() => {
+    setBackupPickerSupported(typeof window !== "undefined" && typeof window.showDirectoryPicker === "function");
     void loadBranding();
     void loadBackupSettings();
     void loadWhatsApp();
   }, []);
+
+  function getBackupFilename(contentDisposition: string | null) {
+    if (!contentDisposition) {
+      return `backup-academia-${new Date().toISOString().slice(0, 10)}.json`;
+    }
+
+    const utfMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+    if (utfMatch?.[1]) {
+      return decodeURIComponent(utfMatch[1]);
+    }
+
+    const plainMatch = /filename="?([^"]+)"?/i.exec(contentDisposition);
+    return plainMatch?.[1] ?? `backup-academia-${new Date().toISOString().slice(0, 10)}.json`;
+  }
+
+  async function buildChecksum(blob: Blob) {
+    const buffer = await blob.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(new Uint8Array(digest))
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function fetchBackupFile() {
+    const res = await fetch("/api/admin/backup", {
+      method: "GET",
+      cache: "no-store"
+    });
+
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error ?? "Falha ao gerar backup");
+    }
+
+    return {
+      blob: await res.blob(),
+      fileName: getBackupFilename(res.headers.get("content-disposition"))
+    };
+  }
 
   async function loadBranding() {
     setBrandingLoading(true);
@@ -400,6 +457,62 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  async function downloadBackupNow() {
+    setBackupSaving(true);
+    setBackupMessage("");
+
+    try {
+      const { blob, fileName } = await fetchBackupFile();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setBackupMessage(`Download iniciado: ${fileName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao baixar backup";
+      setBackupMessage(message);
+    } finally {
+      setBackupSaving(false);
+    }
+  }
+
+  async function pickFolderAndSaveBackup() {
+    if (!window.showDirectoryPicker) {
+      setBackupMessage("Seu navegador não permite selecionar uma pasta diretamente. Use o download do backup.");
+      return;
+    }
+
+    setBackupSaving(true);
+    setBackupMessage("");
+
+    try {
+      const directoryHandle = await window.showDirectoryPicker();
+      const { blob, fileName } = await fetchBackupFile();
+      const checksum = await buildChecksum(blob);
+
+      const backupHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+      const backupWritable = await backupHandle.createWritable();
+      await backupWritable.write(blob);
+      await backupWritable.close();
+
+      const checksumHandle = await directoryHandle.getFileHandle(`${fileName}.sha256`, { create: true });
+      const checksumWritable = await checksumHandle.createWritable();
+      await checksumWritable.write(`${checksum}  ${fileName}\n`);
+      await checksumWritable.close();
+
+      setBackupMessage(`Backup salvo em ${directoryHandle.name}/${fileName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Falha ao salvar backup na pasta selecionada";
+      setBackupMessage(message);
+    } finally {
+      setBackupSaving(false);
+    }
+  }
+
   async function importExcel(file: File) {
     setImporting(true);
     const form = new FormData();
@@ -616,29 +729,45 @@ export default function ConfiguracoesPage() {
       <Card className="space-y-3">
         <h2 className="text-lg font-black text-ink">Backup manual para pasta sincronizada</h2>
         <p className="text-sm text-muted">
-          O sistema continua usando o banco local. Quando voce clicar no botao abaixo, ele gera uma copia JSON completa
-          em outra pasta, como OneDrive, Google Drive ou Dropbox.
+          Gere uma copia completa do sistema sem precisar digitar caminho manual. Quando o navegador permitir, voce pode
+          escolher a pasta na hora. Se preferir, tambem pode manter uma pasta automatica no servidor.
         </p>
 
+        <div className="flex flex-wrap gap-2">
+          {backupPickerSupported ? (
+            <Button type="button" onClick={() => void pickFolderAndSaveBackup()} disabled={backupSaving || backupLoading}>
+              {backupSaving ? "Salvando backup..." : "Selecionar pasta e salvar"}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted">
+              Seu navegador não oferece seleção direta de pasta nesta tela. Use o botão de download abaixo.
+            </p>
+          )}
+          <Button type="button" variant="secondary" onClick={() => void downloadBackupNow()} disabled={backupSaving || backupLoading}>
+            {backupSaving ? "Preparando..." : "Baixar backup agora"}
+          </Button>
+        </div>
+
         <label className="text-sm font-medium text-ink">
-          Pasta de backup
+          Pasta automática do servidor
           <Input
             value={backupDir}
             onChange={(event) => setBackupDir(event.target.value)}
-            placeholder="C:\\Users\\SeuUsuario\\OneDrive\\Backups\\Academia"
+            placeholder="/Users/seu-usuario/iCloud Drive/Backups/Academia"
           />
         </label>
+        <p className="text-xs text-muted">
+          Essa pasta é usada pelos backups automáticos do servidor. Se ela não estiver preenchida, você ainda pode baixar
+          o backup manualmente a qualquer momento.
+        </p>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => void saveBackupNow()} disabled={backupSaving || backupLoading || !backupDir.trim()}>
-            {backupSaving ? "Salvando backup..." : "Salvar copia agora"}
+            {backupSaving ? "Salvando..." : "Salvar na pasta automática"}
           </Button>
           <Button variant="secondary" onClick={() => void loadBackupSettings()} disabled={backupLoading || backupSaving}>
             {backupLoading ? "Carregando..." : "Recarregar pasta"}
           </Button>
-          <a href="/api/admin/backup" target="_blank" rel="noreferrer" className="inline-flex">
-            <Button type="button" variant="ghost">Baixar JSON</Button>
-          </a>
         </div>
 
         {backupMessage ? <p className="text-sm text-muted">{backupMessage}</p> : null}

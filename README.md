@@ -56,6 +56,11 @@ npm run prisma:seed
 npm run dev
 ```
 
+## Atalhos Windows
+- `Iniciar Controle Academia.bat`: gera a build e sobe o servidor local.
+- `Atualizar e Iniciar Controle Academia.bat`: atualiza do GitHub, instala dependências, aplica migrations e inicia.
+- `Instalar Atualizar e Iniciar Controle Academia.bat`: pode ser baixado sozinho; ele tenta instalar `winget`, `git`, `node` e `postgresql` quando faltarem, baixa/atualiza o projeto, prepara o banco e inicia o sistema.
+
 ## Usuário inicial
 - E-mail: `admin@academia.local`
 - Senha: `admin123`
@@ -92,6 +97,18 @@ Mapeamento implementado:
 - `Graficos` -> recalculado no dashboard
 
 ## Jobs automáticos
+- Backup completo manual/cron:
+
+```bash
+npm run jobs:backup
+```
+
+- Backup completo em pasta específica:
+
+```bash
+npm run jobs:backup -- /caminho/do/backup
+```
+
 - Geração mensal de mensalidades:
 
 ```bash
@@ -124,6 +141,9 @@ npm run jobs:whatsapp-alertas -- --dry-run
 
 ## Observações
 - Alterações financeiras geram log em `logs_auditoria`.
+- Exclusões físicas de mensalidades, pagamentos, despesas, caixa e pedidos foram bloqueadas para proteger o histórico.
+- Remoção de aluno agora vira arquivamento seguro e remoção de usuário vira desativação.
+- Backups geram arquivo JSON e checksum `.sha256`; se `BACKUP_EXPORT_DIR_MIRROR` estiver definido, a cópia é salva também em um segundo destino.
 - O WhatsApp foi preparado para provedores compatíveis com Evolution API usando `baseUrl`, `instanceName` e `apiKey`.
 - Exportações foram implementadas em CSV (compatível com Excel e impressão em PDF pelo navegador).
 - O projeto está pronto para deploy em Vercel/Node + Postgres gerenciado.

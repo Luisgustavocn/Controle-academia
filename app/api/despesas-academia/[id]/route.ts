@@ -6,5 +6,6 @@ export const { PUT, DELETE } = createByIdHandlers({
   module: "despesas-academia",
   requiredRole: UserRole.FINANCEIRO,
   numericFields: ["valorPrevisto", "valorPago"],
-  dateFields: ["dataVencimento", "dataPagamento"]
+  dateFields: ["dataVencimento", "dataPagamento"],
+  deleteBlockedReason: "Exclusão física de despesas está bloqueada para proteger o histórico. Ajuste o status ou os valores."
 });

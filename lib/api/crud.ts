@@ -19,6 +19,7 @@ type CrudConfig = {
   defaultValues?: Record<string, unknown>;
   queryFilters?: (request: NextRequest) => Record<string, unknown>;
   validate?: (data: Record<string, unknown>, mode: "create" | "update") => string | null;
+  deleteBlockedReason?: string;
 };
 
 function normalizePayload(payload: Record<string, unknown>, config: CrudConfig) {
@@ -223,6 +224,10 @@ export function createByIdHandlers(config: CrudConfig) {
   async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const auth = requireRole(request, role);
     if (auth instanceof Response) return auth;
+
+    if (config.deleteBlockedReason) {
+      return fail(config.deleteBlockedReason, 409);
+    }
 
     const { id } = await context.params;
     const delegate = getDelegate(config.model);

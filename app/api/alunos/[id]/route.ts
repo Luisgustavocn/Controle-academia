@@ -1,17 +1,19 @@
 import { AlunoStatus, MensalidadeStatus, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
+import { logAudit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia, toCompetencia } from "@/lib/competencia";
 import {
-  buildVencimentoDate,
-  cancelarMensalidadesFuturasDoAluno,
-  generateMensalidadesAteCompetencia,
-  competenciaFromUtcDate,
-  sincronizarMensalidadesComDataInicio,
-  sincronizarVencimentoMensalidadesPorAluno
-} from "@/lib/services/mensalidades";
+    buildVencimentoDate,
+    cancelarMensalidadesFuturasDoAluno,
+    generateMensalidadesAteCompetencia,
+    competenciaFromUtcDate,
+    sincronizarMensalidadesComDataInicio,
+    sincronizarVencimentoMensalidadesPorAluno
+  } from "@/lib/services/mensalidades";
+import { createBackupFile } from "@/lib/services/backup";
 import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
@@ -235,6 +237,32 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
-  await prisma.aluno.delete({ where: { id } });
-  return ok({ ok: true });
+  const previous = await prisma.aluno.findUnique({ where: { id } });
+  if (!previous) {
+    return fail("Aluno não encontrado", 404);
+  }
+
+  const backup = await createBackupFile();
+  const dataSaida = previous.dataSaidaCancelamento ?? new Date();
+  const updated = await prisma.aluno.update({
+    where: { id },
+    data: {
+      status: AlunoStatus.CANCELADO,
+      dataSaidaCancelamento: dataSaida
+    }
+  });
+
+  await cancelarMensalidadesFuturasDoAluno(id, dataSaida);
+
+  await logAudit({
+    userId: auth.id,
+    modulo: "alunos",
+    entidade: "Aluno",
+    entidadeId: id,
+    acao: "ARCHIVE",
+    antes: previous,
+    depois: updated
+  });
+
+  return ok({ ok: true, archived: true, backupFilePath: backup.filePath });
 }

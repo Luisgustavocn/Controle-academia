@@ -1,0 +1,1151 @@
+{
+  "generatedAt": "2026-04-04T17:39:55.472Z",
+  "users": [
+    {
+      "id": "cmml3htfe00itsrnc6z07rf4t",
+      "name": "admin",
+      "email": "admin@admin.com",
+      "passwordHash": "$2a$10$CIstViEaCgDh/6JpHqcgSukNc6SMmGc.U1FVvP71.2iIiSv/tYQ56",
+      "role": "ADMIN",
+      "active": true,
+      "createdAt": "2026-03-10T21:01:21.338Z",
+      "updatedAt": "2026-03-10T21:01:21.338Z"
+    },
+    {
+      "id": "cmnf88fnt0000sri15lot2x4n",
+      "name": "Administrador",
+      "email": "admin@academia.local",
+      "passwordHash": "$2a$10$084616WpXSHWkkiW5zbqaOLlWaYHXo3ogqxpEraG/byBwNUq5NV9y",
+      "role": "ADMIN",
+      "active": true,
+      "createdAt": "2026-03-31T23:07:06.953Z",
+      "updatedAt": "2026-03-31T23:07:06.953Z"
+    }
+  ],
+  "configuracoes": [
+    {
+      "id": "7a58bd94-c407-4491-9263-895517f216f6",
+      "chave": "whatsapp.enabled",
+      "valor": "true",
+      "descricao": "Liga os envios automaticos de WhatsApp",
+      "updatedAt": "2026-04-04T17:28:18.698Z"
+    },
+    {
+      "id": "bde79c5a-c1e6-45d7-9295-96e366b37e61",
+      "chave": "whatsapp.baseUrl",
+      "valor": "http://localhost:8080",
+      "descricao": "Base URL da API WhatsApp compatível com Evolution",
+      "updatedAt": "2026-04-04T17:28:18.699Z"
+    },
+    {
+      "id": "4b8490af-b900-40dc-9aa8-3a15ce053c3c",
+      "chave": "whatsapp.instanceName",
+      "valor": "controle-academia",
+      "descricao": "Nome da instancia conectada no provedor WhatsApp",
+      "updatedAt": "2026-04-04T17:28:18.700Z"
+    },
+    {
+      "id": "42100ea3-e497-4704-a6ec-5017382387ab",
+      "chave": "whatsapp.apiKey",
+      "valor": "6AF7E493-63F3-4FFB-86D4-DF7B089A23BB",
+      "descricao": "Chave da API do provedor WhatsApp",
+      "updatedAt": "2026-04-04T17:28:18.700Z"
+    },
+    {
+      "id": "bd10fb2f-5107-4ec4-bb8e-0c54f57d476a",
+      "chave": "whatsapp.countryCode",
+      "valor": "55",
+      "descricao": "Codigo de pais padrao para telefones sem DDI",
+      "updatedAt": "2026-04-04T17:28:18.700Z"
+    },
+    {
+      "id": "bb7d3cbd-1135-4fc3-95e1-34fb128d8baf",
+      "chave": "whatsapp.daysBeforeDue",
+      "valor": "3",
+      "descricao": "Quantos dias antes do vencimento enviar o lembrete",
+      "updatedAt": "2026-04-04T17:28:18.701Z"
+    },
+    {
+      "id": "cmml3gxr500dmsrnc9vdvlpeq",
+      "chave": "branding.academyName",
+      "valor": "Academia Power Life",
+      "descricao": "Nome exibido no sistema",
+      "updatedAt": "2026-03-10T21:08:35.906Z"
+    },
+    {
+      "id": "cmml3gxr500dnsrncxkz6vsus",
+      "chave": "branding.logoUrl",
+      "valor": "logo.jpeg",
+      "descricao": "Logo da academia (path em /public ou URL)",
+      "updatedAt": "2026-03-10T21:08:35.908Z"
+    },
+    {
+      "id": "cmml3gxr500dosrnc5b3zvw17",
+      "chave": "branding.bg",
+      "valor": "#f5f1f0",
+      "descricao": "Cor de fundo principal",
+      "updatedAt": "2026-03-10T21:08:35.909Z"
+    },
+    {
+      "id": "cmml3gxr500dpsrncz9k6qre5",
+      "chave": "branding.ink",
+      "valor": "#1f1718",
+      "descricao": "Cor de texto principal",
+      "updatedAt": "2026-03-10T21:08:35.910Z"
+    },
+    {
+      "id": "cmml3gxr500dqsrncyys6z7vy",
+      "chave": "branding.muted",
+      "valor": "#6f6466",
+      "descricao": "Cor de texto secundário",
+      "updatedAt": "2026-03-10T21:08:35.911Z"
+    },
+    {
+      "id": "cmml3gxr500drsrnclszua6aq",
+      "chave": "branding.line",
+      "valor": "#ddd2d4",
+      "descricao": "Cor de bordas",
+      "updatedAt": "2026-03-10T21:08:35.912Z"
+    },
+    {
+      "id": "cmml3gxr500dssrnc3rmodlil",
+      "chave": "branding.accent",
+      "valor": "#c51623",
+      "descricao": "Cor de destaque principal",
+      "updatedAt": "2026-03-10T21:08:35.913Z"
+    },
+    {
+      "id": "cmml3gxr500dtsrncei5pzdtc",
+      "chave": "branding.accentDark",
+      "valor": "#8e1018",
+      "descricao": "Cor de destaque escura",
+      "updatedAt": "2026-03-10T21:08:35.914Z"
+    },
+    {
+      "id": "cmml3gxr500dusrncvejppree",
+      "chave": "branding.accentSoft",
+      "valor": "#fbeaec",
+      "descricao": "Cor de destaque suave",
+      "updatedAt": "2026-03-10T21:08:35.915Z"
+    },
+    {
+      "id": "cmml3gxr500dvsrncj2nphqho",
+      "chave": "branding.sidebar",
+      "valor": "#181113",
+      "descricao": "Cor da barra lateral",
+      "updatedAt": "2026-03-10T21:08:35.916Z"
+    },
+    {
+      "id": "cmml3gxr500dwsrncj5qazqpc",
+      "chave": "branding.sidebarLine",
+      "valor": "#2e2025",
+      "descricao": "Cor de borda da barra lateral",
+      "updatedAt": "2026-03-10T21:08:35.916Z"
+    },
+    {
+      "id": "cmnklo9vv002nsr41e86e5dia",
+      "chave": "whatsapp.testPhone",
+      "valor": "55999243919",
+      "descricao": "Numero usado para testes manuais de WhatsApp",
+      "updatedAt": "2026-04-04T17:28:18.701Z"
+    },
+    {
+      "id": "cmml3vs9y00s2srncus6h6lbn",
+      "chave": "fechamento:2026-03",
+      "valor": "{\"entradas\":0,\"saidas\":0,\"saldo\":0,\"fechadoEm\":\"2026-03-10T21:12:13.030Z\"}",
+      "descricao": "Resumo automático de fechamento mensal do caixa",
+      "updatedAt": "2026-03-10T21:12:13.031Z"
+    },
+    {
+      "id": "cmnf88fpi000qsri1s7fqpw3g",
+      "chave": "empresa.nome",
+      "valor": "Academia Exemplo",
+      "descricao": "Nome exibido no cabeçalho",
+      "updatedAt": "2026-03-31T23:07:07.014Z"
+    },
+    {
+      "id": "cmnklo9vw002psr41688nzqmd",
+      "chave": "whatsapp.template.dueSoon",
+      "valor": "Oi, {nome}! Sua mensalidade vence em {vencimento}. Valor: {valor}. Se ja pagou, desconsidere esta mensagem.",
+      "descricao": "Template da mensagem de mensalidade proxima do vencimento",
+      "updatedAt": "2026-04-04T17:28:18.702Z"
+    },
+    {
+      "id": "cmnklo9vw002tsr41w6wpi67q",
+      "chave": "whatsapp.template.overdue",
+      "valor": "Oi, {nome}! Sua mensalidade venceu em {vencimento}. Valor pendente: {valor}. Se precisar, fale com a recepcao para regularizar.",
+      "descricao": "Template da mensagem de mensalidade vencida",
+      "updatedAt": "2026-04-04T17:28:18.702Z"
+    },
+    {
+      "id": "cmnkmb2kf00j3sr4198c34d38",
+      "chave": "backup.exportDir",
+      "valor": "/Users/luisgustavo/Library/Mobile Documents/com~apple~CloudDocs/Programas/Controle academia/backups",
+      "descricao": "Pasta usada para salvar backups JSON do sistema",
+      "updatedAt": "2026-04-04T17:39:55.455Z"
+    }
+  ],
+  "categoriasFinanceiras": [
+    {
+      "id": "cmml3hz7e00j6srncvj0hzxvz",
+      "nome": "Vendas de produtos",
+      "tipo": "ENTRADA",
+      "descricao": null,
+      "ativa": true,
+      "createdAt": "2026-03-10T21:01:28.826Z"
+    },
+    {
+      "id": "cmml3hz7e00j5srnch2n7q18q",
+      "nome": "Mensalidades",
+      "tipo": "ENTRADA",
+      "descricao": null,
+      "ativa": true,
+      "createdAt": "2026-03-10T21:01:28.826Z"
+    }
+  ],
+  "modalidades": [
+    {
+      "id": "cmml5ytps001jsr773lotx16a",
+      "nome": "Personalizada",
+      "valorPadrao": "0",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:10:34.097Z",
+      "updatedAt": "2026-03-10T22:10:34.097Z"
+    },
+    {
+      "id": "cmml5zji3001ksr77l7t72m47",
+      "nome": "2x personal",
+      "valorPadrao": "290",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:11:07.515Z",
+      "updatedAt": "2026-03-10T22:11:07.515Z"
+    },
+    {
+      "id": "cmml5zvt4001lsr77fm8u73ww",
+      "nome": "3x Musc",
+      "valorPadrao": "100",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:11:23.464Z",
+      "updatedAt": "2026-03-10T22:11:23.464Z"
+    },
+    {
+      "id": "cmml608c1001msr770bd1vsd3",
+      "nome": "Todos os dias",
+      "valorPadrao": "110",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:11:39.697Z",
+      "updatedAt": "2026-03-10T22:11:39.697Z"
+    },
+    {
+      "id": "cmml60nud001nsr77g0rj7qwk",
+      "nome": "3x personal",
+      "valorPadrao": "350",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:11:59.798Z",
+      "updatedAt": "2026-03-10T22:11:59.798Z"
+    },
+    {
+      "id": "cmml618g3001osr77w36fy9ii",
+      "nome": "3x personal + 2x sozinho",
+      "valorPadrao": "375",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:12:26.499Z",
+      "updatedAt": "2026-03-10T22:12:26.499Z"
+    },
+    {
+      "id": "cmml622cp001psr777v5cskov",
+      "nome": "2x personal + 1x sozinho",
+      "valorPadrao": "260",
+      "ativa": true,
+      "createdAt": "2026-03-10T22:13:05.257Z",
+      "updatedAt": "2026-03-10T22:13:05.257Z"
+    },
+    {
+      "id": "cmnf88fnz0001sri1aq3dh67p",
+      "nome": "todos os dias",
+      "valorPadrao": "180",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.959Z",
+      "updatedAt": "2026-03-31T23:07:06.959Z"
+    },
+    {
+      "id": "cmnf88fo80002sri1blwkafxu",
+      "nome": "3xmusc",
+      "valorPadrao": "150",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.968Z",
+      "updatedAt": "2026-03-31T23:07:06.968Z"
+    },
+    {
+      "id": "cmnf88fo90003sri1urep70zw",
+      "nome": "2xpersonal",
+      "valorPadrao": "300",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.970Z",
+      "updatedAt": "2026-03-31T23:07:06.970Z"
+    },
+    {
+      "id": "cmnf88fob0004sri1unryvi4b",
+      "nome": "3xpersonal",
+      "valorPadrao": "420",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.971Z",
+      "updatedAt": "2026-03-31T23:07:06.971Z"
+    },
+    {
+      "id": "cmnf88foe0005sri1kap7ncb5",
+      "nome": "2xpersonal+1sozinho",
+      "valorPadrao": "340",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.974Z",
+      "updatedAt": "2026-03-31T23:07:06.974Z"
+    },
+    {
+      "id": "cmnf88fof0006sri1gobzsp08",
+      "nome": "3xpersonal2xsozinha",
+      "valorPadrao": "490",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.975Z",
+      "updatedAt": "2026-03-31T23:07:06.975Z"
+    },
+    {
+      "id": "cmnf88fog0007sri179xazijb",
+      "nome": "1xfuncional",
+      "valorPadrao": "120",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.976Z",
+      "updatedAt": "2026-03-31T23:07:06.976Z"
+    },
+    {
+      "id": "cmnf88foh0008sri1g0zw8ew6",
+      "nome": "funcional kids",
+      "valorPadrao": "130",
+      "ativa": true,
+      "createdAt": "2026-03-31T23:07:06.977Z",
+      "updatedAt": "2026-03-31T23:07:06.977Z"
+    }
+  ],
+  "alunos": [
+    {
+      "id": "cmml7i4l800o8sr77jaodfnto",
+      "nomeCompleto": "gus",
+      "telefone": "0",
+      "vencimentoDia": 3,
+      "status": "CANCELADO",
+      "dataInicio": "2026-01-01T00:00:00.000Z",
+      "dataSaidaCancelamento": "2026-02-01T00:00:00.000Z",
+      "observacoes": null,
+      "modalidadeId": "cmml622cp001psr777v5cskov",
+      "createdAt": "2026-03-10T22:53:34.269Z",
+      "updatedAt": "2026-03-10T23:46:26.677Z"
+    }
+  ],
+  "historicoPlanos": [],
+  "mensalidades": [
+    {
+      "id": "cmml9deip00wjsr7768bimfq5",
+      "alunoId": "cmml7i4l800o8sr77jaodfnto",
+      "competencia": "2026-03",
+      "valor": "260",
+      "vencimento": "2026-03-03T03:00:00.000Z",
+      "dataPagamento": null,
+      "formaPagamento": null,
+      "status": "ISENTO",
+      "observacao": "Mensalidade isenta por cancelamento do aluno",
+      "createdAt": "2026-03-10T23:45:53.090Z",
+      "updatedAt": "2026-03-10T23:46:26.681Z"
+    },
+    {
+      "id": "cmml9deiu00wksr77hiymbftc",
+      "alunoId": "cmml7i4l800o8sr77jaodfnto",
+      "competencia": "2026-01",
+      "valor": "260",
+      "vencimento": "2026-01-03T03:00:00.000Z",
+      "dataPagamento": "2025-03-10T03:00:00.000Z",
+      "formaPagamento": null,
+      "status": "PAGO",
+      "observacao": null,
+      "createdAt": "2026-03-10T23:45:53.094Z",
+      "updatedAt": "2026-03-10T23:46:32.818Z"
+    },
+    {
+      "id": "cmml9deiu00wlsr77ka73akfn",
+      "alunoId": "cmml7i4l800o8sr77jaodfnto",
+      "competencia": "2026-02",
+      "valor": "260",
+      "vencimento": "2026-02-03T03:00:00.000Z",
+      "dataPagamento": "2025-03-10T03:00:00.000Z",
+      "formaPagamento": null,
+      "status": "PAGO",
+      "observacao": null,
+      "createdAt": "2026-03-10T23:45:53.094Z",
+      "updatedAt": "2026-03-10T23:46:33.671Z"
+    }
+  ],
+  "pagamentos": [],
+  "caixa": [
+    {
+      "id": "auto_pedido_cmnf88fpc000nsri1x644cm50",
+      "data": "2026-03-31T23:07:07.009Z",
+      "tipo": "ENTRADA",
+      "categoriaId": "cmml3hz7e00j6srncvj0hzxvz",
+      "descricao": "Pedido de produto - Ana Martins",
+      "valor": "130",
+      "origemDestino": "Ana Martins",
+      "alunoId": null,
+      "formaPagamento": null,
+      "competencia": "2026-03",
+      "observacao": "Lançamento automático (pedido)",
+      "createdAt": "2026-03-31T23:07:42.970Z",
+      "updatedAt": "2026-04-04T17:34:16.322Z"
+    },
+    {
+      "id": "auto_mensalidade_cmml9deiu00wksr77hiymbftc",
+      "data": "2025-03-10T03:00:00.000Z",
+      "tipo": "ENTRADA",
+      "categoriaId": "cmml3hz7e00j5srnch2n7q18q",
+      "descricao": "Mensalidade 2026-01 - gus",
+      "valor": "260",
+      "origemDestino": "gus",
+      "alunoId": "cmml7i4l800o8sr77jaodfnto",
+      "formaPagamento": null,
+      "competencia": "2025-03",
+      "observacao": "Lançamento automático (mensalidade)",
+      "createdAt": "2026-03-10T23:46:32.833Z",
+      "updatedAt": "2026-04-04T17:34:16.318Z"
+    },
+    {
+      "id": "auto_mensalidade_cmml9deiu00wlsr77ka73akfn",
+      "data": "2025-03-10T03:00:00.000Z",
+      "tipo": "ENTRADA",
+      "categoriaId": "cmml3hz7e00j5srnch2n7q18q",
+      "descricao": "Mensalidade 2026-02 - gus",
+      "valor": "260",
+      "origemDestino": "gus",
+      "alunoId": "cmml7i4l800o8sr77jaodfnto",
+      "formaPagamento": null,
+      "competencia": "2025-03",
+      "observacao": "Lançamento automático (mensalidade)",
+      "createdAt": "2026-03-10T23:46:33.688Z",
+      "updatedAt": "2026-04-04T17:34:16.321Z"
+    }
+  ],
+  "despesasAcademia": [
+    {
+      "id": "cmnf88fp3000fsri10farsik6",
+      "dataVencimento": "2026-03-10T00:00:00.000Z",
+      "competencia": "2026-03",
+      "descricao": "luz/água academia",
+      "categoriaId": null,
+      "valorPrevisto": "320",
+      "valorPago": "320",
+      "status": "PAGO",
+      "dataPagamento": "2026-03-09T00:00:00.000Z",
+      "observacao": null,
+      "createdAt": "2026-03-31T23:07:07.000Z",
+      "updatedAt": "2026-03-31T23:07:07.000Z"
+    },
+    {
+      "id": "cmnf88fp3000gsri1hijso5am",
+      "dataVencimento": "2026-03-12T00:00:00.000Z",
+      "competencia": "2026-03",
+      "descricao": "aluguel",
+      "categoriaId": null,
+      "valorPrevisto": "2500",
+      "valorPago": "0",
+      "status": "PENDENTE",
+      "dataPagamento": null,
+      "observacao": null,
+      "createdAt": "2026-03-31T23:07:07.000Z",
+      "updatedAt": "2026-03-31T23:07:07.000Z"
+    }
+  ],
+  "presencas": [],
+  "agendaPersonal": [],
+  "produtos": [
+    {
+      "id": "cl_seed_produto_camisa",
+      "nome": "Camiseta Dry Fit",
+      "categoria": "roupas",
+      "tamanho": "M",
+      "cor": "preta",
+      "preco": "65",
+      "estoque": 20,
+      "ativo": true,
+      "createdAt": "2026-03-31T23:07:07.007Z",
+      "updatedAt": "2026-03-31T23:07:07.007Z"
+    }
+  ],
+  "pedidos": [
+    {
+      "id": "cmnf88fpc000nsri1x644cm50",
+      "clienteNome": "Ana Martins",
+      "alunoId": null,
+      "modelo": "Camiseta Dry Fit",
+      "cor": "preta",
+      "tamanho": "M",
+      "quantidade": 2,
+      "valorUnitario": "65",
+      "valorTotal": "130",
+      "pago": "130",
+      "dataPedido": "2026-03-31T23:07:07.009Z",
+      "observacao": null,
+      "createdAt": "2026-03-31T23:07:07.009Z",
+      "itens": [
+        {
+          "id": "cmnf88fpc000psri12wj23tar",
+          "pedidoId": "cmnf88fpc000nsri1x644cm50",
+          "produtoId": "cl_seed_produto_camisa",
+          "descricaoManual": null,
+          "modelo": null,
+          "cor": null,
+          "tamanho": null,
+          "quantidade": 2,
+          "valorUnitario": "65",
+          "valorTotal": "130"
+        }
+      ]
+    }
+  ],
+  "controleMensal": [
+    {
+      "id": "cmnklwg3p00ansr41ue9yvb0o",
+      "competencia": "2025-11",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 0,
+      "totalFinal": 0,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.157Z"
+    },
+    {
+      "id": "cmnklwg3w00aosr41m3ck2ns3",
+      "competencia": "2025-12",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 0,
+      "totalFinal": 0,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.164Z"
+    },
+    {
+      "id": "cmnklwg3z00apsr41bktxwfwz",
+      "competencia": "2026-01",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 0,
+      "totalFinal": 0,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.168Z"
+    },
+    {
+      "id": "cmnklwg4300aqsr41zevlkgrz",
+      "competencia": "2026-02",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 1,
+      "totalFinal": -1,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.171Z"
+    },
+    {
+      "id": "cmnklwg5400arsr4129j79p2a",
+      "competencia": "2026-03",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 0,
+      "totalFinal": 0,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.208Z"
+    },
+    {
+      "id": "cmnklwg5700assr4153w2smjt",
+      "competencia": "2026-04",
+      "inicioMes": 0,
+      "entrou": 0,
+      "saiu": 0,
+      "totalFinal": 0,
+      "ajusteManual": false,
+      "observacao": null,
+      "updatedAt": "2026-04-04T17:28:33.211Z"
+    }
+  ],
+  "logsAuditoria": [
+    {
+      "id": "cmml72row00lisr77dbkqnzw1",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml6exte007usr77cue2q9og",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:39:31.734Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-03T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:41:37.709Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-04T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T22:41:37.712Z"
+    },
+    {
+      "id": "cmml72yl900lksr779wm8a40m",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml6exte007usr77cue2q9og",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:41:37.709Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-04T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:41:46.652Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-03T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T22:41:46.654Z"
+    },
+    {
+      "id": "cmml733zl00lmsr77he2e84wg",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml6exte007usr77cue2q9og",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:41:46.652Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-03T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml6exte007usr77cue2q9og",
+        "valor": 260,
+        "status": "ISENTO",
+        "alunoId": "cmml6exta007ssr77g52isrvb",
+        "createdAt": "2026-03-10T22:23:05.906Z",
+        "updatedAt": "2026-03-10T22:41:53.647Z",
+        "observacao": null,
+        "vencimento": "2026-02-04T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-02-03T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T22:41:53.649Z"
+    },
+    {
+      "id": "cmml7imcr00oosr77zv7y8doo",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml7i4lp00obsr77drnanlqq",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml7i4lp00obsr77drnanlqq",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T22:53:34.286Z",
+        "updatedAt": "2026-03-10T22:53:37.958Z",
+        "observacao": null,
+        "vencimento": "2026-02-03T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml7i4lp00obsr77drnanlqq",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T22:53:34.286Z",
+        "updatedAt": "2026-03-10T22:53:57.286Z",
+        "observacao": null,
+        "vencimento": "2026-02-03T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": "2025-03-10T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T22:53:57.291Z"
+    },
+    {
+      "id": "cmml7in4000oqsr772aj5oun3",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml7i4lg00oasr77ato755qf",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml7i4lg00oasr77ato755qf",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T22:53:34.277Z",
+        "updatedAt": "2026-03-10T22:53:37.958Z",
+        "observacao": null,
+        "vencimento": "2026-03-03T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml7i4lg00oasr77ato755qf",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T22:53:34.277Z",
+        "updatedAt": "2026-03-10T22:53:58.271Z",
+        "observacao": null,
+        "vencimento": "2026-03-03T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-03-10T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T22:53:58.272Z"
+    },
+    {
+      "id": "cmml9e96e00xksr7704yx86p0",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml9deiu00wksr77hiymbftc",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml9deiu00wksr77hiymbftc",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T23:45:53.094Z",
+        "updatedAt": "2026-03-10T23:45:54.717Z",
+        "observacao": null,
+        "vencimento": "2026-01-03T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml9deiu00wksr77hiymbftc",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T23:45:53.094Z",
+        "updatedAt": "2026-03-10T23:46:32.818Z",
+        "observacao": null,
+        "vencimento": "2026-01-03T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": "2025-03-10T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T23:46:32.822Z"
+    },
+    {
+      "id": "cmml9e9u500xmsr77rkd4he2c",
+      "userId": null,
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmml9deiu00wlsr77ka73akfn",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmml9deiu00wlsr77ka73akfn",
+        "valor": 260,
+        "status": "ATRASADO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T23:45:53.094Z",
+        "updatedAt": "2026-03-10T23:45:54.717Z",
+        "observacao": null,
+        "vencimento": "2026-02-03T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmml9deiu00wlsr77ka73akfn",
+        "valor": 260,
+        "status": "PAGO",
+        "alunoId": "cmml7i4l800o8sr77jaodfnto",
+        "createdAt": "2026-03-10T23:45:53.094Z",
+        "updatedAt": "2026-03-10T23:46:33.671Z",
+        "observacao": null,
+        "vencimento": "2026-02-03T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": "2025-03-10T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-10T23:46:33.677Z"
+    },
+    {
+      "id": "cmnf8j15a003ksraup8kcjq0n",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002rsraue52f6a22",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002rsraue52f6a22",
+        "valor": 180,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2025-11-10T03:00:00.000Z",
+        "competencia": "2025-11",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002rsraue52f6a22",
+        "valor": 180,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:21.353Z",
+        "observacao": null,
+        "vencimento": "2025-11-10T03:00:00.000Z",
+        "competencia": "2025-11",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:21.359Z"
+    },
+    {
+      "id": "cmnf8j1wd003msrau048v8zrt",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002ssrau1r3sh03c",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002ssrau1r3sh03c",
+        "valor": 180,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2025-12-10T03:00:00.000Z",
+        "competencia": "2025-12",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002ssrau1r3sh03c",
+        "valor": 180,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:22.329Z",
+        "observacao": null,
+        "vencimento": "2025-12-10T03:00:00.000Z",
+        "competencia": "2025-12",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:22.334Z"
+    },
+    {
+      "id": "cmnf8j2ft003osrau42p86ou4",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002tsrauzh3cslg7",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002tsrauzh3cslg7",
+        "valor": 180,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2026-01-10T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002tsrauzh3cslg7",
+        "valor": 180,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:23.027Z",
+        "observacao": null,
+        "vencimento": "2026-01-10T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:23.033Z"
+    },
+    {
+      "id": "cmnf8j2v2003qsraujz6sawk2",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002vsrauem4j7y93",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002vsrauem4j7y93",
+        "valor": 120,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2026-01-15T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002vsrauem4j7y93",
+        "valor": 120,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:23.579Z",
+        "observacao": null,
+        "vencimento": "2026-01-15T03:00:00.000Z",
+        "competencia": "2026-01",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:23.582Z"
+    },
+    {
+      "id": "cmnf8j37i003ssraueq0jadja",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002usrauo9o5o4rh",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002usrauo9o5o4rh",
+        "valor": 180,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2026-02-10T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002usrauo9o5o4rh",
+        "valor": 180,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_ana",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:24.028Z",
+        "observacao": null,
+        "vencimento": "2026-02-10T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:24.030Z"
+    },
+    {
+      "id": "cmnf8j3ye003wsrau8nvzkeyd",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf88foz000csri11wn6sbcl",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf88foz000csri11wn6sbcl",
+        "valor": 120,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:07:06.995Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2026-03-15T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf88foz000csri11wn6sbcl",
+        "valor": 120,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:07:06.995Z",
+        "updatedAt": "2026-03-31T23:15:24.996Z",
+        "observacao": null,
+        "vencimento": "2026-03-15T03:00:00.000Z",
+        "competencia": "2026-03",
+        "dataPagamento": "2026-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:24.999Z"
+    },
+    {
+      "id": "cmnf8j3md003usrauxudaphyy",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "mensalidades",
+      "entidade": "Mensalidade",
+      "entidadeId": "cmnf8ijab002wsrauthdwvn9d",
+      "acao": "UPDATE",
+      "antes": {
+        "id": "cmnf8ijab002wsrauthdwvn9d",
+        "valor": 120,
+        "status": "ATRASADO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:14:58.223Z",
+        "observacao": null,
+        "vencimento": "2026-02-15T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": null,
+        "formaPagamento": null
+      },
+      "depois": {
+        "id": "cmnf8ijab002wsrauthdwvn9d",
+        "valor": 120,
+        "status": "PAGO",
+        "alunoId": "cl_seed_aluno_bruno",
+        "createdAt": "2026-03-31T23:14:58.211Z",
+        "updatedAt": "2026-03-31T23:15:24.562Z",
+        "observacao": null,
+        "vencimento": "2026-02-15T03:00:00.000Z",
+        "competencia": "2026-02",
+        "dataPagamento": "2025-03-31T03:00:00.000Z",
+        "formaPagamento": null
+      },
+      "createdAt": "2026-03-31T23:15:24.565Z"
+    },
+    {
+      "id": "cmnklv9mm009bsr419w3d1igg",
+      "userId": null,
+      "modulo": "whatsapp",
+      "entidade": "Configuracao",
+      "entidadeId": "whatsapp.instanceName",
+      "acao": "WHATSAPP_TESTE",
+      "antes": null,
+      "depois": {
+        "phone": "5555999243919",
+        "message": "Teste de integração do WhatsApp da Academia Power Life. Se voce recebeu esta mensagem, a integração esta funcionando.",
+        "providerResponse": {
+          "key": {
+            "id": "3EB07543B8393486DBFDE620D83A8AD5E4E14530",
+            "fromMe": true,
+            "remoteJid": "555599243919@s.whatsapp.net"
+          },
+          "source": "unknown",
+          "status": "PENDING",
+          "message": {
+            "conversation": "Teste de integração do WhatsApp da Academia Power Life. Se voce recebeu esta mensagem, a integração esta funcionando."
+          },
+          "pushName": "",
+          "instanceId": "bc05a5c6-8fa0-4b9f-9aca-79fc08514d88",
+          "contextInfo": null,
+          "messageType": "conversation",
+          "messageTimestamp": 1775323656
+        }
+      },
+      "createdAt": "2026-04-04T17:27:38.111Z"
+    },
+    {
+      "id": "cmnkm3yw400i7sr41qspffwvc",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "caixa",
+      "entidade": "movimentacaoCaixa",
+      "entidadeId": "cmnf88fp0000esri1lf9wpzp6",
+      "acao": "DELETE",
+      "antes": {
+        "id": "cmnf88fp0000esri1lf9wpzp6",
+        "data": "2026-03-09T00:00:00.000Z",
+        "tipo": "SAIDA",
+        "valor": 320,
+        "alunoId": null,
+        "createdAt": "2026-03-31T23:07:06.997Z",
+        "descricao": "Conta de luz",
+        "updatedAt": "2026-03-31T23:07:06.997Z",
+        "observacao": null,
+        "categoriaId": null,
+        "competencia": "2026-03",
+        "origemDestino": null,
+        "formaPagamento": "boleto"
+      },
+      "depois": null,
+      "createdAt": "2026-04-04T17:34:24.101Z"
+    },
+    {
+      "id": "cmnkm41f400i9sr41orvsdyme",
+      "userId": "cmnf88fnt0000sri15lot2x4n",
+      "modulo": "caixa",
+      "entidade": "movimentacaoCaixa",
+      "entidadeId": "cmnf88fp0000dsri13wj5pp46",
+      "acao": "DELETE",
+      "antes": {
+        "id": "cmnf88fp0000dsri13wj5pp46",
+        "data": "2026-03-08T00:00:00.000Z",
+        "tipo": "ENTRADA",
+        "valor": 180,
+        "alunoId": null,
+        "createdAt": "2026-03-31T23:07:06.997Z",
+        "descricao": "Mensalidade Ana",
+        "updatedAt": "2026-03-31T23:07:06.997Z",
+        "observacao": null,
+        "categoriaId": null,
+        "competencia": "2026-03",
+        "origemDestino": null,
+        "formaPagamento": "pix"
+      },
+      "depois": null,
+      "createdAt": "2026-04-04T17:34:27.377Z"
+    }
+  ]
+}

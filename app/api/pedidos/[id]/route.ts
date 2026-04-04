@@ -244,33 +244,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const auth = requireRole(request, UserRole.RECEPCAO);
   if (auth instanceof Response) return auth;
 
-  const { id } = await context.params;
-  const existing = await prisma.pedidoProduto.findUnique({
-    where: { id },
-    include: { itens: true }
-  });
-  if (!existing) {
-    return fail("Pedido não encontrado", 404);
-  }
-
-  await prisma.$transaction(async (trx) => {
-    for (const item of existing.itens) {
-      if (item.produtoId) {
-        await trx.produto.update({
-          where: { id: item.produtoId },
-          data: {
-            estoque: {
-              increment: item.quantidade
-            }
-          }
-        });
-      }
-    }
-
-    await trx.pedidoProduto.delete({ where: { id } });
-  });
-
-  await syncAutomaticEntriesInCaixa(true);
-
-  return ok({ ok: true });
+  await context.params;
+  return fail("Exclusão física de pedidos está bloqueada para proteger o histórico. Faça a correção pelo próprio pedido ou registre um ajuste.", 409);
 }

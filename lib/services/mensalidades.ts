@@ -284,18 +284,25 @@ export async function sincronizarVencimentoMensalidadesPorAluno(alunoId?: string
 export async function sincronizarMensalidadesComDataInicio(alunoId: string, dataInicio: Date) {
   const competenciaInicio = competenciaFromUtcDate(dataInicio);
 
-  const removidas = await prisma.mensalidade.deleteMany({
+  const ajustadas = await prisma.mensalidade.updateMany({
     where: {
       alunoId,
       competencia: {
         lt: competenciaInicio
+      },
+      status: {
+        in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO]
       }
+    },
+    data: {
+      status: MensalidadeStatus.ISENTO,
+      observacao: `Competência anterior à data de início (${competenciaInicio}) preservada por segurança em vez de removida automaticamente.`
     }
   });
 
   return {
     competenciaInicio,
-    removidas: removidas.count
+    ajustadas: ajustadas.count
   };
 }
 

@@ -153,25 +153,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const auth = requireRole(request, UserRole.FINANCEIRO);
   if (auth instanceof Response) return auth;
 
-  const { id } = await context.params;
-  if (isAutoCaixaEntryId(id)) {
-    return fail("Lançamento automático. Remova ou ajuste o pagamento na origem.", 400);
-  }
-  const previous = await prisma.movimentacaoCaixa.findUnique({ where: { id } });
-  if (!previous) {
-    return fail("Movimentação não encontrada", 404);
-  }
-
-  await prisma.movimentacaoCaixa.delete({ where: { id } });
-
-  await logAudit({
-    userId: auth.id,
-    modulo: "caixa",
-    entidade: "movimentacaoCaixa",
-    entidadeId: id,
-    acao: "DELETE",
-    antes: previous
-  });
-
-  return ok({ ok: true });
+  await context.params;
+  return fail("Exclusão física de lançamentos do caixa está bloqueada para proteger o histórico. Faça um ajuste compensatório.", 409);
 }

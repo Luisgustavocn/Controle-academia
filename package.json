@@ -7,10 +7,13 @@
     "dev:fast": "next dev --turbo",
     "build": "next build",
     "start": "next start",
+    "start:local": "node scripts/start-local.mjs",
+    "update:start:local": "node scripts/update-and-start-local.mjs",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
+    "jobs:backup": "tsx scripts/run-backup.ts",
     "jobs:mensalidades": "tsx scripts/run-generate-monthly.ts",
     "jobs:fechamento": "tsx scripts/run-close-cash-month.ts",
     "jobs:whatsapp-alertas": "tsx scripts/run-whatsapp-reminders.ts"

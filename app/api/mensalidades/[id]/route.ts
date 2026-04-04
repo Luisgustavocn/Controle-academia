@@ -177,24 +177,6 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const auth = requireRole(request, UserRole.ADMIN);
   if (auth instanceof Response) return auth;
 
-  const { id } = await context.params;
-  const previous = await prisma.mensalidade.findUnique({ where: { id } });
-  if (!previous) {
-    return fail("Mensalidade não encontrada", 404);
-  }
-
-  await prisma.mensalidade.delete({ where: { id } });
-
-  await logAudit({
-    userId: auth.id,
-    modulo: "mensalidades",
-    entidade: "Mensalidade",
-    entidadeId: id,
-    acao: "DELETE",
-    antes: previous
-  });
-
-  await syncAutomaticEntriesInCaixa(true);
-
-  return ok({ ok: true });
+  await context.params;
+  return fail("Exclusão física de mensalidades está bloqueada para proteger o histórico. Ajuste o status ou os dados da cobrança.", 409);
 }

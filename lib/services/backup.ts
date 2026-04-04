@@ -1,8 +1,10 @@
+import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 
 const BACKUP_DIR_KEY = "backup.exportDir";
+const BACKUP_MIRROR_DIR_KEY = "backup.exportDirMirror";
 const DEFAULT_BACKUP_DIR = path.join(process.cwd(), "backups");
 
 function safeTimestamp(date = new Date()) {
@@ -82,6 +84,21 @@ export async function getBackupDirectory() {
   };
 }
 
+export async function getMirrorBackupDirectory() {
+  const item = await prisma.configuracao.findUnique({
+    where: { chave: BACKUP_MIRROR_DIR_KEY }
+  });
+
+  const configuredDir = item?.valor?.trim();
+  const envDir = process.env.BACKUP_EXPORT_DIR_MIRROR?.trim();
+  const backupDir = configuredDir || envDir || "";
+
+  return {
+    backupDir,
+    source: configuredDir ? "config" : envDir ? "env" : "none"
+  };
+}
+
 export async function saveBackupDirectory(backupDir: string) {
   const trimmed = backupDir.trim();
   await prisma.configuracao.upsert({
@@ -98,20 +115,42 @@ export async function saveBackupDirectory(backupDir: string) {
   });
 }
 
+function buildChecksum(content: string) {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+async function writeBackupArtifact(directory: string, fileName: string, content: string, checksum: string) {
+  const resolvedDir = path.resolve(directory);
+  await mkdir(resolvedDir, { recursive: true });
+
+  const filePath = path.join(resolvedDir, fileName);
+  await writeFile(filePath, content, "utf8");
+  await writeFile(`${filePath}.sha256`, `${checksum}  ${fileName}\n`, "utf8");
+
+  return filePath;
+}
+
 export async function createBackupFile(targetDir?: string) {
-  const resolvedBaseDir = path.resolve(targetDir?.trim() || (await getBackupDirectory()).backupDir);
-  await mkdir(resolvedBaseDir, { recursive: true });
-
   const payload = await buildBackupPayload();
+  const content = JSON.stringify(payload, null, 2);
+  const checksum = buildChecksum(content);
   const fileName = `backup-academia-${safeTimestamp()}.json`;
-  const filePath = path.join(resolvedBaseDir, fileName);
+  const primaryDir = path.resolve(targetDir?.trim() || (await getBackupDirectory()).backupDir);
+  const mirrorDir = targetDir?.trim() ? "" : (await getMirrorBackupDirectory()).backupDir;
+  const directories = [primaryDir, mirrorDir].filter(Boolean);
+  const filePaths: string[] = [];
 
-  await writeFile(filePath, JSON.stringify(payload, null, 2), "utf8");
+  for (const directory of directories) {
+    filePaths.push(await writeBackupArtifact(directory, fileName, content, checksum));
+  }
 
   return {
     fileName,
-    filePath,
-    directory: resolvedBaseDir,
+    filePath: filePaths[0],
+    filePaths,
+    directory: primaryDir,
+    directories,
+    checksum,
     generatedAt: payload.generatedAt
   };
 }

@@ -7,7 +7,7 @@ import { CrudModule } from "@/components/forms/crud-module";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 
 type CaixaItem = {
   id: string;
@@ -148,7 +148,7 @@ export default function CaixaPage() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="w-full max-w-[220px] text-sm font-medium text-ink">
             Mês dos gráficos
-            <Input type="month" value={competencia} onChange={(event) => setCompetencia(event.target.value)} />
+            <MonthYearPicker value={competencia} onChange={setCompetencia} />
           </label>
           <Button variant="secondary" onClick={() => void loadChartData()} disabled={loadingCharts}>
             {loadingCharts ? "Carregando..." : "Atualizar gráficos"}

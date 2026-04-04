@@ -6,6 +6,7 @@ import { ModuleHeader } from "@/components/ui/module-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 
 type MatrizAluno = {
   id: string;
@@ -266,7 +267,7 @@ export default function FrequenciaPage() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="min-w-[160px] text-sm font-semibold text-ink">
             Competência
-            <Input type="month" value={competencia} onChange={(event) => setCompetencia(event.target.value)} />
+            <MonthYearPicker value={competencia} onChange={setCompetencia} />
           </label>
           <label className="min-w-[220px] flex-1 text-sm font-semibold text-ink">
             Buscar aluno

@@ -48,4 +48,17 @@ export function getSessionUserFromRequest(request: NextRequest): SessionUser | n
   return verifySessionToken(token);
 }
 
+export function getSessionCookieOptions(request: NextRequest) {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isHttps = request.nextUrl.protocol === "https:" || forwardedProto === "https";
+
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isHttps,
+    path: "/",
+    maxAge: 60 * 60 * 12
+  };
+}
+
 export const sessionCookie = COOKIE_NAME;

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, Clock3, CreditCard, RefreshCw
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Select } from "@/components/ui/select";
 
@@ -247,7 +248,7 @@ export default function MensalidadesPage() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="w-full max-w-[220px] text-sm font-medium text-ink">
             Mês de referência
-            <Input type="month" value={competencia} onChange={(event) => setCompetencia(event.target.value)} />
+            <MonthYearPicker value={competencia} onChange={setCompetencia} />
           </label>
 
           <label className="min-w-[260px] flex-1 text-sm font-medium text-ink">
