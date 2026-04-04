@@ -7,7 +7,8 @@ function runNpm(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(npmCommand, args, {
       stdio: "inherit",
-      shell: false
+      shell: true,
+      env: { ...process.env }
     });
 
     child.on("error", reject);
