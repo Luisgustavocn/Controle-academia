@@ -2,6 +2,25 @@ node_modules
 .next
 .env
 .env.*
+!.env.example
 coverage
 dist
 *.log
+
+# Backups e exportacoes locais
+/backups/
+/backups-cloud-test/
+/exports/
+/dumps/
+/data/
+/public/uploads/branding/*
+backup-academia-*.json
+backup-academia-*.json.sha256
+*.dump
+*.bak
+*.backup
+dump-*.sql
+backup-*.sql
+
+# Utilitario local com credenciais de desenvolvimento
+/Testar Banco.bat

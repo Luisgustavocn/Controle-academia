@@ -1,13 +1,9 @@
-import { runMonthlyGeneration } from "@/lib/services/jobs";
 import { currentCompetencia } from "@/lib/competencia";
+import { runProductionCli } from "@/scripts/cli-runtime";
 
-async function main() {
+void runProductionCli("mensalidades", async () => {
+  const { runMonthlyGeneration } = await import("@/lib/services/jobs");
   const competencia = process.argv[2] || currentCompetencia();
-  const result = await runMonthlyGeneration(competencia);
-  console.log(JSON.stringify(result, null, 2));
-}
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+  return runMonthlyGeneration(competencia);
 });

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const appUrl = "http://localhost:3000/login";
@@ -8,7 +9,10 @@ function runNpm(args) {
     const child = spawn(npmCommand, args, {
       stdio: "inherit",
       shell: true,
-      env: { ...process.env }
+      env: {
+        ...process.env,
+        APP_DATA_DIR: process.env.APP_DATA_DIR || path.resolve("data")
+      }
     });
 
     child.on("error", reject);

@@ -5,6 +5,10 @@ import { FinanceEvolutionChart } from "@/components/charts/finance-evolution-cha
 import { currentCompetencia } from "@/lib/competencia";
 import { getDashboardSummary } from "@/lib/services/dashboard";
 import { LayoutDashboard } from "lucide-react";
+import { UserRole } from "@prisma/client";
+import { redirect } from "next/navigation";
+import { getActiveSessionUser } from "@/lib/auth/server-session";
+import { hasRole } from "@/lib/roles";
 
 function currency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -15,6 +19,15 @@ function percent(value: number) {
 }
 
 export default async function DashboardPage() {
+  const session = await getActiveSessionUser();
+  if (!session) {
+    redirect("/login");
+  }
+
+  if (!hasRole(session.role, UserRole.RECEPCAO)) {
+    redirect("/frequencia");
+  }
+
   const summary = await getDashboardSummary(currentCompetencia());
 
   return (

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
+import path from "node:path";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -13,7 +14,10 @@ function runCommand(command, args, label) {
     const child = spawn(command, args, {
       stdio: "inherit",
       shell: true,
-      env: { ...process.env }
+      env: {
+        ...process.env,
+        APP_DATA_DIR: process.env.APP_DATA_DIR || path.resolve("data")
+      }
     });
 
     child.on("error", reject);

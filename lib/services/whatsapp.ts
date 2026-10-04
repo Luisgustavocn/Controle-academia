@@ -3,6 +3,7 @@ import { addDays, differenceInCalendarDays } from "date-fns";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { getBrandingConfig } from "@/lib/services/branding";
+import { REDACTED_SECRET_VALUE } from "@/lib/configuration-secrets";
 
 export type WhatsAppConfig = {
   enabled: boolean;
@@ -52,6 +53,17 @@ const WHATSAPP_KEYS = {
   dueSoonTemplate: "whatsapp.template.dueSoon",
   overdueTemplate: "whatsapp.template.overdue"
 } as const;
+
+const PERSISTED_WHATSAPP_KEYS = [
+  WHATSAPP_KEYS.enabled,
+  WHATSAPP_KEYS.baseUrl,
+  WHATSAPP_KEYS.instanceName,
+  WHATSAPP_KEYS.countryCode,
+  WHATSAPP_KEYS.daysBeforeDue,
+  WHATSAPP_KEYS.testPhone,
+  WHATSAPP_KEYS.dueSoonTemplate,
+  WHATSAPP_KEYS.overdueTemplate
+];
 
 const WHATSAPP_DEFAULTS: WhatsAppConfig = {
   enabled: false,
@@ -151,7 +163,6 @@ export async function ensureWhatsAppDefaults() {
       { chave: WHATSAPP_KEYS.enabled, valor: String(WHATSAPP_DEFAULTS.enabled), descricao: "Liga os envios automaticos de WhatsApp" },
       { chave: WHATSAPP_KEYS.baseUrl, valor: WHATSAPP_DEFAULTS.baseUrl, descricao: "Base URL da API WhatsApp compatível com Evolution" },
       { chave: WHATSAPP_KEYS.instanceName, valor: WHATSAPP_DEFAULTS.instanceName, descricao: "Nome da instancia conectada no provedor WhatsApp" },
-      { chave: WHATSAPP_KEYS.apiKey, valor: WHATSAPP_DEFAULTS.apiKey, descricao: "Chave da API do provedor WhatsApp" },
       { chave: WHATSAPP_KEYS.countryCode, valor: WHATSAPP_DEFAULTS.countryCode, descricao: "Codigo de pais padrao para telefones sem DDI" },
       { chave: WHATSAPP_KEYS.daysBeforeDue, valor: String(WHATSAPP_DEFAULTS.daysBeforeDue), descricao: "Quantos dias antes do vencimento enviar o lembrete" },
       { chave: WHATSAPP_KEYS.testPhone, valor: WHATSAPP_DEFAULTS.testPhone, descricao: "Numero usado para testes manuais de WhatsApp" },
@@ -173,7 +184,7 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
     const items = await prisma.configuracao.findMany({
       where: {
         chave: {
-          in: Object.values(WHATSAPP_KEYS)
+          in: PERSISTED_WHATSAPP_KEYS
         }
       }
     });
@@ -183,7 +194,7 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
       enabled: parseBoolean(byKey.get(WHATSAPP_KEYS.enabled), WHATSAPP_DEFAULTS.enabled),
       baseUrl: byKey.get(WHATSAPP_KEYS.baseUrl) ?? WHATSAPP_DEFAULTS.baseUrl,
       instanceName: byKey.get(WHATSAPP_KEYS.instanceName) ?? WHATSAPP_DEFAULTS.instanceName,
-      apiKey: byKey.get(WHATSAPP_KEYS.apiKey) ?? WHATSAPP_DEFAULTS.apiKey,
+      apiKey: WHATSAPP_DEFAULTS.apiKey,
       countryCode: byKey.get(WHATSAPP_KEYS.countryCode) ?? WHATSAPP_DEFAULTS.countryCode,
       daysBeforeDue: Number(byKey.get(WHATSAPP_KEYS.daysBeforeDue) ?? WHATSAPP_DEFAULTS.daysBeforeDue),
       testPhone: byKey.get(WHATSAPP_KEYS.testPhone) ?? WHATSAPP_DEFAULTS.testPhone,
@@ -198,14 +209,16 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
 }
 
 export async function saveWhatsAppConfig(input: Partial<WhatsAppConfig>) {
-  const safe = sanitizeConfig(input);
+  const safe = sanitizeConfig({
+    ...input,
+    apiKey: WHATSAPP_DEFAULTS.apiKey
+  });
   await ensureWhatsAppDefaults();
 
   const entries: Array<{ chave: string; valor: string; descricao: string }> = [
     { chave: WHATSAPP_KEYS.enabled, valor: String(safe.enabled), descricao: "Liga os envios automaticos de WhatsApp" },
     { chave: WHATSAPP_KEYS.baseUrl, valor: safe.baseUrl, descricao: "Base URL da API WhatsApp compatível com Evolution" },
     { chave: WHATSAPP_KEYS.instanceName, valor: safe.instanceName, descricao: "Nome da instancia conectada no provedor WhatsApp" },
-    { chave: WHATSAPP_KEYS.apiKey, valor: safe.apiKey, descricao: "Chave da API do provedor WhatsApp" },
     { chave: WHATSAPP_KEYS.countryCode, valor: safe.countryCode, descricao: "Codigo de pais padrao para telefones sem DDI" },
     { chave: WHATSAPP_KEYS.daysBeforeDue, valor: String(safe.daysBeforeDue), descricao: "Quantos dias antes do vencimento enviar o lembrete" },
     { chave: WHATSAPP_KEYS.testPhone, valor: safe.testPhone, descricao: "Numero usado para testes manuais de WhatsApp" },
@@ -222,6 +235,17 @@ export async function saveWhatsAppConfig(input: Partial<WhatsAppConfig>) {
   }
 
   return safe;
+}
+
+export function isWhatsAppApiKeyConfigured() {
+  return Boolean(WHATSAPP_DEFAULTS.apiKey);
+}
+
+export function maskWhatsAppConfig(config: WhatsAppConfig): WhatsAppConfig {
+  return {
+    ...config,
+    apiKey: config.apiKey ? REDACTED_SECRET_VALUE : ""
+  };
 }
 
 function validateConfig(config: WhatsAppConfig) {

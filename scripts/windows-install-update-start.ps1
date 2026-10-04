@@ -3,7 +3,7 @@ param(
   [string]$InstallDir = "$env:USERPROFILE\Controle-academia",
   [string]$DbName = "controle_academia",
   [string]$DbUser = "postgres",
-  [string]$DbPassword = "postgres",
+  [string]$DbPassword = $env:CONTROLE_ACADEMIA_DB_PASSWORD,
   [string]$DbPort = "5432"
 )
 
@@ -28,7 +28,7 @@ function Invoke-ExternalCommand([string]$FilePath, [string[]]$Arguments, [string
   Write-Step $Label
   & $FilePath @Arguments
   if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao executar: $FilePath $($Arguments -join ' ')"
+    throw "Falha ao executar: $FilePath"
   }
 }
 
@@ -85,7 +85,7 @@ function Ensure-Postgres {
   Install-WingetPackage `
     "PostgreSQL.PostgreSQL.16" `
     "Instalando PostgreSQL" `
-    @("--override", "--mode unattended --unattendedmodeui none --superpassword postgres --serverport 5432")
+    @("--override", "--mode unattended --unattendedmodeui none --superpassword $DbPassword --serverport $DbPort")
 
   if (-not (Test-CommandExists "psql")) {
     throw "PostgreSQL foi instalado, mas o comando psql nao ficou disponivel. Feche e abra o script novamente."
@@ -146,6 +146,7 @@ function Ensure-EnvFile {
   $jwtSecret = ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
 
   Set-Or-ReplaceEnvValue $envFile "DATABASE_URL" $databaseUrl
+  Set-Or-ReplaceEnvValue $envFile "APP_DATA_DIR" (Join-Path $InstallDir "data")
 
   $envContent = Get-Content $envFile -Raw
   if ($envContent -match '(?m)^JWT_SECRET="?troque-por-uma-chave-forte"?$' -or -not ($envContent -match '(?m)^JWT_SECRET=')) {
@@ -153,6 +154,7 @@ function Ensure-EnvFile {
   }
 
   $env:DATABASE_URL = $databaseUrl
+  $env:APP_DATA_DIR = Join-Path $InstallDir "data"
   $env:PGPASSWORD = $DbPassword
 }
 
@@ -202,6 +204,10 @@ function Ensure-SeedIfNeeded {
 }
 
 try {
+  if ([string]::IsNullOrWhiteSpace($DbPassword)) {
+    throw "Defina CONTROLE_ACADEMIA_DB_PASSWORD antes de executar este script."
+  }
+
   Ensure-Winget
   Ensure-Git
   Ensure-Node

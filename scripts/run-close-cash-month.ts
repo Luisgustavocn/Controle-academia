@@ -1,13 +1,14 @@
-import { runCashClosing } from "@/lib/services/jobs";
 import { currentCompetencia } from "@/lib/competencia";
+import { runProductionCli } from "@/scripts/cli-runtime";
 
-async function main() {
+void runProductionCli("fechamento-caixa", async () => {
+  const { runCashClosing } = await import("@/lib/services/jobs");
   const competencia = process.argv[2] || currentCompetencia();
   const result = await runCashClosing(competencia);
-  console.log(JSON.stringify(result, null, 2));
-}
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+  if (!result.backupSaved) {
+    throw new Error("Fechamento gravado, mas o backup JSON obrigatorio falhou");
+  }
+
+  return result;
 });

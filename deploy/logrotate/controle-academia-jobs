@@ -1,0 +1,9 @@
+/var/log/controle-academia/jobs/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 controle-academia controle-academia
+}

@@ -2,11 +2,16 @@ import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
+import { getOptionalEnvironmentValue } from "@/lib/env";
+import { getDefaultBackupDirectory } from "@/lib/storage";
+import {
+  REDACTED_SECRET_VALUE,
+  redactConfigurationValue,
+  redactSensitiveFields
+} from "@/lib/configuration-secrets";
 
 const BACKUP_DIR_KEY = "backup.exportDir";
 const BACKUP_MIRROR_DIR_KEY = "backup.exportDirMirror";
-const DEFAULT_BACKUP_DIR = path.join(process.cwd(), "backups");
-
 function safeTimestamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, "-");
 }
@@ -48,10 +53,21 @@ export async function buildBackupPayload() {
     prisma.logAuditoria.findMany()
   ]);
 
+  const sanitizedUsers = users.map((user) => ({
+    ...user,
+    passwordHash: REDACTED_SECRET_VALUE
+  }));
+  const sanitizedConfiguracoes = configuracoes.map(redactConfigurationValue);
+  const sanitizedLogsAuditoria = logsAuditoria.map((log) => ({
+    ...log,
+    antes: redactSensitiveFields(log.antes),
+    depois: redactSensitiveFields(log.depois)
+  }));
+
   return {
     generatedAt: new Date().toISOString(),
-    users,
-    configuracoes,
+    users: sanitizedUsers,
+    configuracoes: sanitizedConfiguracoes,
     categoriasFinanceiras,
     modalidades,
     alunos,
@@ -65,7 +81,7 @@ export async function buildBackupPayload() {
     produtos,
     pedidos,
     controleMensal,
-    logsAuditoria
+    logsAuditoria: sanitizedLogsAuditoria
   };
 }
 
@@ -75,12 +91,13 @@ export async function getBackupDirectory() {
   });
 
   const configuredDir = item?.valor?.trim();
-  const envDir = process.env.BACKUP_EXPORT_DIR?.trim();
-  const backupDir = configuredDir || envDir || DEFAULT_BACKUP_DIR;
+  const envDir = getOptionalEnvironmentValue("BACKUP_EXPORT_DIR");
+  const usePersistedConfig = process.env.NODE_ENV !== "production" && !envDir;
+  const backupDir = envDir || (usePersistedConfig ? configuredDir : "") || getDefaultBackupDirectory();
 
   return {
     backupDir,
-    source: configuredDir ? "config" : envDir ? "env" : "default"
+    source: envDir ? "env" : usePersistedConfig && configuredDir ? "config" : "app-data"
   };
 }
 
@@ -90,16 +107,22 @@ export async function getMirrorBackupDirectory() {
   });
 
   const configuredDir = item?.valor?.trim();
-  const envDir = process.env.BACKUP_EXPORT_DIR_MIRROR?.trim();
-  const backupDir = configuredDir || envDir || "";
+  const mirrorDefinedInEnvironment = process.env.BACKUP_EXPORT_DIR_MIRROR !== undefined;
+  const envDir = getOptionalEnvironmentValue("BACKUP_EXPORT_DIR_MIRROR");
+  const usePersistedConfig = process.env.NODE_ENV !== "production" && !mirrorDefinedInEnvironment;
+  const backupDir = mirrorDefinedInEnvironment ? envDir : usePersistedConfig ? configuredDir : "";
 
   return {
     backupDir,
-    source: configuredDir ? "config" : envDir ? "env" : "none"
+    source: mirrorDefinedInEnvironment ? "env" : usePersistedConfig && configuredDir ? "config" : "none"
   };
 }
 
 export async function saveBackupDirectory(backupDir: string) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("O diretorio de backup de producao deve ser configurado pelo ambiente.");
+  }
+
   const trimmed = backupDir.trim();
   await prisma.configuracao.upsert({
     where: { chave: BACKUP_DIR_KEY },
@@ -135,9 +158,12 @@ export async function createBackupFile(targetDir?: string) {
   const content = JSON.stringify(payload, null, 2);
   const checksum = buildChecksum(content);
   const fileName = `backup-academia-${safeTimestamp()}.json`;
-  const primaryDir = path.resolve(targetDir?.trim() || (await getBackupDirectory()).backupDir);
-  const mirrorDir = targetDir?.trim() ? "" : (await getMirrorBackupDirectory()).backupDir;
-  const directories = [primaryDir, mirrorDir].filter(Boolean);
+  const requestedDir = process.env.NODE_ENV === "production" ? "" : (targetDir?.trim() ?? "");
+  const primaryDir = path.resolve(requestedDir || (await getBackupDirectory()).backupDir);
+  const mirrorDir = requestedDir ? "" : (await getMirrorBackupDirectory()).backupDir;
+  const directories = [primaryDir, mirrorDir].filter(
+    (directory): directory is string => Boolean(directory)
+  );
   const filePaths: string[] = [];
 
   for (const directory of directories) {

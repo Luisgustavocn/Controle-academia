@@ -1,0 +1,22 @@
+# Instale no crontab do usuario nao-root `controle-academia`.
+# Confirme os caminhos de npm, flock e bash na VPS antes de instalar.
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+CRON_TZ=America/Sao_Paulo
+TZ=America/Sao_Paulo
+
+# Garante as mensalidades da competencia atual todos os dias as 05:30.
+30 5 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/mensalidades.lock /usr/bin/npm --prefix /opt/controle-academia/app run jobs:mensalidades >> /var/log/controle-academia/jobs/mensalidades.log 2>&1
+
+# Sincroniza PENDENTE/ATRASADO uma vez ao dia as 06:00.
+0 6 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/atrasos.lock /usr/bin/npm --prefix /opt/controle-academia/app run jobs:atrasos >> /var/log/controle-academia/jobs/atrasos.log 2>&1
+
+# Envia lembretes em horario comercial, uma vez ao dia as 09:00.
+0 9 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/whatsapp.lock /usr/bin/npm --prefix /opt/controle-academia/app run jobs:whatsapp-alertas >> /var/log/controle-academia/jobs/whatsapp.log 2>&1
+
+# Exportacao logica JSON diaria e retencao de 14 dias.
+20 23 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/backup-json.lock /usr/bin/npm --prefix /opt/controle-academia/app run jobs:backup >> /var/log/controle-academia/jobs/backup-json.log 2>&1
+35 23 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/backup-json.lock /usr/bin/npm --prefix /opt/controle-academia/app run jobs:backup-prune >> /var/log/controle-academia/jobs/backup-json.log 2>&1
+
+# Dump nativo diario, validado e com retencao de 30 dias.
+50 23 * * * /usr/bin/flock -n /var/lib/controle-academia/locks/backup-postgres.lock /bin/bash /opt/controle-academia/app/scripts/backup-postgres.sh >> /var/log/controle-academia/jobs/backup-postgres.log 2>&1

@@ -1,20 +1,36 @@
+import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { AlunoStatus, MensalidadeStatus, TipoMovimentacao, UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { FIRST_ACCESS_DEFAULT_EMAIL, FIRST_ACCESS_PENDING_KEY } from "../lib/auth/first-access";
 
 async function main() {
-  const passwordHash = await hash("admin123", 10);
-
-  await prisma.user.upsert({
-    where: { email: "admin@academia.local" },
-    update: {},
-    create: {
-      name: "Administrador",
-      email: "admin@academia.local",
-      passwordHash,
-      role: UserRole.ADMIN
-    }
+  const existingAdmin = await prisma.user.findUnique({
+    where: { email: FIRST_ACCESS_DEFAULT_EMAIL },
+    select: { id: true }
   });
+
+  if (!existingAdmin) {
+    const passwordHash = await hash(randomBytes(32).toString("base64url"), 10);
+    await prisma.user.create({
+      data: {
+        name: "Administrador",
+        email: FIRST_ACCESS_DEFAULT_EMAIL,
+        passwordHash,
+        role: UserRole.ADMIN
+      }
+    });
+
+    await prisma.configuracao.upsert({
+      where: { chave: FIRST_ACCESS_PENDING_KEY },
+      update: { valor: "true" },
+      create: {
+        chave: FIRST_ACCESS_PENDING_KEY,
+        valor: "true",
+        descricao: "Indica se o cadastro seguro do administrador inicial esta pendente"
+      }
+    });
+  }
 
   const modalidades = [
     ["todos os dias", 180],

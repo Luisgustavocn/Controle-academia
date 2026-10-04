@@ -24,16 +24,16 @@ export async function POST(request: NextRequest) {
   const requestedDir = String(body.backupDir ?? "").trim();
   const savePath = Boolean(body.savePath);
 
-  if (!requestedDir) {
+  if (!requestedDir && process.env.NODE_ENV !== "production") {
     return fail("Informe a pasta onde o backup deve ser salvo.", 400);
   }
 
   try {
-    if (savePath) {
+    if (savePath && process.env.NODE_ENV !== "production") {
       await saveBackupDirectory(requestedDir);
     }
 
-    const result = await createBackupFile(requestedDir);
+    const result = await createBackupFile(process.env.NODE_ENV === "production" ? undefined : requestedDir);
     return ok(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao salvar backup.";

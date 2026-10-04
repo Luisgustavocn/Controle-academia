@@ -2,7 +2,11 @@ import { hash } from "bcryptjs";
 import { NextRequest, NextResponse } from "next/server";
 import { fail } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { getFirstAccessUser, isFirstAccessPending } from "@/lib/auth/first-access";
+import {
+  getFirstAccessUser,
+  isFirstAccessPending,
+  markFirstAccessComplete
+} from "@/lib/auth/first-access";
 import { getSessionCookieOptions, sessionCookie, signSessionToken } from "@/lib/auth/session";
 
 export async function GET() {
@@ -69,6 +73,7 @@ export async function POST(request: NextRequest) {
       passwordHash
     }
   });
+  await markFirstAccessComplete();
 
   const token = signSessionToken({
     id: updated.id,

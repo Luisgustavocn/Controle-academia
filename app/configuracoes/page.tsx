@@ -576,7 +576,7 @@ export default function ConfiguracoesPage() {
             <p className="text-sm font-semibold text-ink">Enviar logo do computador</p>
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              accept="image/png,image/jpeg,image/webp"
               disabled={logoUploading}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -586,7 +586,7 @@ export default function ConfiguracoesPage() {
                 event.currentTarget.value = "";
               }}
             />
-            <p className="text-xs text-muted">Formatos: PNG, JPG, WEBP ou SVG. Tamanho maximo: 4MB.</p>
+            <p className="text-xs text-muted">Formatos: PNG, JPG ou WEBP. Tamanho maximo: 4MB.</p>
           </div>
 
           <div className="rounded-xl border border-line/80 bg-white/80 p-3">
@@ -753,7 +753,7 @@ export default function ConfiguracoesPage() {
           <Input
             value={backupDir}
             onChange={(event) => setBackupDir(event.target.value)}
-            placeholder="/Users/seu-usuario/iCloud Drive/Backups/Academia"
+            placeholder="/var/lib/controle-academia/backups"
           />
         </label>
         <p className="text-xs text-muted">
@@ -828,11 +828,10 @@ export default function ConfiguracoesPage() {
           </label>
 
           <label className="text-sm font-medium text-ink">
-            API key
+            API key (variavel de ambiente)
             <Input
-              value={whatsApp.apiKey}
-              onChange={(event) => setWhatsApp((prev) => ({ ...prev, apiKey: event.target.value }))}
-              placeholder="apikey"
+              value={whatsApp.apiKey ? "Configurada no servidor" : "Nao configurada"}
+              disabled
             />
           </label>
 

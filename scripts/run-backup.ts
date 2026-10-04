@@ -1,12 +1,14 @@
-import { createBackupFile } from "@/lib/services/backup";
+import { runProductionCli } from "@/scripts/cli-runtime";
 
-async function main() {
+void runProductionCli("backup-json", async () => {
+  const { createBackupFile } = await import("@/lib/services/backup");
   const targetDir = process.argv[2];
   const result = await createBackupFile(targetDir);
-  console.log(JSON.stringify(result, null, 2));
-}
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
+  return {
+    fileName: result.fileName,
+    directories: result.directories,
+    checksum: result.checksum,
+    generatedAt: result.generatedAt
+  };
 });

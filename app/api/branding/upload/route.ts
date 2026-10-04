@@ -5,28 +5,33 @@ import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
+import { getBrandingUploadsDirectory } from "@/lib/storage";
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
 
 const MIME_TO_EXT: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
-  "image/webp": "webp",
-  "image/svg+xml": "svg"
+  "image/webp": "webp"
 };
 
-const EXT_ALLOWED = new Set(["png", "jpg", "jpeg", "webp", "svg"]);
+function hasBytes(bytes: Uint8Array, expected: number[], offset = 0) {
+  return expected.every((value, index) => bytes[offset + index] === value);
+}
 
-function pickExtension(file: File) {
-  const byMime = MIME_TO_EXT[file.type];
-  if (byMime) return byMime;
+function detectSafeImageExtension(file: File, bytes: Uint8Array) {
+  const declaredExtension = MIME_TO_EXT[file.type];
+  if (!declaredExtension) return "";
 
-  const fromName = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (EXT_ALLOWED.has(fromName)) {
-    return fromName === "jpeg" ? "jpg" : fromName;
-  }
+  const detectedExtension = hasBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    ? "png"
+    : hasBytes(bytes, [0xff, 0xd8, 0xff])
+      ? "jpg"
+      : hasBytes(bytes, [0x52, 0x49, 0x46, 0x46]) && hasBytes(bytes, [0x57, 0x45, 0x42, 0x50], 8)
+        ? "webp"
+        : "";
 
-  return "";
+  return detectedExtension === declaredExtension ? detectedExtension : "";
 }
 
 export async function POST(request: NextRequest) {
@@ -51,19 +56,18 @@ export async function POST(request: NextRequest) {
     return fail("Arquivo muito grande. Limite de 4MB", 400);
   }
 
-  const ext = pickExtension(file);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const ext = detectSafeImageExtension(file, bytes);
   if (!ext) {
-    return fail("Formato inválido. Use PNG, JPG, WEBP ou SVG", 400);
+    return fail("Formato inválido. Use PNG, JPG ou WEBP", 400);
   }
 
   const fileName = `logo-${Date.now()}-${randomUUID().slice(0, 8)}.${ext}`;
-  const brandingUploadsDir = path.join(process.cwd(), "public", "uploads", "branding");
+  const brandingUploadsDir = getBrandingUploadsDirectory();
   const destinationPath = path.join(brandingUploadsDir, fileName);
 
   await mkdir(brandingUploadsDir, { recursive: true });
-
-  const bytes = await file.arrayBuffer();
-  await writeFile(destinationPath, Buffer.from(bytes));
+  await writeFile(destinationPath, bytes, { flag: "wx" });
 
   return ok({
     logoUrl: `/uploads/branding/${fileName}`
