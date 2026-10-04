@@ -2,7 +2,8 @@ import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
-import { importFromExcelBuffer } from "@/lib/excel/importer";
+import { importFromExcelBuffer, InvalidSpreadsheetError } from "@/lib/excel/importer";
+import { validateSpreadsheetUpload } from "@/lib/excel/upload-validation";
 
 export async function POST(request: NextRequest) {
   const auth = requireRole(request, UserRole.ADMIN);
@@ -16,11 +17,25 @@ export async function POST(request: NextRequest) {
     return fail("Envie o arquivo Excel no campo 'file'", 400);
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await importFromExcelBuffer(Buffer.from(arrayBuffer), year);
+  const validation = validateSpreadsheetUpload(file);
+  if (!validation.ok) {
+    return fail(validation.message, validation.status);
+  }
 
-  return ok({
-    message: "Importação concluída",
-    result
-  });
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await importFromExcelBuffer(Buffer.from(arrayBuffer), year);
+
+    return ok({
+      message: "Importação concluída",
+      result
+    });
+  } catch (error) {
+    if (error instanceof InvalidSpreadsheetError) {
+      return fail(error.message, 400);
+    }
+
+    console.error("Falha ao importar planilha", error);
+    return fail("Não foi possível concluir a importação da planilha", 500);
+  }
 }

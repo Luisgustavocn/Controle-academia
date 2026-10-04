@@ -19,6 +19,50 @@ const MONTH_LABELS: Record<string, number> = {
 
 const PAID_MARKERS = new Set(["1", "x", "ok", "pago", "sim", "s", "true", "p", "pg"]);
 
+const SUPPORTED_IMPORT_SHEETS = new Set([
+  "Musc",
+  "caixa",
+  "despesa academia",
+  "Personal",
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+  "roupas",
+  "Pedido"
+]);
+
+export class InvalidSpreadsheetError extends Error {
+  constructor() {
+    super("Arquivo Excel inválido ou não reconhecido");
+    this.name = "InvalidSpreadsheetError";
+  }
+}
+
+export function parseSpreadsheetBuffer(fileBuffer: Buffer) {
+  let workbook: XLSX.WorkBook;
+
+  try {
+    workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
+  } catch {
+    throw new InvalidSpreadsheetError();
+  }
+
+  if (!workbook.SheetNames.some((sheetName) => SUPPORTED_IMPORT_SHEETS.has(sheetName))) {
+    throw new InvalidSpreadsheetError();
+  }
+
+  return workbook;
+}
+
 function normalizeKey(value: string) {
   return value
     .normalize("NFD")
@@ -522,7 +566,7 @@ async function importProdutosPedidos(workbook: XLSX.WorkBook, importYear: number
 }
 
 export async function importFromExcelBuffer(fileBuffer: Buffer, importYear = new Date().getFullYear()) {
-  const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
+  const workbook = parseSpreadsheetBuffer(fileBuffer);
 
   const result = {
     musc: await importMusc(workbook, importYear),
@@ -537,7 +581,7 @@ export async function importFromExcelBuffer(fileBuffer: Buffer, importYear = new
 }
 
 export async function importOnlyMuscFromExcelBuffer(fileBuffer: Buffer, importYear = new Date().getFullYear()) {
-  const workbook = XLSX.read(fileBuffer, { type: "buffer", cellDates: true });
+  const workbook = parseSpreadsheetBuffer(fileBuffer);
   const musc = await importMusc(workbook, importYear);
   return { musc };
 }
