@@ -56,11 +56,6 @@ npm run prisma:seed
 npm run dev
 ```
 
-## Atalhos Windows
-- `Iniciar Controle Academia.bat`: gera a build e sobe o servidor local.
-- `Atualizar e Iniciar Controle Academia.bat`: atualiza do GitHub, instala dependências, aplica migrations e inicia.
-- `Instalar Atualizar e Iniciar Controle Academia.bat`: pode ser baixado sozinho; ele tenta instalar `winget`, `git`, `node` e `postgresql` quando faltarem, baixa/atualiza o projeto, prepara o banco e inicia o sistema. Antes de executá-lo, defina `CONTROLE_ACADEMIA_DB_PASSWORD` no ambiente com uma senha forte para o PostgreSQL.
-
 ## Usuário inicial
 - E-mail: `admin@academia.local`
 - No primeiro acesso, o sistema solicita a definição de um e-mail e de uma senha segura.
@@ -337,8 +332,6 @@ GET /api/health
 ```
 
 Nunca use `prisma migrate dev` ou `prisma db push` como procedimento normal de produção. `npm start` não executa migrations automaticamente.
-
-Os atalhos locais `Iniciar Manual.bat`, `update:start:local` e o instalador Windows executam `migrate deploy` como parte de seus fluxos administrativos locais. Eles não devem ser usados como startup do servidor de produção.
 
 ## Seed e primeiro administrador
 

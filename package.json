@@ -10,8 +10,6 @@
     "dev:fast": "next dev --turbo",
     "build": "next build",
     "start": "node scripts/start-production.mjs",
-    "start:local": "node scripts/start-local.mjs",
-    "update:start:local": "node scripts/update-and-start-local.mjs",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",

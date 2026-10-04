@@ -7,6 +7,12 @@ coverage
 dist
 *.log
 
+# Artefatos do sistema operacional e temporarios
+.DS_Store
+Thumbs.db
+*.tmp
+*.old
+
 # Backups e exportacoes locais
 /backups/
 /backups-cloud-test/
@@ -21,6 +27,3 @@ backup-academia-*.json.sha256
 *.backup
 dump-*.sql
 backup-*.sql
-
-# Utilitario local com credenciais de desenvolvimento
-/Testar Banco.bat
