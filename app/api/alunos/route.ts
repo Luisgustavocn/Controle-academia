@@ -95,6 +95,15 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       modalidade: true,
+      _count: {
+        select: {
+          mensalidades: {
+            where: {
+              status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] }
+            }
+          }
+        }
+      },
       mensalidades: {
         where: {
           competencia: competenciaAtual
@@ -104,38 +113,30 @@ export async function GET(request: NextRequest) {
     orderBy: { nomeCompleto: "asc" }
   });
 
-  const items = await Promise.all(
-    alunos.map(async (aluno) => {
-      const inadimplencia = await prisma.mensalidade.count({
-        where: {
-          alunoId: aluno.id,
-          status: { in: ["PENDENTE", "ATRASADO"] }
-        }
-      });
-
-      return {
-        ...aluno,
-        dataInicio: toDateInputValue(aluno.dataInicio),
-        dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
-        modalidadeNome: aluno.modalidade?.nome ?? "",
-        valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
-        inadimplente: inadimplencia > 0,
-        mensalidadeAtual: aluno.mensalidades[0] ?? null,
-        mensalidadeValor: aluno.mensalidades[0] ? Number(aluno.mensalidades[0].valor) : "",
-        mensalidadeStatus: aluno.mensalidades[0]?.status ?? "",
-        mensalidadeDataPagamento: aluno.mensalidades[0]?.dataPagamento
-          ? toDateInputValue(aluno.mensalidades[0].dataPagamento)
-          : "",
-        mensalidadeFormaPagamento: aluno.mensalidades[0]?.formaPagamento ?? "",
-        mensalidadeObservacao: aluno.mensalidades[0]?.observacao ?? "",
-        proximoVencimento: (() => {
-          const hoje = new Date();
-          const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-          return new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(ultimoDia, aluno.vencimentoDia));
-        })()
-      };
-    })
-  );
+  const items = alunos.map((aluno) => {
+    const { _count, ...alunoData } = aluno;
+    return {
+      ...alunoData,
+      dataInicio: toDateInputValue(aluno.dataInicio),
+      dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
+      modalidadeNome: aluno.modalidade?.nome ?? "",
+      valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
+      inadimplente: _count.mensalidades > 0,
+      mensalidadeAtual: aluno.mensalidades[0] ?? null,
+      mensalidadeValor: aluno.mensalidades[0] ? Number(aluno.mensalidades[0].valor) : "",
+      mensalidadeStatus: aluno.mensalidades[0]?.status ?? "",
+      mensalidadeDataPagamento: aluno.mensalidades[0]?.dataPagamento
+        ? toDateInputValue(aluno.mensalidades[0].dataPagamento)
+        : "",
+      mensalidadeFormaPagamento: aluno.mensalidades[0]?.formaPagamento ?? "",
+      mensalidadeObservacao: aluno.mensalidades[0]?.observacao ?? "",
+      proximoVencimento: (() => {
+        const hoje = new Date();
+        const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+        return new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(ultimoDia, aluno.vencimentoDia));
+      })()
+    };
+  });
 
   return ok({ items });
 }
