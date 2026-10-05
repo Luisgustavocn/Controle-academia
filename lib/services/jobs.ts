@@ -3,6 +3,7 @@ import { addDays } from "date-fns";
 import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
 import { createBackupFile } from "@/lib/services/backup";
+import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 import { buildMonthlyStudentControl, generateMensalidadesCompetencia } from "@/lib/services/mensalidades";
 export { dispatchWhatsAppBillingReminders, getWhatsAppReminderPreview } from "@/lib/services/whatsapp";
 
@@ -17,6 +18,8 @@ export async function runMonthlyGeneration(competencia = currentCompetencia()) {
 }
 
 export async function runCashClosing(competencia = currentCompetencia()) {
+  await syncAutomaticEntriesInCaixa(true);
+
   const movimentos = await prisma.movimentacaoCaixa.findMany({
     where: { competencia }
   });
