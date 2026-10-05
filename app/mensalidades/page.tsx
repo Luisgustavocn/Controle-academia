@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Select } from "@/components/ui/select";
+import { useHasCapability } from "@/components/capability-provider";
 
 type MensalidadeStatus = "PENDENTE" | "PAGO" | "ATRASADO" | "ISENTO";
 type MensalidadeSection = "PAGAS" | "PENDENTES" | "ATRASADAS";
@@ -89,6 +90,7 @@ function toCurrency(value: number) {
 }
 
 export default function MensalidadesPage() {
+  const canManage = useHasCapability("finance.monthlies.manage");
   const [payload, setPayload] = useState<BoardPayload>(EMPTY_PAYLOAD);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -314,13 +316,13 @@ export default function MensalidadesPage() {
                       <th>Aluno</th>
                       <th>Valor</th>
                       <th>Pago em</th>
-                      <th>Ações</th>
+                      {canManage ? <th>Ações</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {payload.colunas.pagas.length === 0 ? (
                       <tr>
-                        <td colSpan={4}>{loading ? "Carregando..." : "Sem mensalidades pagas."}</td>
+                        <td colSpan={canManage ? 4 : 3}>{loading ? "Carregando..." : "Sem mensalidades pagas."}</td>
                       </tr>
                     ) : (
                       payload.colunas.pagas.map((item) => (
@@ -331,11 +333,11 @@ export default function MensalidadesPage() {
                           </td>
                           <td>{toCurrency(item.valor)}</td>
                           <td>{item.dataPagamento || "-"}</td>
-                          <td>
+                          {canManage ? <td>
                             <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                               Editar
                             </Button>
-                          </td>
+                          </td> : null}
                         </tr>
                       ))
                     )}
@@ -376,13 +378,13 @@ export default function MensalidadesPage() {
                       <th>Aluno</th>
                       <th>Vence</th>
                       <th>Valor</th>
-                      <th>Ações</th>
+                      {canManage ? <th>Ações</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {payload.colunas.pendentes.length === 0 ? (
                       <tr>
-                        <td colSpan={4}>{loading ? "Carregando..." : "Sem mensalidades pendentes."}</td>
+                        <td colSpan={canManage ? 4 : 3}>{loading ? "Carregando..." : "Sem mensalidades pendentes."}</td>
                       </tr>
                     ) : (
                       payload.colunas.pendentes.map((item) => (
@@ -393,7 +395,7 @@ export default function MensalidadesPage() {
                           </td>
                           <td>{item.vencimento}</td>
                           <td>{toCurrency(item.valor)}</td>
-                          <td>
+                          {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
                               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => void marcarComoPago(item)}>
                                 Marcar pago
@@ -402,7 +404,7 @@ export default function MensalidadesPage() {
                                 Editar
                               </Button>
                             </div>
-                          </td>
+                          </td> : null}
                         </tr>
                       ))
                     )}
@@ -444,13 +446,13 @@ export default function MensalidadesPage() {
                       <th>Mês pendente</th>
                       <th>Vence</th>
                       <th>Valor</th>
-                      <th>Ações</th>
+                      {canManage ? <th>Ações</th> : null}
                     </tr>
                   </thead>
                   <tbody>
                     {payload.colunas.atrasadas.length === 0 ? (
                       <tr>
-                        <td colSpan={5}>{loading ? "Carregando..." : "Sem mensalidades atrasadas."}</td>
+                        <td colSpan={canManage ? 5 : 4}>{loading ? "Carregando..." : "Sem mensalidades atrasadas."}</td>
                       </tr>
                     ) : (
                       payload.colunas.atrasadas.map((item) => (
@@ -462,7 +464,7 @@ export default function MensalidadesPage() {
                           <td>{item.mesPendente}</td>
                           <td>{item.vencimento}</td>
                           <td>{toCurrency(item.valor)}</td>
-                          <td>
+                          {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
                               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => void marcarComoPago(item)}>
                                 Marcar pago
@@ -471,7 +473,7 @@ export default function MensalidadesPage() {
                                 Editar
                               </Button>
                             </div>
-                          </td>
+                          </td> : null}
                         </tr>
                       ))
                     )}
@@ -483,7 +485,7 @@ export default function MensalidadesPage() {
         </Card>
       </div>
 
-      {editing ? (
+      {editing && canManage ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(20,14,17,0.62)] p-4 backdrop-blur-[2px]">
           <Card className="max-h-[92vh] w-full max-w-3xl overflow-hidden p-0">
             <div className="flex items-start justify-between border-b border-line/80 px-5 py-4 md:px-6">

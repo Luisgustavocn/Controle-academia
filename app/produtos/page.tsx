@@ -47,6 +47,9 @@ export default function ProdutosPage() {
             ]
           }
         ]}
+        createCapability="products.manage"
+        updateCapability="products.manage"
+        deleteCapability="products.manage"
       />
     </div>
   );

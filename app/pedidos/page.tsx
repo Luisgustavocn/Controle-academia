@@ -345,6 +345,9 @@ export default function PedidosPage() {
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
         defaultValues={{ quantidade: "1", pago: "0" }}
+        createCapability="sales.create"
+        updateCapability="sales.manage"
+        deleteCapability="sales.manage"
       />
     </div>
   );

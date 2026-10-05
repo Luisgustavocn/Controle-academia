@@ -991,6 +991,9 @@ export default function ConfiguracoesPage() {
           }
         ]}
         defaultValues={{ role: "RECEPCAO", active: "true" }}
+        createCapability="team.manage"
+        updateCapability="team.manage"
+        deleteCapability="team.manage"
       />
 
       <CrudModule
@@ -1008,6 +1011,9 @@ export default function ConfiguracoesPage() {
           { key: "valor", label: "Valor", required: true },
           { key: "descricao", label: "Descricao", type: "textarea" }
         ]}
+        createCapability="settings.manage"
+        updateCapability="settings.manage"
+        deleteCapability="settings.manage"
       />
     </div>
   );

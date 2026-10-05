@@ -263,6 +263,9 @@ export default function CaixaPage() {
           { key: "formaPagamento", label: "Forma pagamento" },
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
+        createCapability="finance.cash.manage"
+        updateCapability="finance.cash.manage"
+        deleteCapability="finance.cash.manage"
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -290,6 +293,9 @@ export default function CaixaPage() {
             }
           ]}
           defaultValues={{ tipo: "ENTRADA", ativa: "true" }}
+          createCapability="finance.cash.manage"
+          updateCapability="finance.cash.manage"
+          deleteCapability="finance.cash.manage"
         />
 
         <CrudModule
@@ -316,6 +322,9 @@ export default function CaixaPage() {
             }
           ]}
           defaultValues={{ tipo: "SAIDA", ativa: "true" }}
+          createCapability="finance.cash.manage"
+          updateCapability="finance.cash.manage"
+          deleteCapability="finance.cash.manage"
         />
       </div>
     </div>

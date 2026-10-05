@@ -589,6 +589,9 @@ export default function AgendaPersonalPage() {
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
         defaultValues={{ semanaRef: weekRef, tipoAula: "personal", ativo: "true" }}
+        createCapability="schedule.write"
+        updateCapability="schedule.write"
+        deleteCapability="schedule.write"
       />
 
       <CrudModule
@@ -604,6 +607,9 @@ export default function AgendaPersonalPage() {
         fields={[
           { key: "nome", label: "Nome do professor", required: true }
         ]}
+        createCapability="schedule.write"
+        updateCapability="schedule.write"
+        deleteCapability="schedule.write"
       />
     </div>
   );

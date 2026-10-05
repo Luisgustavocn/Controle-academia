@@ -45,6 +45,9 @@ export default function DespesasAcademiaPage() {
           { key: "dataPagamento", label: "Data pagamento", type: "date" },
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
+        createCapability="finance.expenses.manage"
+        updateCapability="finance.expenses.manage"
+        deleteCapability="finance.expenses.manage"
       />
     </div>
   );

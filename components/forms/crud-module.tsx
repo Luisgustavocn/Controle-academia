@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import { useHasCapability } from "@/components/capability-provider";
+import type { Capability } from "@/lib/auth/capabilities";
 
 type Field = {
   key: string;
@@ -28,6 +30,9 @@ type CrudModuleProps = {
   createLabel?: string;
   onDataChanged?: () => void | Promise<void>;
   refreshKey?: string | number;
+  createCapability?: Capability;
+  updateCapability?: Capability;
+  deleteCapability?: Capability;
 };
 
 type LookupConfig = {
@@ -338,8 +343,15 @@ export function CrudModule({
   searchPlaceholder,
   createLabel,
   onDataChanged,
-  refreshKey
+  refreshKey,
+  createCapability,
+  updateCapability,
+  deleteCapability
 }: CrudModuleProps) {
+  const canCreate = useHasCapability(createCapability);
+  const canUpdate = useHasCapability(updateCapability);
+  const canDelete = useHasCapability(deleteCapability);
+  const hasRowActions = canUpdate || canDelete;
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -431,7 +443,7 @@ export function CrudModule({
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && key === "n") {
+      if (canCreate && (event.ctrlKey || event.metaKey) && key === "n") {
         event.preventDefault();
         setEditingId(null);
         setForm(defaultValues ?? {});
@@ -441,7 +453,7 @@ export function CrudModule({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [defaultValues]);
+  }, [canCreate, defaultValues]);
 
   useEffect(() => {
     if (!formOpen) {
@@ -987,18 +999,18 @@ export function CrudModule({
               >
                 Limpar filtros
               </Button>
-              <Button
+              {canCreate ? <Button
                 onClick={openCreateModal}
                 className="inline-flex items-center gap-2"
               >
                 <Plus className="h-4 w-4" />
                 {createLabel ?? "Novo registro"}
-              </Button>
+              </Button> : null}
             </div>
           </div>
         </div>
 
-        <p className="mb-3 text-xs text-muted">Atalhos: <strong>Ctrl/Cmd + K</strong> busca rápida, <strong>Ctrl/Cmd + N</strong> novo registro.</p>
+        <p className="mb-3 text-xs text-muted">Atalhos: <strong>Ctrl/Cmd + K</strong> busca rápida{canCreate ? <>, <strong>Ctrl/Cmd + N</strong> novo registro</> : null}.</p>
 
         <div className="overflow-x-auto rounded-xl border border-line/80 bg-white/80">
           <table>
@@ -1007,17 +1019,17 @@ export function CrudModule({
                 {columns.map((column) => (
                   <th key={column.key}>{column.label}</th>
                 ))}
-                <th>Ações</th>
+                {hasRowActions ? <th>Ações</th> : null}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={columns.length + 1}>Carregando...</td>
+                  <td colSpan={columns.length + (hasRowActions ? 1 : 0)}>Carregando...</td>
                 </tr>
               ) : filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length + 1}>Sem dados.</td>
+                  <td colSpan={columns.length + (hasRowActions ? 1 : 0)}>Sem dados.</td>
                 </tr>
               ) : (
                 filteredItems.map((item, index) => {
@@ -1030,7 +1042,7 @@ export function CrudModule({
                     {columns.map((column) => (
                       <td key={`${rowId}-${column.key}`}>{normalizeCellValue(column.key, item[column.key], column.label, item)}</td>
                     ))}
-                    <td className="relative">
+                    {hasRowActions ? <td className="relative">
                       <div data-row-actions-root="true" className="relative inline-flex">
                         <button
                           type="button"
@@ -1041,7 +1053,7 @@ export function CrudModule({
                           <MoreHorizontal className="h-4 w-4" />
                         </button>
                       </div>
-                    </td>
+                    </td> : null}
                   </tr>
                   );
                 })
@@ -1061,16 +1073,16 @@ export function CrudModule({
                 }
                 style={{ top: `${openActions.top}px`, left: `${openActions.left}px` }}
               >
-                <Button
+                {canUpdate ? <Button
                   type="button"
                   variant="secondary"
                   className="justify-start"
                   onClick={() => startEdit(openActions.item)}
                 >
                   Editar
-                </Button>
+                </Button> : null}
 
-                {quickBooleanField &&
+                {canUpdate && quickBooleanField &&
                 openActions.item[quickBooleanField] !== undefined &&
                 openActions.item.id !== undefined ? (
                   <Button
@@ -1093,7 +1105,7 @@ export function CrudModule({
                   </Button>
                 ) : null}
 
-                {endpoint === "/api/alunos" &&
+                {canUpdate && endpoint === "/api/alunos" &&
                 ["CANCELADO", "TRANCADO"].includes(String(openActions.item.status ?? "").toUpperCase()) &&
                 openActions.item.id !== undefined ? (
                   <Button
@@ -1106,14 +1118,14 @@ export function CrudModule({
                   </Button>
                 ) : null}
 
-                <Button
+                {canDelete ? <Button
                   type="button"
                   variant="danger"
                   className="justify-start"
                   onClick={() => void remove(openActions.item.id)}
                 >
                   Excluir
-                </Button>
+                </Button> : null}
               </div>,
               document.body
             )

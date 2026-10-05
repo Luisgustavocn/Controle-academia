@@ -53,6 +53,9 @@ export default function AlunosPage() {
           { key: "mensalidadeValor", label: "Valor mensalidade exclusivo (opcional)", type: "number" }
         ]}
         defaultValues={{ status: "ATIVO" }}
+        createCapability="students.create"
+        updateCapability="students.update"
+        deleteCapability="students.status"
       />
 
       <CrudModule
@@ -79,6 +82,9 @@ export default function AlunosPage() {
           }
         ]}
         defaultValues={{ ativa: "true" }}
+        createCapability="students.update"
+        updateCapability="students.update"
+        deleteCapability="students.update"
       />
     </div>
   );
