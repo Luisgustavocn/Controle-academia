@@ -2,6 +2,16 @@ import { AlunoStatus, MensalidadeStatus, TipoMovimentacao } from "@prisma/client
 import { monthRange } from "@/lib/services/mensalidades";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia } from "@/lib/competencia";
+import type { SessionRole } from "@/lib/auth/jwt-payload";
+import {
+  academyMonthRange,
+  academyCompetencia,
+  getAcademyDateContext,
+  recentCompetencias,
+  type AcademyDateContext
+} from "@/lib/timezone";
+
+export const NO_ATTENDANCE_ALERT_DAYS = 10;
 
 export type DashboardKpis = {
   alunos_ativos: number;
@@ -169,7 +179,7 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
 }
 
 function dateCompetencia(date: Date) {
-  return date.toISOString().slice(0, 7);
+  return academyCompetencia(date);
 }
 
 export function buildFinanceSeriesFromRows(
@@ -233,4 +243,301 @@ async function buildFinanceSeries(competencias: string[]) {
   ]);
 
   return buildFinanceSeriesFromRows(competencias, { mensalidades, despesas, pedidos });
+}
+
+type OperationalMensalidade = {
+  id: string;
+  alunoId: string;
+  competencia: string;
+  valor: unknown;
+  vencimento: Date;
+  dataPagamento: Date | null;
+  status: MensalidadeStatus;
+  aluno: { nomeCompleto: string };
+};
+
+type OperationalOrder = {
+  id: string;
+  clienteNome: string;
+  dataPedido: Date;
+  pago: unknown;
+  aluno: { nomeCompleto: string } | null;
+};
+
+export type OperationalDashboardSource = {
+  activeStudents: number;
+  openMensalidades: OperationalMensalidade[];
+  paidMensalidades: Array<Pick<OperationalMensalidade, "id" | "alunoId" | "competencia" | "valor" | "dataPagamento" | "status" | "aluno">>;
+  orders: OperationalOrder[];
+  expenses: Array<{ competencia: string; valorPrevisto: unknown; valorPago: unknown }>;
+  attendancesToday: number;
+  appointmentsToday: number;
+  lastAttendances: Array<{ alunoId: string; _max: { data: Date | null } }>;
+  newStudents: Array<{ id: string; nomeCompleto: string; createdAt: Date; status: AlunoStatus }>;
+};
+
+export type DashboardRecentItem = {
+  id: string;
+  kind: "payment" | "student";
+  occurredAt: string;
+  title: string;
+  detail: string;
+  amount?: number;
+  status?: string;
+};
+
+export type OperationalDashboard = {
+  asOf: { dateKey: string; label: string; competencia: string };
+  overview: {
+    activeStudents: number;
+    receivedMonth: number;
+    receivableCurrent: number;
+    delinquentStudents: number;
+  };
+  today: {
+    attendances: number;
+    appointments: number;
+    due: { count: number; amount: number };
+    received: number;
+  };
+  attention: {
+    overdue: { students: number; amount: number };
+    noRecentAttendance: { students: number; thresholdDays: number };
+  };
+  recent: {
+    payments: DashboardRecentItem[];
+    students: DashboardRecentItem[];
+  };
+  financialSeries: FinanceSeriesItem[];
+};
+
+export type OperationalDashboardDto = {
+  asOf: OperationalDashboard["asOf"];
+  overview: Partial<OperationalDashboard["overview"]>;
+  today?: Partial<OperationalDashboard["today"]>;
+  attention?: Partial<OperationalDashboard["attention"]>;
+  recent?: Partial<OperationalDashboard["recent"]>;
+  financialSeries?: FinanceSeriesItem[];
+};
+
+function isWithin(date: Date | null, start: Date, end: Date) {
+  return Boolean(date && date >= start && date < end);
+}
+
+export function buildOperationalDashboardFromRows(
+  context: AcademyDateContext,
+  competencias: string[],
+  source: OperationalDashboardSource
+): OperationalDashboard {
+  const currentOpen = source.openMensalidades.filter(
+    (item) => item.competencia === context.competencia &&
+      (item.status === MensalidadeStatus.PENDENTE || item.status === MensalidadeStatus.ATRASADO)
+  );
+  const overdue = source.openMensalidades.filter((item) => item.status === MensalidadeStatus.ATRASADO);
+  const delinquentIds = new Set(overdue.map((item) => item.alunoId));
+  const dueToday = currentOpen.filter((item) => isWithin(item.vencimento, context.dayStart, context.dayEnd));
+  const paidThisMonth = source.paidMensalidades.filter((item) =>
+    isWithin(item.dataPagamento, context.monthStart, context.monthEnd)
+  );
+  const paidToday = paidThisMonth.filter((item) => isWithin(item.dataPagamento, context.dayStart, context.dayEnd));
+  const ordersThisMonth = source.orders.filter((item) => isWithin(item.dataPedido, context.monthStart, context.monthEnd));
+  const ordersToday = ordersThisMonth.filter((item) => isWithin(item.dataPedido, context.dayStart, context.dayEnd));
+  const amount = (items: Array<{ valor: unknown }>) => items.reduce((total, item) => total + Number(item.valor), 0);
+  const orderAmount = (items: Array<{ pago: unknown }>) => items.reduce((total, item) => total + Number(item.pago), 0);
+  const staleCutoff = new Date(context.dayStart.getTime() - NO_ATTENDANCE_ALERT_DAYS * 86400000);
+
+  const paymentItems: DashboardRecentItem[] = [
+    ...source.paidMensalidades
+      .filter((item) => item.dataPagamento)
+      .map((item) => ({
+        id: `mensalidade-${item.id}`,
+        kind: "payment" as const,
+        occurredAt: item.dataPagamento!.toISOString(),
+        title: item.aluno.nomeCompleto,
+        detail: `Mensalidade ${item.competencia}`,
+        amount: Number(item.valor),
+        status: item.status
+      })),
+    ...source.orders
+      .filter((item) => Number(item.pago) > 0)
+      .map((item) => ({
+        id: `pedido-${item.id}`,
+        kind: "payment" as const,
+        occurredAt: item.dataPedido.toISOString(),
+        title: item.aluno?.nomeCompleto ?? item.clienteNome,
+        detail: "Venda de produto",
+        amount: Number(item.pago),
+        status: "PAGO"
+      }))
+  ].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 8);
+
+  return {
+    asOf: { dateKey: context.dateKey, label: context.label, competencia: context.competencia },
+    overview: {
+      activeStudents: source.activeStudents,
+      receivedMonth: amount(paidThisMonth) + orderAmount(ordersThisMonth),
+      receivableCurrent: amount(currentOpen),
+      delinquentStudents: delinquentIds.size
+    },
+    today: {
+      attendances: source.attendancesToday,
+      appointments: source.appointmentsToday,
+      due: { count: dueToday.length, amount: amount(dueToday) },
+      received: amount(paidToday) + orderAmount(ordersToday)
+    },
+    attention: {
+      overdue: { students: delinquentIds.size, amount: amount(overdue) },
+      noRecentAttendance: {
+        students: source.lastAttendances.filter((item) => item._max.data && item._max.data <= staleCutoff).length,
+        thresholdDays: NO_ATTENDANCE_ALERT_DAYS
+      }
+    },
+    recent: {
+      payments: paymentItems,
+      students: source.newStudents.map((item) => ({
+        id: `aluno-${item.id}`,
+        kind: "student" as const,
+        occurredAt: item.createdAt.toISOString(),
+        title: item.nomeCompleto,
+        detail: "Novo cadastro",
+        status: item.status
+      }))
+    },
+    financialSeries: buildFinanceSeriesFromRows(competencias, {
+      mensalidades: source.paidMensalidades,
+      despesas: source.expenses,
+      pedidos: source.orders
+    })
+  };
+}
+
+export function dashboardDtoForRole(data: OperationalDashboard, role: SessionRole): OperationalDashboardDto {
+  if (role === "ADMIN") return data;
+
+  if (role === "FINANCEIRO") {
+    return {
+      asOf: data.asOf,
+      overview: data.overview,
+      today: { due: data.today.due, received: data.today.received },
+      attention: { overdue: data.attention.overdue },
+      recent: { payments: data.recent.payments },
+      financialSeries: data.financialSeries
+    };
+  }
+
+  if (role === "RECEPCAO") {
+    return {
+      asOf: data.asOf,
+      overview: data.overview,
+      today: data.today,
+      attention: data.attention,
+      recent: data.recent
+    };
+  }
+
+  return { asOf: data.asOf, overview: { activeStudents: data.overview.activeStudents } };
+}
+
+export async function getOperationalDashboard(role: SessionRole, referenceDate = new Date()) {
+  const context = getAcademyDateContext(referenceDate);
+  const competencias = recentCompetencias(referenceDate, 12);
+  const firstRange = academyMonthRange(competencias[0] ?? context.competencia);
+  const lastRange = academyMonthRange(competencias[competencias.length - 1] ?? context.competencia);
+  const needsOperationalData = role === "ADMIN" || role === "RECEPCAO";
+  const needsFinancialSeries = role === "ADMIN" || role === "FINANCEIRO";
+
+  const [
+    activeStudents,
+    openMensalidades,
+    attendancesToday,
+    appointmentsToday,
+    lastAttendances,
+    newStudents,
+    paidMensalidades,
+    expenses,
+    orders
+  ] = await Promise.all([
+    prisma.aluno.count({ where: { status: AlunoStatus.ATIVO } }),
+    prisma.mensalidade.findMany({
+      where: {
+        aluno: { status: AlunoStatus.ATIVO },
+        OR: [
+          { competencia: context.competencia, status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] } },
+          { status: MensalidadeStatus.ATRASADO }
+        ]
+      },
+      select: {
+        id: true,
+        alunoId: true,
+        competencia: true,
+        valor: true,
+        vencimento: true,
+        dataPagamento: true,
+        status: true,
+        aluno: { select: { nomeCompleto: true } }
+      }
+    }),
+    needsOperationalData ? prisma.presenca.count({
+      where: { presente: true, data: { gte: context.dayStart, lt: context.dayEnd } }
+    }) : Promise.resolve(0),
+    needsOperationalData ? prisma.agendaPersonal.count({
+      where: {
+        ativo: true,
+        diaSemana: context.weekday,
+        semanaRef: { in: ["", context.weekRef] }
+      }
+    }) : Promise.resolve(0),
+    needsOperationalData ? prisma.presenca.groupBy({
+      by: ["alunoId"],
+      where: { presente: true, aluno: { status: AlunoStatus.ATIVO } },
+      _max: { data: true }
+    }) : Promise.resolve([]),
+    needsOperationalData ? prisma.aluno.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: { id: true, nomeCompleto: true, createdAt: true, status: true }
+    }) : Promise.resolve([]),
+    prisma.mensalidade.findMany({
+      where: {
+        status: { in: [MensalidadeStatus.PAGO, MensalidadeStatus.PARCIAL] },
+        dataPagamento: { gte: firstRange.start, lt: lastRange.end }
+      },
+      select: {
+        id: true,
+        alunoId: true,
+        competencia: true,
+        valor: true,
+        dataPagamento: true,
+        status: true,
+        aluno: { select: { nomeCompleto: true } }
+      }
+    }),
+    needsFinancialSeries ? prisma.despesaAcademia.findMany({
+      where: { competencia: { in: competencias } },
+      select: { competencia: true, valorPrevisto: true, valorPago: true }
+    }) : Promise.resolve([]),
+    prisma.pedidoProduto.findMany({
+      where: { dataPedido: { gte: firstRange.start, lt: lastRange.end }, pago: { gt: 0 } },
+      select: {
+        id: true,
+        clienteNome: true,
+        dataPedido: true,
+        pago: true,
+        aluno: { select: { nomeCompleto: true } }
+      }
+    })
+  ]);
+
+  const full = buildOperationalDashboardFromRows(context, competencias, {
+    activeStudents,
+    openMensalidades,
+    paidMensalidades,
+    orders,
+    expenses,
+    attendancesToday,
+    appointmentsToday,
+    lastAttendances,
+    newStudents
+  });
+  return dashboardDtoForRole(full, role);
 }
