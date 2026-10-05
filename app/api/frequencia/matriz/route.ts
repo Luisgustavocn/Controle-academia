@@ -1,25 +1,9 @@
 import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
+import { CivilDateValidationError, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-
-function parseCompetencia(competencia: string) {
-  const match = /^(\d{4})-(\d{2})$/.exec(competencia);
-  if (!match) {
-    return null;
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return null;
-  }
-
-  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0));
-  return { start, end };
-}
 
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "attendance.read");
@@ -30,9 +14,12 @@ export async function GET(request: NextRequest) {
     return fail("competencia é obrigatória (yyyy-mm)", 400);
   }
 
-  const period = parseCompetencia(competencia);
-  if (!period) {
-    return fail("competencia inválida. Use yyyy-mm", 400);
+  let period;
+  try {
+    period = civilMonthRange(competencia);
+  } catch (error) {
+    if (error instanceof CivilDateValidationError) return fail(error.message, 400);
+    throw error;
   }
 
   const alunos = await prisma.aluno.findMany({
@@ -66,6 +53,10 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  return ok({ items: { alunos, presencas } });
+  return ok({
+    items: {
+      alunos,
+      presencas: presencas.map((presenca) => ({ ...presenca, data: prismaDateToCivil(presenca.data) }))
+    }
+  });
 }
-

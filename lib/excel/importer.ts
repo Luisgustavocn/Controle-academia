@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
-import { AlunoStatus, MensalidadeStatus, TipoMovimentacao } from "@prisma/client";
+import { AlunoStatus, MensalidadeStatus, TipoMovimentacao, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { confirmAttendance } from "@/lib/services/attendance";
 
 const MONTH_LABELS: Record<string, number> = {
   jan: 1,
@@ -440,7 +441,7 @@ async function importAgenda(workbook: XLSX.WorkBook) {
   return { agendaSlots };
 }
 
-async function importPresencas(workbook: XLSX.WorkBook, importYear: number) {
+async function importPresencas(workbook: XLSX.WorkBook, importYear: number, actorId: string) {
   let presencas = 0;
 
   for (const [monthName, monthNum] of Object.entries(MONTH_LABELS)) {
@@ -465,29 +466,16 @@ async function importPresencas(workbook: XLSX.WorkBook, importYear: number) {
         const marker = mapped[String(day)] ?? mapped[`dia${day}`];
         if (String(marker).trim() !== "1") continue;
 
-        const data = new Date(importYear, monthNum - 1, day);
-        if (data.getMonth() !== monthNum - 1) continue;
+        const data = `${importYear}-${String(monthNum).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        if (new Date(`${data}T00:00:00.000Z`).getUTCMonth() !== monthNum - 1) continue;
 
-        await prisma.presenca.upsert({
-          where: {
-            alunoId_data_horario: {
-              alunoId: aluno.id,
-              data,
-              horario: ""
-            }
-          },
-          create: {
-            alunoId: aluno.id,
-            data,
-            horario: "",
-            tipoAula: "musculação",
-            presente: true,
-            observacao: `Importado da aba ${sheetName}`
-          },
-          update: {
-            presente: true
-          }
-        });
+        await confirmAttendance({
+          alunoId: aluno.id,
+          data,
+          horario: null,
+          tipoAula: "musculação",
+          observacao: `Importado da aba ${sheetName}`
+        }, { id: actorId, role: UserRole.ADMIN });
 
         presencas += 1;
       }
@@ -565,7 +553,7 @@ async function importProdutosPedidos(workbook: XLSX.WorkBook, importYear: number
   return { produtos, pedidos };
 }
 
-export async function importFromExcelBuffer(fileBuffer: Buffer, importYear = new Date().getFullYear()) {
+export async function importFromExcelBuffer(fileBuffer: Buffer, importYear: number, actorId: string) {
   const workbook = parseSpreadsheetBuffer(fileBuffer);
 
   const result = {
@@ -573,7 +561,7 @@ export async function importFromExcelBuffer(fileBuffer: Buffer, importYear = new
     caixa: await importCaixa(workbook, importYear),
     despesaAcademia: await importDespesas(workbook, "despesa academia", importYear),
     agenda: await importAgenda(workbook),
-    presencas: await importPresencas(workbook, importYear),
+    presencas: await importPresencas(workbook, importYear, actorId),
     produtosPedidos: await importProdutosPedidos(workbook, importYear)
   };
 

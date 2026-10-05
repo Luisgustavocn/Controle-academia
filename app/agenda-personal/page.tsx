@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarClock } from "lucide-react";
 import { CrudModule } from "@/components/forms/crud-module";
 import { ModuleHeader } from "@/components/ui/module-header";
+import { useHasCapability } from "@/components/capability-provider";
+import { academyToday, compareCivilDates, parseCivilDate } from "@/lib/attendance-date";
 import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -152,8 +154,8 @@ function formatDayMonth(dateIso?: string) {
   return `${day}/${month}`;
 }
 
-function presenceKey(alunoId: string, dateIso: string, horario: string) {
-  return `${alunoId}|${dateIso}|${normalizeHorarioValue(horario)}`;
+function presenceKey(alunoId: string, dateIso: string) {
+  return `${alunoId}|${dateIso}`;
 }
 
 type AgendaPresencaItem = {
@@ -165,6 +167,8 @@ type AgendaPresencaItem = {
 };
 
 export default function AgendaPersonalPage() {
+  const canRetroactive = useHasCapability("attendance.retroactive");
+  const todayDate = academyToday();
   const [professores, setProfessores] = useState<ProfessorOption[]>([]);
   const [agendaItems, setAgendaItems] = useState<AgendaItem[]>([]);
   const [selectedProfessor, setSelectedProfessor] = useState("");
@@ -219,12 +223,11 @@ export default function AgendaPersonalPage() {
       const next: Record<string, { id: string; presente: boolean }> = {};
       for (const payload of payloads) {
         for (const item of payload.items) {
-          const dateIso = String(item.data ?? "").slice(0, 10);
-          const horario = normalizeHorarioValue(String(item.horario ?? ""));
-          if (!item.alunoId || !dateIso || !horario || !validDates.has(dateIso)) {
+          const dateIso = parseCivilDate(String(item.data ?? ""));
+          if (!item.alunoId || !validDates.has(dateIso)) {
             continue;
           }
-          next[presenceKey(item.alunoId, dateIso, horario)] = { id: String(item.id), presente: Boolean(item.presente) };
+          next[presenceKey(item.alunoId, dateIso)] = { id: String(item.id), presente: Boolean(item.presente) };
         }
       }
 
@@ -298,7 +301,7 @@ export default function AgendaPersonalPage() {
     return map;
   }, [agendaProfessor]);
 
-  async function marcarPresencaAgenda(item: AgendaItem, presente: boolean) {
+  async function marcarPresencaAgenda(item: AgendaItem) {
     const alunoId = String(item.alunoId ?? "").trim();
     if (!alunoId) {
       alert("Selecione um aluno cadastrado para registrar presença nesse horário.");
@@ -311,30 +314,21 @@ export default function AgendaPersonalPage() {
       alert("Não foi possível identificar data/horário desta aula.");
       return;
     }
+    const comparison = compareCivilDates(dateIso, todayDate);
+    if (comparison > 0) {
+      alert("Não é permitido registrar presença futura.");
+      return;
+    }
+    if (comparison < 0 && !canRetroactive) {
+      alert("Sem permissão para presença retroativa.");
+      return;
+    }
 
-    const key = presenceKey(alunoId, dateIso, horario);
+    const key = presenceKey(alunoId, dateIso);
     const existing = presencasAgenda[key];
     setSavingPresencaKey(key);
     try {
-      if (existing) {
-        const res = await fetch(`/api/presencas/${existing.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ presente })
-        });
-        const payload = (await res.json().catch(() => ({}))) as { error?: string; item?: { id?: string } };
-        if (!res.ok) {
-          alert(payload.error ?? "Não foi possível atualizar presença.");
-          return;
-        }
-
-        setPresencasAgenda((prev) => ({
-          ...prev,
-          [key]: { id: String(payload.item?.id ?? existing.id), presente }
-        }));
-        return;
-      }
-
+      if (existing?.presente) return;
       const res = await fetch("/api/presencas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -343,7 +337,7 @@ export default function AgendaPersonalPage() {
           data: dateIso,
           horario,
           tipoAula: item.tipoAula ?? "personal",
-          presente
+          presente: true
         })
       });
       const payload = (await res.json().catch(() => ({}))) as { error?: string; item?: { id?: string } };
@@ -360,7 +354,7 @@ export default function AgendaPersonalPage() {
 
       setPresencasAgenda((prev) => ({
         ...prev,
-        [key]: { id, presente }
+        [key]: { id, presente: true }
       }));
     } finally {
       setSavingPresencaKey(null);
@@ -480,24 +474,21 @@ export default function AgendaPersonalPage() {
                                     {(() => {
                                       const alunoId = String(item.alunoId ?? "").trim();
                                       const dateIso = weekDatesByDay[item.diaSemana];
-                                      const horario = normalizeHorarioValue(item.horario);
-                                      const key =
-                                        alunoId && dateIso && horario ? presenceKey(alunoId, dateIso, horario) : "";
+                                      const key = alunoId && dateIso ? presenceKey(alunoId, dateIso) : "";
                                       const status = key ? presencasAgenda[key] : undefined;
                                       const saving = key ? savingPresencaKey === key : false;
                                       const isFoi = Boolean(status?.presente);
-                                      const isNaoFoi = status ? !status.presente : false;
 
                                       return (
                                         <div className="mt-1 space-y-1">
                                           <div className="text-[11px] text-muted">
-                                            {status ? (status.presente ? "Presença: foi" : "Presença: não foi") : "Presença: sem marcação"}
+                                            {isFoi ? "Presença diária confirmada" : "Presença: sem marcação"}
                                           </div>
                                           <div className="flex flex-wrap gap-1">
                                             <button
                                               type="button"
                                               disabled={!alunoId || saving}
-                                              onClick={() => void marcarPresencaAgenda(item, true)}
+                                              onClick={() => void marcarPresencaAgenda(item)}
                                               className={
                                                 isFoi
                                                   ? "rounded-md border border-[rgba(34,136,83,0.28)] bg-[#1f6d44] px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50"
@@ -505,18 +496,6 @@ export default function AgendaPersonalPage() {
                                               }
                                             >
                                               {saving && isFoi ? "..." : "Foi"}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={!alunoId || saving}
-                                              onClick={() => void marcarPresencaAgenda(item, false)}
-                                              className={
-                                                isNaoFoi
-                                                  ? "rounded-md border border-[rgba(159,16,24,0.35)] bg-accent px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50"
-                                                  : "rounded-md border border-line bg-white px-2 py-0.5 text-[10px] font-semibold text-ink disabled:opacity-50"
-                                              }
-                                            >
-                                              {saving && isNaoFoi ? "..." : "Não foi"}
                                             </button>
                                             <button
                                               type="button"

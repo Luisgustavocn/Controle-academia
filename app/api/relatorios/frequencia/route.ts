@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { currentCompetencia } from "@/lib/competencia";
+import { academyToday, CivilDateValidationError, civilMonthRange } from "@/lib/attendance-date";
 
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "reports.operational");
@@ -13,16 +13,20 @@ export async function GET(request: NextRequest) {
   if (competenciaParam && !/^\d{4}-\d{2}$/.test(competenciaParam)) {
     return fail("competencia inválida. Use yyyy-mm", 400);
   }
-  const competencia = competenciaParam || currentCompetencia();
-  const start = new Date(`${competencia}-01T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + 1);
+  const competencia = competenciaParam || academyToday().slice(0, 7);
+  let range;
+  try {
+    range = civilMonthRange(competencia);
+  } catch (error) {
+    if (error instanceof CivilDateValidationError) return fail(error.message, 400);
+    throw error;
+  }
 
   const presencas = await prisma.presenca.findMany({
     where: {
       data: {
-        gte: start,
-        lt: end
+        gte: range.start,
+        lt: range.end
       },
       presente: true
     },

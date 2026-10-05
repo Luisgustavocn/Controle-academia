@@ -9,6 +9,7 @@ import {
   redactConfigurationValue,
   redactSensitiveFields
 } from "@/lib/configuration-secrets";
+import { prismaDateToCivil } from "@/lib/attendance-date";
 
 const BACKUP_DIR_KEY = "backup.exportDir";
 const BACKUP_MIRROR_DIR_KEY = "backup.exportDirMirror";
@@ -76,7 +77,7 @@ export async function buildBackupPayload() {
     pagamentos,
     caixa,
     despesasAcademia,
-    presencas,
+    presencas: presencas.map((presenca) => ({ ...presenca, data: prismaDateToCivil(presenca.data) })),
     agendaPersonal,
     produtos,
     pedidos,

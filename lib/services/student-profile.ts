@@ -2,6 +2,7 @@ import { AlunoStatus, MensalidadeStatus, UserRole } from "@prisma/client";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { prisma } from "@/lib/prisma";
 import { getAcademyDateContext } from "@/lib/timezone";
+import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
 
 export class StudentProfileNotFoundError extends Error {}
 
@@ -86,7 +87,9 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
 
   const capabilities = studentProfileCapabilities(role, student.status);
   const academy = getAcademyDateContext(referenceDate);
-  const last30DaysStart = new Date(academy.dayStart.getTime() - 29 * 24 * 60 * 60 * 1000);
+  const attendanceMonth = civilMonthRange(academy.competencia);
+  const last30DaysStart = civilDateToPrisma(addCivilDays(academy.dateKey, -29));
+  const attendanceDayEnd = civilDateToPrisma(addCivilDays(academy.dateKey, 1));
 
   const [lastAttendance, attendanceThisMonth, attendanceLast30Days, currentMonthly, openMonthlyCount, lastPaidMonthly] = await Promise.all([
     capabilities.viewAttendance
@@ -97,10 +100,10 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
         })
       : null,
     capabilities.viewAttendance
-      ? prisma.presenca.count({ where: { alunoId: id, presente: true, data: { gte: academy.monthStart, lt: academy.monthEnd } } })
+      ? prisma.presenca.count({ where: { alunoId: id, presente: true, data: { gte: attendanceMonth.start, lt: attendanceMonth.end } } })
       : null,
     capabilities.viewAttendance
-      ? prisma.presenca.count({ where: { alunoId: id, presente: true, data: { gte: last30DaysStart, lt: academy.dayEnd } } })
+      ? prisma.presenca.count({ where: { alunoId: id, presente: true, data: { gte: last30DaysStart, lt: attendanceDayEnd } } })
       : null,
     capabilities.viewFinancial
       ? prisma.mensalidade.findUnique({
@@ -138,7 +141,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
     summary: {
       ...(capabilities.viewAttendance ? {
         attendance: {
-          lastAttendanceAt: iso(lastAttendance?.data),
+          lastAttendanceAt: lastAttendance?.data ? prismaDateToCivil(lastAttendance.data) : null,
           thisMonth: attendanceThisMonth ?? 0,
           last30Days: attendanceLast30Days ?? 0
         }
@@ -216,9 +219,10 @@ export async function getStudentProfileFinancial(id: string) {
 export async function getStudentProfileAttendance(id: string, referenceDate = new Date()) {
   await ensureStudent(id);
   const academy = getAcademyDateContext(referenceDate);
-  const periodStart = new Date(academy.dayStart.getTime() - 59 * 24 * 60 * 60 * 1000);
+  const periodStart = civilDateToPrisma(addCivilDays(academy.dateKey, -59));
+  const periodEnd = civilDateToPrisma(addCivilDays(academy.dateKey, 1));
   const rows = await prisma.presenca.findMany({
-    where: { alunoId: id, presente: true, data: { gte: periodStart, lt: academy.dayEnd } },
+    where: { alunoId: id, presente: true, data: { gte: periodStart, lt: periodEnd } },
     select: { id: true, data: true, horario: true, tipoAula: true },
     orderBy: [{ data: "desc" }, { horario: "desc" }],
     take: 61
@@ -226,7 +230,7 @@ export async function getStudentProfileAttendance(id: string, referenceDate = ne
   return {
     items: rows.slice(0, 60).map((item) => ({
       id: item.id,
-      occurredAt: item.data.toISOString(),
+      date: prismaDateToCivil(item.data),
       time: item.horario,
       classType: item.tipoAula
     })),

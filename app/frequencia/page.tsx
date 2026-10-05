@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
+import { useHasCapability } from "@/components/capability-provider";
+import { academyToday, civilDateToPrisma, compareCivilDates, parseCivilDate } from "@/lib/attendance-date";
 
 type MatrizAluno = {
   id: string;
@@ -40,17 +42,15 @@ function dayIso(competencia: string, day: number) {
   return `${competencia}-${String(day).padStart(2, "0")}`;
 }
 
-function isoDateKey(value: string) {
-  return new Date(value).toISOString().slice(0, 10);
-}
-
 function weekdayLabel(competencia: string, day: number) {
-  const date = new Date(`${dayIso(competencia, day)}T00:00:00`);
-  return WEEKDAY_LABELS[date.getDay()] ?? "";
+  const date = civilDateToPrisma(dayIso(competencia, day));
+  return WEEKDAY_LABELS[date.getUTCDay()] ?? "";
 }
 
 export default function FrequenciaPage() {
-  const [competencia, setCompetencia] = useState(new Date().toISOString().slice(0, 7));
+  const todayDate = academyToday();
+  const canRetroactive = useHasCapability("attendance.retroactive");
+  const [competencia, setCompetencia] = useState(todayDate.slice(0, 7));
   const [buscaAluno, setBuscaAluno] = useState("");
   const [relatorio, setRelatorio] = useState<string>("");
   const [matrizLoading, setMatrizLoading] = useState(false);
@@ -76,8 +76,13 @@ export default function FrequenciaPage() {
     () => Object.values(presencas).filter((presenca) => presenca.presente).length,
     [presencas]
   );
-  const todayCompetencia = new Date().toISOString().slice(0, 7);
-  const todayDay = competencia === todayCompetencia ? new Date().getDate() : null;
+  const todayCompetencia = todayDate.slice(0, 7);
+  const todayDay = competencia === todayCompetencia ? Number(todayDate.slice(8, 10)) : null;
+
+  function canEditDate(dateKey: string) {
+    const comparison = compareCivilDates(dateKey, todayDate);
+    return comparison === 0 || (comparison < 0 && canRetroactive);
+  }
 
   const weekRanges = useMemo(() => {
     const ranges: Array<{ start: number; end: number; days: number[] }> = [];
@@ -100,18 +105,13 @@ export default function FrequenciaPage() {
   const diasSemanaSelecionada = selectedWeek.days;
 
   useEffect(() => {
-    const today = new Date();
-    const isSameMonth =
-      today.getFullYear() === Number(competencia.slice(0, 4)) &&
-      today.getMonth() + 1 === Number(competencia.slice(5, 7));
-
-    if (isSameMonth) {
-      setWeekIndex(Math.floor((today.getDate() - 1) / 7));
+    if (competencia === todayDate.slice(0, 7)) {
+      setWeekIndex(Math.floor((Number(todayDate.slice(8, 10)) - 1) / 7));
       return;
     }
 
     setWeekIndex(0);
-  }, [competencia]);
+  }, [competencia, todayDate]);
 
   const totalPresencasAlunoSelecionado = useMemo(() => {
     if (!alunoCalendario) return 0;
@@ -141,7 +141,7 @@ export default function FrequenciaPage() {
 
       const index: Record<string, { id: string; presente: boolean }> = {};
       for (const presenca of nextPresencasRaw) {
-        const key = `${presenca.alunoId}|${isoDateKey(presenca.data)}`;
+        const key = `${presenca.alunoId}|${parseCivilDate(presenca.data)}`;
         index[key] = { id: presenca.id, presente: Boolean(presenca.presente) };
       }
 
@@ -163,6 +163,10 @@ export default function FrequenciaPage() {
 
   async function togglePresenca(alunoId: string, day: number) {
     const dateKey = dayIso(competencia, day);
+    if (!canEditDate(dateKey)) {
+      alert(compareCivilDates(dateKey, todayDate) > 0 ? "Não é permitido registrar presença futura." : "Sem permissão para presença retroativa.");
+      return;
+    }
     const cellKey = `${alunoId}|${dateKey}`;
     const existing = presencas[cellKey];
 
@@ -321,7 +325,7 @@ export default function FrequenciaPage() {
                                 return (
                                   <button
                                     type="button"
-                                    disabled={saving}
+                                    disabled={saving || !canEditDate(dayIso(competencia, todayDay))}
                                     onClick={() => void togglePresenca(aluno.id, todayDay)}
                                     className={
                                       checked
@@ -368,7 +372,7 @@ export default function FrequenciaPage() {
                             <td key={`${aluno.id}-${day}`} className="h-[46px] text-center">
                               <button
                                 type="button"
-                                disabled={isSaving}
+                                disabled={isSaving || !canEditDate(dateKey)}
                                 onClick={() => void togglePresenca(aluno.id, day)}
                                 className={
                                   checked
@@ -474,7 +478,7 @@ export default function FrequenciaPage() {
                     <button
                       key={`day-${day}`}
                       type="button"
-                      disabled={isSaving}
+                      disabled={isSaving || !canEditDate(dayIso(competencia, day))}
                       onClick={() => void togglePresenca(alunoCalendario.id, day)}
                       className={
                         checked

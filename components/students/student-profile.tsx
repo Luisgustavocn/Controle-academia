@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ArrowLeft, CalendarCheck2, CreditCard, Edit3, MoreHorizontal } from "lucide-react";
 import type { StudentProfileOverview } from "@/lib/services/student-profile";
 import { ACADEMY_TIME_ZONE } from "@/lib/timezone";
+import { civilDateLabel, relativeCivilDateLabel } from "@/lib/attendance-date";
 import { StudentFormDialog } from "@/components/students/student-form-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/badge";
@@ -23,7 +24,7 @@ type FinancialData = {
   limits: { monthly: number; payments: number };
 };
 type AttendanceData = {
-  items: Array<{ id: string; occurredAt: string; time: string | null; classType: string }>;
+  items: Array<{ id: string; date: string; time: string | null; classType: string }>;
   periodDays: number;
   hasMore: boolean;
 };
@@ -52,12 +53,7 @@ function currency(value: number) {
 
 function attendanceLabel(value: string | null | undefined, now = new Date()) {
   if (!value) return "Nunca";
-  const key = (entry: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: ACADEMY_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(entry);
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const current = key(new Date(value));
-  if (current === key(now)) return "Hoje";
-  if (current === key(yesterday)) return "Ontem";
-  return date(value);
+  return relativeCivilDateLabel(value, now);
 }
 
 function SectionLoading() {
@@ -211,7 +207,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
         {capabilities.viewAttendance ? <TabsContent value="attendance">
           {loadingSection === "attendance" ? <SectionLoading /> : sectionErrors.attendance ? <ErrorState message={sectionErrors.attendance} onRetry={() => void loadSection("attendance", true)} /> : attendance ? <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3"><SummaryCard label="Última presença" value={attendanceLabel(attendanceSummary?.lastAttendanceAt)} /><SummaryCard label="No mês" value={String(attendanceSummary?.thisMonth ?? 0)} /><SummaryCard label="Últimos 30 dias" value={String(attendanceSummary?.last30Days ?? 0)} /></div>
-            <Card><CardHeader><CardTitle>Presenças recentes</CardTitle><CardDescription>Registros confirmados dos últimos {attendance.periodDays} dias, mais recentes primeiro.</CardDescription></CardHeader>{attendance.items.length === 0 ? <EmptyState title="Sem presenças recentes" description="Nenhuma presença confirmada foi encontrada nesse período." /> : <ul className="divide-y divide-line">{attendance.items.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"><div><p className="font-semibold">{dateTime(item.occurredAt)}</p><p className="text-helper text-muted">{item.classType}</p></div>{item.time ? <span className="text-sm text-muted">Horário: {item.time}</span> : null}</li>)}</ul>}{attendance.hasMore ? <p className="mt-3 text-helper text-muted">Existem mais registros fora do limite desta visualização.</p> : null}</Card>
+            <Card><CardHeader><CardTitle>Presenças recentes</CardTitle><CardDescription>Registros confirmados dos últimos {attendance.periodDays} dias, mais recentes primeiro.</CardDescription></CardHeader>{attendance.items.length === 0 ? <EmptyState title="Sem presenças recentes" description="Nenhuma presença confirmada foi encontrada nesse período." /> : <ul className="divide-y divide-line">{attendance.items.map((item) => <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-3 first:pt-0 last:pb-0"><div><p className="font-semibold">{civilDateLabel(item.date)}</p><p className="text-helper text-muted">{item.classType}</p></div>{item.time ? <span className="text-sm text-muted">Horário: {item.time}</span> : null}</li>)}</ul>}{attendance.hasMore ? <p className="mt-3 text-helper text-muted">Existem mais registros fora do limite desta visualização.</p> : null}</Card>
           </div> : null}
         </TabsContent> : null}
 

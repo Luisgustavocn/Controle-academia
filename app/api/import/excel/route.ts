@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const result = await importFromExcelBuffer(Buffer.from(arrayBuffer), year);
+    const result = await importFromExcelBuffer(Buffer.from(arrayBuffer), year, auth.id);
 
     return ok({
       message: "Importação concluída",

@@ -22,6 +22,7 @@ import { ResponsiveList } from "@/components/ui/responsive-list";
 import { SearchField } from "@/components/ui/search-field";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { relativeCivilDateLabel } from "@/lib/attendance-date";
 
 type Modality = { id: string; name: string; active: boolean };
 type Student = {
@@ -50,16 +51,7 @@ const STATUS_LABEL: Record<Student["status"], string> = {
 
 export function formatStudentAttendance(value: string | null, now = new Date()) {
   if (!value) return "Sem presença";
-  const timeZone = "America/Sao_Paulo";
-  const dayKey = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-  const date = new Date(value);
-  const todayKey = dayKey(now);
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const valueKey = dayKey(date);
-  if (valueKey === todayKey) return "Hoje";
-  if (valueKey === dayKey(yesterday)) return "Ontem";
-  return new Intl.DateTimeFormat("pt-BR", { timeZone, day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+  return relativeCivilDateLabel(value, now);
 }
 
 function StudentSkeleton() {

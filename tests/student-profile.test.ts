@@ -140,12 +140,13 @@ test("financial section limits and maps monthly and explicit payment history", a
 
 test("attendance section returns recent confirmed attendance in descending source order", async () => {
   db.presenca.findMany = async () => [
-    { id: "a2", data: new Date("2026-10-05T13:00:00Z"), horario: "10:00", tipoAula: "musculacao" },
-    { id: "a1", data: new Date("2026-10-04T13:00:00Z"), horario: null, tipoAula: "musculacao" }
+    { id: "a2", data: new Date("2026-10-05T00:00:00Z"), horario: "10:00", tipoAula: "musculacao" },
+    { id: "a1", data: new Date("2026-10-04T00:00:00Z"), horario: null, tipoAula: "musculacao" }
   ];
   const result = await getStudentProfileAttendance("student-1", new Date("2026-10-05T15:00:00Z"));
   assert.equal(result.periodDays, 60);
   assert.equal(result.items.length, 2);
+  assert.equal(result.items[0]?.date, "2026-10-05");
   assert.equal(result.items[0]?.time, "10:00");
   assert.equal(result.hasMore, false);
 });

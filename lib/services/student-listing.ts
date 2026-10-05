@@ -1,6 +1,7 @@
 import { AlunoStatus, MensalidadeStatus, Prisma, UserRole } from "@prisma/client";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { prisma } from "@/lib/prisma";
+import { prismaDateToCivil } from "@/lib/attendance-date";
 
 export const STUDENT_PAGE_SIZES = [10, 20, 50] as const;
 export const STUDENT_SORTS = ["name.asc", "name.desc", "status.asc", "dueDay.asc", "dueDay.desc"] as const;
@@ -144,7 +145,7 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
       status: student.status,
       dueDay: student.vencimentoDia,
       modality: student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null,
-      lastAttendanceAt: attendanceByStudent.get(student.id)?.toISOString() ?? null,
+      lastAttendanceAt: attendanceByStudent.get(student.id) ? prismaDateToCivil(attendanceByStudent.get(student.id)!) : null,
       ...(showFinancial
         ? { financialStatus: (financialByStudent.get(student.id) ?? 0) > 0 ? "INADIMPLENTE" as const : "EM_DIA" as const }
         : {})

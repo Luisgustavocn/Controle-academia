@@ -10,6 +10,7 @@ import {
   recentCompetencias,
   type AcademyDateContext
 } from "@/lib/timezone";
+import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
 
 export const NO_ATTENDANCE_ALERT_DAYS = 10;
 
@@ -96,6 +97,7 @@ export async function getDashboardSummary(referenceCompetencia = currentCompeten
 
 export async function getDashboardKpis(referenceCompetencia: string): Promise<DashboardKpis> {
   const { start: mesStart, end: mesEnd } = competenciaRange(referenceCompetencia);
+  const attendanceRange = civilMonthRange(referenceCompetencia);
 
   const [
     alunosAtivos,
@@ -131,9 +133,10 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
     prisma.movimentacaoCaixa.findMany({ where: { competencia: referenceCompetencia } }),
     prisma.presenca.count({
       where: {
+        presente: true,
         data: {
-          gte: mesStart,
-          lt: mesEnd
+          gte: attendanceRange.start,
+          lt: attendanceRange.end
         }
       }
     }),
@@ -344,7 +347,7 @@ export function buildOperationalDashboardFromRows(
   const ordersToday = ordersThisMonth.filter((item) => isWithin(item.dataPedido, context.dayStart, context.dayEnd));
   const amount = (items: Array<{ valor: unknown }>) => items.reduce((total, item) => total + Number(item.valor), 0);
   const orderAmount = (items: Array<{ pago: unknown }>) => items.reduce((total, item) => total + Number(item.pago), 0);
-  const staleCutoff = new Date(context.dayStart.getTime() - NO_ATTENDANCE_ALERT_DAYS * 86400000);
+  const staleCutoff = addCivilDays(context.dateKey, -NO_ATTENDANCE_ALERT_DAYS);
 
   const paymentItems: DashboardRecentItem[] = [
     ...source.paidMensalidades
@@ -388,7 +391,9 @@ export function buildOperationalDashboardFromRows(
     attention: {
       overdue: { students: delinquentIds.size, amount: amount(overdue) },
       noRecentAttendance: {
-        students: source.lastAttendances.filter((item) => item._max.data && item._max.data <= staleCutoff).length,
+        students: source.lastAttendances.filter(
+          (item) => item._max.data && prismaDateToCivil(item._max.data) <= staleCutoff
+        ).length,
         thresholdDays: NO_ATTENDANCE_ALERT_DAYS
       }
     },
@@ -440,6 +445,7 @@ export function dashboardDtoForRole(data: OperationalDashboard, role: SessionRol
 
 export async function getOperationalDashboard(role: SessionRole, referenceDate = new Date()) {
   const context = getAcademyDateContext(referenceDate);
+  const attendanceToday = civilDateToPrisma(context.dateKey);
   const competencias = recentCompetencias(referenceDate, 12);
   const firstRange = academyMonthRange(competencias[0] ?? context.competencia);
   const lastRange = academyMonthRange(competencias[competencias.length - 1] ?? context.competencia);
@@ -478,7 +484,7 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
       }
     }),
     needsOperationalData ? prisma.presenca.count({
-      where: { presente: true, data: { gte: context.dayStart, lt: context.dayEnd } }
+      where: { presente: true, data: attendanceToday }
     }) : Promise.resolve(0),
     needsOperationalData ? prisma.agendaPersonal.count({
       where: {

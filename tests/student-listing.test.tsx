@@ -65,12 +65,12 @@ test("financial visibility follows role capabilities and protects personal DTO c
   assert.equal(getCapabilitiesForRole(UserRole.PERSONAL).includes("finance.monthlies.read"), false);
 });
 
-test("attendance is rendered as today, yesterday, date or empty in Sao Paulo timezone", () => {
+test("attendance civil DATE is rendered as today, yesterday, date or empty", () => {
   const now = new Date("2026-10-05T15:00:00.000Z");
   assert.equal(formatStudentAttendance(null, now), "Sem presença");
-  assert.equal(formatStudentAttendance("2026-10-05T13:00:00.000Z", now), "Hoje");
-  assert.equal(formatStudentAttendance("2026-10-04T13:00:00.000Z", now), "Ontem");
-  assert.equal(formatStudentAttendance("2026-09-20T13:00:00.000Z", now), "20/09/2026");
+  assert.equal(formatStudentAttendance("2026-10-05", now), "Hoje");
+  assert.equal(formatStudentAttendance("2026-10-04", now), "Ontem");
+  assert.equal(formatStudentAttendance("2026-09-20", now), "20/09/2026");
 });
 
 test("responsive student primitives expose desktop, mobile and semantic status", () => {
