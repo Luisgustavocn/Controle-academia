@@ -356,6 +356,8 @@ export function CrudModule({
   const [openActions, setOpenActions] = useState<RowActionsMenuState | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const firstListFetchRef = useRef(true);
+  const previousRefreshKeyRef = useRef(refreshKey);
 
   async function fetchItems() {
     setLoading(true);
@@ -394,11 +396,12 @@ export function CrudModule({
   }
 
   useEffect(() => {
-    void fetchItems();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (firstListFetchRef.current) {
+      firstListFetchRef.current = false;
+      void fetchItems();
+      return;
+    }
 
-  useEffect(() => {
     const timer = setTimeout(() => {
       void fetchItems();
     }, 250);
@@ -407,9 +410,10 @@ export function CrudModule({
   }, [search, localStatusFilter]);
 
   useEffect(() => {
-    if (refreshKey === undefined) {
+    if (refreshKey === undefined || previousRefreshKeyRef.current === refreshKey) {
       return;
     }
+    previousRefreshKeyRef.current = refreshKey;
     void fetchItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
