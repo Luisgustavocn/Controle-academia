@@ -144,11 +144,14 @@ function buildChecksum(content: string) {
 
 async function writeBackupArtifact(directory: string, fileName: string, content: string, checksum: string) {
   const resolvedDir = path.resolve(directory);
-  await mkdir(resolvedDir, { recursive: true });
+  await mkdir(resolvedDir, { recursive: true, mode: 0o750 });
 
   const filePath = path.join(resolvedDir, fileName);
-  await writeFile(filePath, content, "utf8");
-  await writeFile(`${filePath}.sha256`, `${checksum}  ${fileName}\n`, "utf8");
+  await writeFile(filePath, content, { encoding: "utf8", mode: 0o600 });
+  await writeFile(`${filePath}.sha256`, `${checksum}  ${fileName}\n`, {
+    encoding: "utf8",
+    mode: 0o600
+  });
 
   return filePath;
 }
