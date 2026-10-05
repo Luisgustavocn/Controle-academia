@@ -343,106 +343,86 @@ export default function RelatoriosPage() {
 
     try {
       const query = `competencia=${encodeURIComponent(competencia)}`;
-      const prev = previousCompetencia(competencia);
-      const prevQuery = `competencia=${encodeURIComponent(prev)}`;
 
       const [
         ativosRes,
-        inadimplentesRes,
         vencimentosRes,
         caixaRes,
         frequenciaRes,
         despesasCategoriasRes,
         pedidosRes,
         alunosMovimentoRes,
-        mensalidadesResumoRes,
-        summaryAtualRes,
-        mensalidadesResumoAnteriorRes,
-        summaryAnteriorRes
+        comparativoRes
       ] = await Promise.all([
         fetch("/api/relatorios/ativos", { cache: "no-store" }),
-        fetch(`/api/relatorios/inadimplentes?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/vencimentos?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/caixa-mensal?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/frequencia?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/despesas-categorias?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/pedidos?${query}`, { cache: "no-store" }),
         fetch(`/api/relatorios/alunos-movimento?${query}`, { cache: "no-store" }),
-        fetch(`/api/mensalidades/colunas?${query}`, { cache: "no-store" }),
-        fetch(`/api/dashboard/summary?${query}`, { cache: "no-store" }),
-        fetch(`/api/mensalidades/colunas?${prevQuery}`, { cache: "no-store" }),
-        fetch(`/api/dashboard/summary?${prevQuery}`, { cache: "no-store" })
+        fetch(`/api/relatorios/comparativo?${query}`, { cache: "no-store" })
       ]);
 
       const [
         ativosPayload,
-        inadimplentesPayload,
         vencimentosPayload,
         caixaPayload,
         frequenciaPayload,
         despesasCategoriasPayload,
         pedidosPayload,
         alunosMovimentoPayload,
-        mensalidadesResumoPayload,
-        summaryAtualPayload,
-        mensalidadesResumoAnteriorPayload,
-        summaryAnteriorPayload
+        comparativoPayload
       ] = await Promise.all([
         ativosRes.json().catch(() => ({})),
-        inadimplentesRes.json().catch(() => ({})),
         vencimentosRes.json().catch(() => ({})),
         caixaRes.json().catch(() => ({})),
         frequenciaRes.json().catch(() => ({})),
         despesasCategoriasRes.json().catch(() => ({})),
         pedidosRes.json().catch(() => ({})),
         alunosMovimentoRes.json().catch(() => ({})),
-        mensalidadesResumoRes.json().catch(() => ({})),
-        summaryAtualRes.json().catch(() => ({})),
-        mensalidadesResumoAnteriorRes.json().catch(() => ({})),
-        summaryAnteriorRes.json().catch(() => ({}))
+        comparativoRes.json().catch(() => ({}))
       ]);
 
       if (
         !ativosRes.ok ||
-        !inadimplentesRes.ok ||
         !vencimentosRes.ok ||
         !caixaRes.ok ||
         !frequenciaRes.ok ||
         !despesasCategoriasRes.ok ||
         !pedidosRes.ok ||
         !alunosMovimentoRes.ok ||
-        !mensalidadesResumoRes.ok ||
-        !summaryAtualRes.ok ||
-        !mensalidadesResumoAnteriorRes.ok ||
-        !summaryAnteriorRes.ok
+        !comparativoRes.ok
       ) {
         const message =
           (ativosPayload as { error?: string }).error ||
-          (inadimplentesPayload as { error?: string }).error ||
           (vencimentosPayload as { error?: string }).error ||
           (caixaPayload as { error?: string }).error ||
           (frequenciaPayload as { error?: string }).error ||
           (despesasCategoriasPayload as { error?: string }).error ||
           (pedidosPayload as { error?: string }).error ||
           (alunosMovimentoPayload as { error?: string }).error ||
-          (mensalidadesResumoPayload as { error?: string }).error ||
-          (summaryAtualPayload as { error?: string }).error ||
-          (mensalidadesResumoAnteriorPayload as { error?: string }).error ||
-          (summaryAnteriorPayload as { error?: string }).error ||
+          (comparativoPayload as { error?: string }).error ||
           "Falha ao carregar relatórios.";
         throw new Error(message);
       }
+
+      const vencimentos = Array.isArray((vencimentosPayload as { items?: unknown[] }).items)
+        ? ((vencimentosPayload as { items: VencimentoItem[] }).items ?? [])
+        : [];
+      const comparativo = comparativoPayload as {
+        atual?: { resumo?: MensalidadesResumo; kpis?: DashboardKpis };
+        anterior?: { resumo?: MensalidadesResumo; kpis?: DashboardKpis };
+      };
 
       setData({
         ativos: Array.isArray((ativosPayload as { items?: unknown[] }).items)
           ? ((ativosPayload as { items: AlunoAtivo[] }).items ?? [])
           : [],
-        inadimplentes: Array.isArray((inadimplentesPayload as { items?: unknown[] }).items)
-          ? ((inadimplentesPayload as { items: Inadimplente[] }).items ?? [])
-          : [],
-        vencimentos: Array.isArray((vencimentosPayload as { items?: unknown[] }).items)
-          ? ((vencimentosPayload as { items: VencimentoItem[] }).items ?? [])
-          : [],
+        inadimplentes: vencimentos.filter(
+          (item) => item.status === "PENDENTE" || item.status === "ATRASADO"
+        ),
+        vencimentos,
         caixa: {
           competencia: String((caixaPayload as { competencia?: string }).competencia ?? competencia),
           totalEntradas: Number((caixaPayload as { totalEntradas?: number }).totalEntradas ?? 0),
@@ -487,12 +467,12 @@ export default function RelatoriosPage() {
             ? ((alunosMovimentoPayload as { series: AlunoMovimentoSerie[] }).series ?? [])
             : []
         },
-        mensalidadesResumo: normalizeResumo(mensalidadesResumoPayload)
+        mensalidadesResumo: normalizeResumo({ resumo: comparativo.atual?.resumo })
       });
 
-      setPreviousResumo(normalizeResumo(mensalidadesResumoAnteriorPayload));
-      setKpisAtual(normalizeKpis(summaryAtualPayload));
-      setKpisAnterior(normalizeKpis(summaryAnteriorPayload));
+      setPreviousResumo(normalizeResumo({ resumo: comparativo.anterior?.resumo }));
+      setKpisAtual(normalizeKpis({ kpis: comparativo.atual?.kpis }));
+      setKpisAnterior(normalizeKpis({ kpis: comparativo.anterior?.kpis }));
     } catch (fetchError) {
       const message = fetchError instanceof Error ? fetchError.message : "Falha ao carregar relatórios.";
       setError(message);
