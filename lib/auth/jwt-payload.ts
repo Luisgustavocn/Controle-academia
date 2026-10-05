@@ -50,32 +50,32 @@ function decodeJsonSegment(value: string): unknown {
  * Edge-compatible verification used only by middleware. Server code continues
  * to use jsonwebtoken through lib/auth/session.ts.
  */
-export async function verifySessionTokenAtEdge(token: string, secret: string): Promise<boolean> {
+export async function getSessionPayloadAtEdge(token: string, secret: string): Promise<SessionPayload | null> {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) {
-      return false;
+      return null;
     }
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
     const header = decodeJsonSegment(encodedHeader);
     if (!header || typeof header !== "object" || Array.isArray(header)) {
-      return false;
+      return null;
     }
 
     const headerFields = header as Record<string, unknown>;
     if (headerFields.alg !== "HS256" || headerFields.typ !== "JWT") {
-      return false;
+      return null;
     }
 
     const payload = decodeJsonSegment(encodedPayload);
     if (!isSessionPayload(payload)) {
-      return false;
+      return null;
     }
 
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp <= now || (typeof payload.nbf === "number" && payload.nbf > now)) {
-      return false;
+      return null;
     }
 
     const key = await crypto.subtle.importKey(
@@ -86,13 +86,18 @@ export async function verifySessionTokenAtEdge(token: string, secret: string): P
       ["verify"]
     );
 
-    return crypto.subtle.verify(
+    const valid = await crypto.subtle.verify(
       "HMAC",
       key,
       decodeBase64Url(encodedSignature),
       new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`)
     );
+    return valid ? payload : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function verifySessionTokenAtEdge(token: string, secret: string): Promise<boolean> {
+  return Boolean(await getSessionPayloadAtEdge(token, secret));
 }

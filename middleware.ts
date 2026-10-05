@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionTokenAtEdge } from "@/lib/auth/jwt-payload";
+import { getSessionPayloadAtEdge, SESSION_COOKIE_NAME } from "@/lib/auth/jwt-payload";
+import { getDefaultPathForRole, getUnauthorizedPageRedirect } from "@/lib/auth/capabilities";
 
 const publicRoutes = [
   "/login",
@@ -32,10 +33,11 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const secret = process.env.JWT_SECRET;
-  const validSession = Boolean(token && secret && (await verifySessionTokenAtEdge(token, secret)));
+  const session = token && secret ? await getSessionPayloadAtEdge(token, secret) : null;
+  const validSession = Boolean(session);
 
   if (validSession && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL(getDefaultPathForRole(session!.role), request.url));
   }
 
   if (
@@ -61,6 +63,11 @@ export async function middleware(request: NextRequest) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (!pathname.startsWith("/api/") && session) {
+    const redirectPath = getUnauthorizedPageRedirect(session.role, pathname);
+    if (redirectPath) return NextResponse.redirect(new URL(redirectPath, request.url));
   }
 
   return NextResponse.next({
