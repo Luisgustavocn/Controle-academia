@@ -107,6 +107,10 @@ test("DropdownMenu supports arrows, selection and Escape", async () => {
   trigger.focus();
   await user.keyboard("{ArrowDown}");
   await new Promise((resolve) => setTimeout(resolve, 0));
+  const menu = screen.getByRole("menu");
+  assert.equal(menu.parentElement, document.body);
+  assert.ok(menu.className.includes("fixed"));
+  assert.ok(menu.className.includes("z-40"));
   assert.equal(document.activeElement?.textContent, "Editar");
   await user.keyboard("{ArrowDown}{Enter}");
   assert.equal(selected, "excluir");

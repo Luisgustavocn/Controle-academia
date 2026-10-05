@@ -223,7 +223,7 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
           <DataTableHead>Aluno</DataTableHead><DataTableHead>Modalidade</DataTableHead>
           {canViewFinancial ? <DataTableHead>Financeiro</DataTableHead> : null}
           <DataTableHead>Última presença</DataTableHead><DataTableHead>Status</DataTableHead>
-          {hasActions ? <DataTableHead><span className="sr-only">Ações</span></DataTableHead> : null}
+          {hasActions ? <DataTableHead className="w-24 px-3 text-right"><span className="sr-only">Ações</span></DataTableHead> : null}
         </DataTableRow></DataTableHeader>
         <DataTableBody>{items.map((student) => <DataTableRow key={student.id}>
           <DataTableCell><div className="flex items-center gap-3"><Avatar name={student.name} size="sm" /><div><Link href={profileHref(student.id)} className="font-semibold hover:text-accentDark hover:underline">{student.name}</Link><a className="block text-helper text-muted hover:text-accentDark" href={`tel:${student.phone}`}>{student.phone}</a></div></div></DataTableCell>
@@ -231,7 +231,7 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
           {canViewFinancial ? <DataTableCell>{student.financialStatus === "INADIMPLENTE" ? <StatusBadge status="Atrasado" label="Inadimplente" /> : <StatusBadge status="Pago" label="Em dia" />}</DataTableCell> : null}
           <DataTableCell>{formatStudentAttendance(student.lastAttendanceAt)}</DataTableCell>
           <DataTableCell><StatusBadge status={STATUS_LABEL[student.status]} /></DataTableCell>
-          {hasActions ? <DataTableCell className="w-16"><Actions student={student} /></DataTableCell> : null}
+          {hasActions ? <DataTableCell className="w-24 px-3 text-right"><Actions student={student} /></DataTableCell> : null}
         </DataTableRow>)}</DataTableBody>
       </DataTable>
     </DataTableContainer>

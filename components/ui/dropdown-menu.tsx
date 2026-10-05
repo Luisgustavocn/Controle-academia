@@ -1,6 +1,7 @@
 "use client";
 
-import { Children, cloneElement, isValidElement, KeyboardEvent, ReactElement, ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Children, cloneElement, isValidElement, KeyboardEvent, ReactElement, ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { clsx } from "clsx";
 import { ChevronDown } from "lucide-react";
 
@@ -18,6 +19,7 @@ export function DropdownMenu({ trigger, children, label = "Abrir menu", align = 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 });
 
   function items() {
     return menuRef.current ? Array.from(menuRef.current.querySelectorAll<HTMLElement>("[role='menuitem']:not([aria-disabled='true'])")) : [];
@@ -34,11 +36,39 @@ export function DropdownMenu({ trigger, children, label = "Abrir menu", align = 
   useEffect(() => {
     if (!open) return;
     function closeOnOutside(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
     document.addEventListener("mousedown", closeOnOutside);
     return () => document.removeEventListener("mousedown", closeOnOutside);
   }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    function updatePosition() {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+      const menuWidth = menuRef.current?.offsetWidth || 192;
+      const menuHeight = menuRef.current?.offsetHeight || 0;
+      const horizontalMargin = 8;
+      const preferredLeft = align === "end" ? triggerRect.right - menuWidth : triggerRect.left;
+      const left = Math.min(Math.max(horizontalMargin, preferredLeft), Math.max(horizontalMargin, window.innerWidth - menuWidth - horizontalMargin));
+      const below = triggerRect.bottom + 6;
+      const above = triggerRect.top - menuHeight - 6;
+      const preferredTop = menuHeight > 0 && below + menuHeight > window.innerHeight - 8 && above >= 8 ? above : below;
+      const top = menuHeight > 0
+        ? Math.min(Math.max(8, preferredTop), Math.max(8, window.innerHeight - menuHeight - 8))
+        : preferredTop;
+      setMenuPosition({ left, top });
+    }
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [align, open]);
 
   function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const menuItems = items();
@@ -88,14 +118,15 @@ export function DropdownMenu({ trigger, children, label = "Abrir menu", align = 
         {trigger}
         <ChevronDown className="h-4 w-4" aria-hidden="true" />
       </button>
-      {open ? (
+      {open ? createPortal(
         <div
           ref={menuRef}
           id={menuId}
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKeyDown}
-          className={clsx("absolute top-[calc(100%+0.375rem)] z-40 min-w-48 rounded-ds-lg border border-line bg-card p-1.5 shadow-surface-md", align === "end" ? "right-0" : "left-0")}
+          style={{ left: menuPosition.left, top: menuPosition.top }}
+          className="fixed z-40 min-w-48 rounded-ds-lg border border-line bg-card p-1.5 shadow-surface-md"
         >
           {Children.map(children, (child) =>
             isValidElement(child)
@@ -107,7 +138,8 @@ export function DropdownMenu({ trigger, children, label = "Abrir menu", align = 
                 })
               : child
           )}
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );
