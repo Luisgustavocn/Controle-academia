@@ -18,6 +18,10 @@ import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 
+function toDateInputValue(date: Date | null | undefined) {
+  return date ? date.toISOString().slice(0, 10) : "";
+}
+
 function parseOptionalDate(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -49,6 +53,49 @@ function parseOptionalMensalidadeStatus(value: unknown) {
     throw new Error("status da mensalidade inválido");
   }
   return parsed;
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = requireCapability(request, "students.update");
+  if (auth instanceof Response) return auth;
+
+  const { id } = await context.params;
+  const competencia = toCompetencia(new Date());
+  const aluno = await prisma.aluno.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      nomeCompleto: true,
+      telefone: true,
+      modalidadeId: true,
+      vencimentoDia: true,
+      status: true,
+      dataInicio: true,
+      dataSaidaCancelamento: true,
+      observacoes: true,
+      mensalidades: {
+        where: { competencia },
+        take: 1,
+        select: { valor: true }
+      }
+    }
+  });
+
+  if (!aluno) return fail("Aluno não encontrado", 404);
+  return ok({
+    item: {
+      id: aluno.id,
+      nomeCompleto: aluno.nomeCompleto,
+      telefone: aluno.telefone,
+      modalidadeId: aluno.modalidadeId ?? "",
+      vencimentoDia: String(aluno.vencimentoDia),
+      status: aluno.status,
+      dataInicio: toDateInputValue(aluno.dataInicio),
+      dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
+      observacoes: aluno.observacoes ?? "",
+      mensalidadeValor: aluno.mensalidades[0] ? String(aluno.mensalidades[0].valor) : ""
+    }
+  });
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
