@@ -1,6 +1,6 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import {
   getWhatsAppConfig,
@@ -29,7 +29,7 @@ function toWhatsAppPayload(body: Record<string, unknown>, fallback: WhatsAppConf
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "whatsapp.manage");
   if (auth instanceof Response) return auth;
 
   const [config, preview] = await Promise.all([getWhatsAppConfig(), getWhatsAppReminderPreview()]);
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "whatsapp.manage");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

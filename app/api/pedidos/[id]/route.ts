@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { UserRole } from "@prisma/client";
-import { requireRole } from "@/lib/auth/guards";
+import {} from "@prisma/client";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
@@ -48,7 +48,7 @@ async function loadAlunoOrFail(alunoId: string) {
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "sales.manage");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
@@ -241,7 +241,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "sales.manage");
   if (auth instanceof Response) return auth;
 
   await context.params;

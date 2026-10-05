@@ -1,6 +1,6 @@
-import { Prisma, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 
@@ -11,7 +11,7 @@ function normalizeNome(value: unknown) {
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.PERSONAL);
+  const auth = requireCapability(request, "schedule.write");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.PERSONAL);
+  const auth = requireCapability(request, "schedule.write");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;

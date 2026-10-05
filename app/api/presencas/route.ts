@@ -1,10 +1,10 @@
-import { UserRole } from "@prisma/client";
 import { createListCreateHandlers } from "@/lib/api/crud";
 
 export const { GET, POST } = createListCreateHandlers({
   model: "presenca",
   module: "presencas",
-  requiredRole: UserRole.PERSONAL,
+  readCapability: "attendance.read",
+  writeCapability: "attendance.write",
   searchFields: ["tipoAula", "horario"],
   relationInclude: {
     aluno: { select: { nomeCompleto: true, status: true } }

@@ -1,6 +1,6 @@
-import { MensalidadeStatus, Prisma, UserRole } from "@prisma/client";
+import { MensalidadeStatus, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { currentCompetencia } from "@/lib/competencia";
 import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -81,7 +81,7 @@ function serializeItem(item: {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "finance.monthlies.read");
   if (auth instanceof Response) return auth;
 
   await garantirMensalidadesDoMesAtual();

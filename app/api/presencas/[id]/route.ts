@@ -1,10 +1,9 @@
-import { UserRole } from "@prisma/client";
 import { createByIdHandlers } from "@/lib/api/crud";
 
 export const { PUT, DELETE } = createByIdHandlers({
   model: "presenca",
   module: "presencas",
-  requiredRole: UserRole.PERSONAL,
+  writeCapability: "attendance.write",
   dateFields: ["data"],
   booleanFields: ["presente"]
 });

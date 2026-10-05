@@ -1,7 +1,7 @@
 import { hash } from "bcryptjs";
 import { Prisma, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 
@@ -11,7 +11,7 @@ function parseBool(value: unknown): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "team.read");
   if (auth instanceof Response) return auth;
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "team.manage");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json()) as Record<string, unknown>;

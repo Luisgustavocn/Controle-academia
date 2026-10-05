@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import { createListCreateHandlers } from "@/lib/api/crud";
 
 function toCompetencia(dateLike: unknown) {
@@ -28,7 +27,8 @@ function toCompetencia(dateLike: unknown) {
 export const { GET, POST } = createListCreateHandlers({
   model: "despesaAcademia",
   module: "despesas-academia",
-  requiredRole: UserRole.FINANCEIRO,
+  readCapability: "finance.expenses.read",
+  writeCapability: "finance.expenses.manage",
   searchFields: ["descricao"],
   relationInclude: {
     categoria: { select: { nome: true } }

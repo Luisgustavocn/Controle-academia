@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import { createByIdHandlers } from "@/lib/api/crud";
 
 function normalizeHorario(raw: unknown) {
@@ -33,7 +32,7 @@ function isHorarioAtendimento(value: string) {
 export const { PUT, DELETE } = createByIdHandlers({
   model: "agendaPersonal",
   module: "agenda-personal",
-  requiredRole: UserRole.PERSONAL,
+  writeCapability: "schedule.write",
   intFields: ["diaSemana"],
   booleanFields: ["ativo"],
   validate: (data) => {

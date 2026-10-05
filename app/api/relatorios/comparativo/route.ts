@@ -1,12 +1,12 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { currentCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { getReportComparison } from "@/lib/services/report-comparison";
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "reports.financial");
   if (auth instanceof Response) return auth;
 
   const competenciaParam = request.nextUrl.searchParams.get("competencia");

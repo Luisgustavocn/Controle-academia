@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import { createListCreateHandlers } from "@/lib/api/crud";
 
 function parseTipo(value: string | null) {
@@ -21,7 +20,8 @@ function parseAtiva(value: string | null) {
 export const { GET, POST } = createListCreateHandlers({
   model: "categoriaFinanceira",
   module: "categorias-financeiras",
-  requiredRole: UserRole.FINANCEIRO,
+  readCapability: "finance.cash.read",
+  writeCapability: "finance.cash.manage",
   searchFields: ["nome", "descricao"],
   booleanFields: ["ativa"],
   queryFilters: (request) => {

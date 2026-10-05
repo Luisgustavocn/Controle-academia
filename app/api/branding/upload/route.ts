@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { getBrandingUploadsDirectory } from "@/lib/storage";
 
@@ -35,7 +35,7 @@ function detectSafeImageExtension(file: File, bytes: Uint8Array) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "settings.manage");
   if (auth instanceof Response) return auth;
 
   const formData = await request.formData().catch(() => null);

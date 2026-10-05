@@ -1,7 +1,7 @@
-import { Prisma, TipoMovimentacao, UserRole } from "@prisma/client";
+import { Prisma, TipoMovimentacao } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { toCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -96,7 +96,7 @@ function parseTipoQuery(value: string | null) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "finance.cash.read");
   if (auth instanceof Response) return auth;
 
   await syncAutomaticEntriesInCaixa();
@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "finance.cash.manage");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

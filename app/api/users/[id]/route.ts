@@ -2,7 +2,7 @@ import { hash } from "bcryptjs";
 import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { createBackupFile } from "@/lib/services/backup";
@@ -13,7 +13,7 @@ function parseBool(value: unknown): boolean {
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "team.manage");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
@@ -86,7 +86,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "team.manage");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;

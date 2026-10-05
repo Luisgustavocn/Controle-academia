@@ -1,9 +1,9 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "reports.financial");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json()) as { filename?: string; rows?: Array<Record<string, unknown>> };

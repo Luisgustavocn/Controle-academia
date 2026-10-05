@@ -1,7 +1,8 @@
 import { Prisma, UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability, requireRole } from "@/lib/auth/guards";
+import type { Capability } from "@/lib/auth/capabilities";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 
@@ -9,6 +10,8 @@ type CrudConfig = {
   model: keyof typeof prisma;
   module: string;
   requiredRole?: UserRole;
+  readCapability?: Capability;
+  writeCapability?: Capability;
   searchFields?: string[];
   relationInclude?: Record<string, boolean | object>;
   orderBy?: Record<string, "asc" | "desc">;
@@ -126,7 +129,7 @@ export function createListCreateHandlers(config: CrudConfig) {
   const role = config.requiredRole ?? UserRole.RECEPCAO;
 
   async function GET(request: NextRequest) {
-    const auth = requireRole(request, role);
+    const auth = config.readCapability ? requireCapability(request, config.readCapability) : requireRole(request, role);
     if (auth instanceof Response) return auth;
 
     const q = request.nextUrl.searchParams.get("q") ?? "";
@@ -148,7 +151,7 @@ export function createListCreateHandlers(config: CrudConfig) {
   }
 
   async function POST(request: NextRequest) {
-    const auth = requireRole(request, role);
+    const auth = config.writeCapability ? requireCapability(request, config.writeCapability) : requireRole(request, role);
     if (auth instanceof Response) return auth;
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -187,7 +190,7 @@ export function createByIdHandlers(config: CrudConfig) {
   const role = config.requiredRole ?? UserRole.RECEPCAO;
 
   async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const auth = requireRole(request, role);
+    const auth = config.writeCapability ? requireCapability(request, config.writeCapability) : requireRole(request, role);
     if (auth instanceof Response) return auth;
 
     const { id } = await context.params;
@@ -222,7 +225,7 @@ export function createByIdHandlers(config: CrudConfig) {
   }
 
   async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const auth = requireRole(request, role);
+    const auth = config.writeCapability ? requireCapability(request, config.writeCapability) : requireRole(request, role);
     if (auth instanceof Response) return auth;
 
     if (config.deleteBlockedReason) {

@@ -5,10 +5,9 @@ import { FinanceEvolutionChart } from "@/components/charts/finance-evolution-cha
 import { currentCompetencia } from "@/lib/competencia";
 import { getDashboardSummary } from "@/lib/services/dashboard";
 import { LayoutDashboard } from "lucide-react";
-import { UserRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { getActiveSessionUser } from "@/lib/auth/server-session";
-import { hasRole } from "@/lib/roles";
+import { hasCapability } from "@/lib/auth/capabilities";
 
 function currency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -24,7 +23,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  if (!hasRole(session.role, UserRole.RECEPCAO)) {
+  if (!hasCapability(session.role, "dashboard.view")) {
     redirect("/frequencia");
   }
 

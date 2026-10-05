@@ -1,12 +1,12 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { importFromExcelBuffer, InvalidSpreadsheetError } from "@/lib/excel/importer";
 import { validateSpreadsheetUpload } from "@/lib/excel/upload-validation";
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "settings.manage");
   if (auth instanceof Response) return auth;
 
   const formData = await request.formData();

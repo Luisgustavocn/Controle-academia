@@ -1,6 +1,6 @@
-import { Prisma, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
@@ -79,7 +79,7 @@ async function loadAlunoOrFail(alunoId: string): Promise<AlunoLookupResult> {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "sales.read");
   if (auth instanceof Response) return auth;
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "sales.create");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

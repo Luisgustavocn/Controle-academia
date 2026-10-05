@@ -1,6 +1,6 @@
-import { Prisma, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 
@@ -9,7 +9,7 @@ function toMoney(value: Prisma.Decimal | number) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "sales.read");
   if (auth instanceof Response) return auth;
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";

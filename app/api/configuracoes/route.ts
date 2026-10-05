@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { createListCreateHandlers } from "@/lib/api/crud";
 import { isSensitiveConfigurationKey, redactConfigurationValue } from "@/lib/configuration-secrets";
@@ -7,7 +6,8 @@ import { ok } from "@/lib/http";
 const handlers = createListCreateHandlers({
   model: "configuracao",
   module: "configuracoes",
-  requiredRole: UserRole.ADMIN,
+  readCapability: "settings.manage",
+  writeCapability: "settings.manage",
   searchFields: ["chave", "descricao"],
   validate: (data) =>
     isSensitiveConfigurationKey(String(data.chave ?? ""))

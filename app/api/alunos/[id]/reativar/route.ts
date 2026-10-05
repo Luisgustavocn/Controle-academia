@@ -1,13 +1,13 @@
-import { AlunoStatus, UserRole } from "@prisma/client";
+import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia } from "@/lib/competencia";
 import { generateMensalidadesAteCompetencia } from "@/lib/services/mensalidades";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "students.status");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;

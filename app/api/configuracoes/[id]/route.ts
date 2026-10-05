@@ -1,7 +1,6 @@
-import { UserRole } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { createByIdHandlers } from "@/lib/api/crud";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { isSensitiveConfigurationKey } from "@/lib/configuration-secrets";
 import { fail } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 const handlers = createByIdHandlers({
   model: "configuracao",
   module: "configuracoes",
-  requiredRole: UserRole.ADMIN,
+  writeCapability: "settings.manage",
   validate: (data) =>
     data.chave && isSensitiveConfigurationKey(String(data.chave))
       ? "Segredos devem ser configurados por variaveis de ambiente."
@@ -19,7 +18,7 @@ const handlers = createByIdHandlers({
 export const DELETE = handlers.DELETE;
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "settings.manage");
   if (auth instanceof Response) {
     return auth;
   }

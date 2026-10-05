@@ -1,10 +1,10 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { buildBackupPayload } from "@/lib/services/backup";
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.ADMIN);
+  const auth = requireCapability(request, "settings.manage");
   if (auth instanceof Response) return auth;
 
   const payload = await buildBackupPayload();

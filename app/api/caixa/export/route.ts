@@ -1,12 +1,12 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia } from "@/lib/competencia";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "reports.financial");
   if (auth instanceof Response) return auth;
 
   await syncAutomaticEntriesInCaixa();

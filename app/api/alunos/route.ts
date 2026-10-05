@@ -1,6 +1,6 @@
-import { AlunoStatus, MensalidadeStatus, Prisma, UserRole } from "@prisma/client";
+import { AlunoStatus, MensalidadeStatus, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia, toCompetencia } from "@/lib/competencia";
@@ -52,7 +52,7 @@ function parseOptionalMensalidadeStatus(value: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "students.read");
   if (auth instanceof Response) return auth;
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.RECEPCAO);
+  const auth = requireCapability(request, "students.create");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json()) as Record<string, unknown>;

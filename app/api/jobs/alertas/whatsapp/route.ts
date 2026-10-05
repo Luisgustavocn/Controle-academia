@@ -1,11 +1,11 @@
-import { UserRole } from "@prisma/client";
+import {} from "@prisma/client";
 import { NextRequest } from "next/server";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { ok } from "@/lib/http";
 import { dispatchWhatsAppBillingReminders, getWhatsAppReminderPreview } from "@/lib/services/whatsapp";
 
 export async function GET(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "whatsapp.manage");
   if (auth instanceof Response) return auth;
 
   const preview = await getWhatsAppReminderPreview();
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "whatsapp.manage");
   if (auth instanceof Response) return auth;
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

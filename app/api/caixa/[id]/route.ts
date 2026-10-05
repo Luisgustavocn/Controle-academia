@@ -1,7 +1,7 @@
-import { TipoMovimentacao, UserRole } from "@prisma/client";
+import { TipoMovimentacao } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/guards";
+import { requireCapability } from "@/lib/auth/guards";
 import { toCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
@@ -89,7 +89,7 @@ async function validateCategoria(categoriaId: string | null | undefined, tipo: T
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "finance.cash.manage");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
@@ -150,7 +150,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireRole(request, UserRole.FINANCEIRO);
+  const auth = requireCapability(request, "finance.cash.manage");
   if (auth instanceof Response) return auth;
 
   await context.params;

@@ -1,4 +1,3 @@
-import { UserRole } from "@prisma/client";
 import { createListCreateHandlers } from "@/lib/api/crud";
 
 function toBooleanParam(value: string | null) {
@@ -12,7 +11,8 @@ function toBooleanParam(value: string | null) {
 export const { GET, POST } = createListCreateHandlers({
   model: "produto",
   module: "produtos",
-  requiredRole: UserRole.RECEPCAO,
+  readCapability: "products.read",
+  writeCapability: "products.manage",
   searchFields: ["nome", "categoria", "cor", "tamanho"],
   orderBy: { nome: "asc" },
   numericFields: ["preco"],
