@@ -35,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       aria-invalid={error ? true : props["aria-invalid"]}
       aria-describedby={describedBy}
       className={clsx(
-        "w-full rounded-ds-lg border border-line bg-card text-ink shadow-surface-sm outline-none transition-colors placeholder:text-muted/75 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted",
+        "min-w-0 w-full rounded-ds-lg border border-line bg-card text-ink shadow-surface-sm outline-none transition-colors placeholder:text-muted/75 focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted",
         sizes[inputSize],
         leadingIcon && "pl-10",
         error && "border-danger focus:border-danger focus:ring-danger/20",

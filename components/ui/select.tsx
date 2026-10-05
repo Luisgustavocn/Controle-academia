@@ -23,7 +23,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       {...props}
       aria-invalid={error ? true : props["aria-invalid"]}
       className={clsx(
-        "w-full rounded-ds-lg border border-line bg-card text-ink shadow-surface-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted",
+        "min-w-0 w-full rounded-ds-lg border border-line bg-card text-ink shadow-surface-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:bg-bg disabled:text-muted",
         sizes[selectSize],
         error && "border-danger focus:border-danger focus:ring-danger/20",
         className

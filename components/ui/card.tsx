@@ -2,7 +2,7 @@ import { HTMLAttributes } from "react";
 import { clsx } from "clsx";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLElement>) {
-  return <section className={clsx("rounded-ds-xl border border-line bg-card p-4 shadow-surface-sm", className)} {...props} />;
+  return <section className={clsx("min-w-0 max-w-full rounded-ds-xl border border-line bg-card p-4 shadow-surface-sm", className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

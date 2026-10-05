@@ -16,6 +16,12 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
 
+  // The page itself returns notFound outside development. Let it decide before
+  // authentication so the development gallery is never exposed as a login route.
+  if (pathname === "/design-system") {
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
   if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) {
     return NextResponse.next({
       request: {
