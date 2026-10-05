@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 export type BrandingConfig = {
   academyName: string;
@@ -46,6 +47,8 @@ const BRANDING_DEFAULTS: BrandingConfig = {
   }
 };
 
+export const BRANDING_CACHE_TAG = "branding-config";
+
 const LEGACY_DEFAULTS = {
   academyName: "Power Life Academia",
   logoUrl: "/logo.jpeg",
@@ -70,7 +73,7 @@ function normalizeHex(value: string, fallback: string) {
   return fallback;
 }
 
-export async function ensureBrandingDefaults() {
+export async function initializeBrandingDefaults() {
   if (!process.env.DATABASE_URL) {
     return;
   }
@@ -165,41 +168,52 @@ export async function ensureBrandingDefaults() {
 }
 
 export async function getBrandingConfig(): Promise<BrandingConfig> {
+  if (!process.env.DATABASE_URL) {
+    return BRANDING_DEFAULTS;
+  }
+
   try {
-    await ensureBrandingDefaults();
-
-    if (!process.env.DATABASE_URL) {
-      return BRANDING_DEFAULTS;
-    }
-
-    const items = await prisma.configuracao.findMany({
-      where: {
-        chave: {
-          in: Object.values(BRANDING_KEYS)
-        }
-      }
-    });
-
-    const byKey = new Map(items.map((item) => [item.chave, item.valor]));
-    return {
-      academyName: byKey.get(BRANDING_KEYS.academyName) || BRANDING_DEFAULTS.academyName,
-      logoUrl: byKey.get(BRANDING_KEYS.logoUrl) || BRANDING_DEFAULTS.logoUrl,
-      colors: {
-        bg: normalizeHex(byKey.get(BRANDING_KEYS.bg) || "", BRANDING_DEFAULTS.colors.bg),
-        ink: normalizeHex(byKey.get(BRANDING_KEYS.ink) || "", BRANDING_DEFAULTS.colors.ink),
-        muted: normalizeHex(byKey.get(BRANDING_KEYS.muted) || "", BRANDING_DEFAULTS.colors.muted),
-        line: normalizeHex(byKey.get(BRANDING_KEYS.line) || "", BRANDING_DEFAULTS.colors.line),
-        accent: normalizeHex(byKey.get(BRANDING_KEYS.accent) || "", BRANDING_DEFAULTS.colors.accent),
-        accentDark: normalizeHex(byKey.get(BRANDING_KEYS.accentDark) || "", BRANDING_DEFAULTS.colors.accentDark),
-        accentSoft: normalizeHex(byKey.get(BRANDING_KEYS.accentSoft) || "", BRANDING_DEFAULTS.colors.accentSoft),
-        sidebar: normalizeHex(byKey.get(BRANDING_KEYS.sidebar) || "", BRANDING_DEFAULTS.colors.sidebar),
-        sidebarLine: normalizeHex(byKey.get(BRANDING_KEYS.sidebarLine) || "", BRANDING_DEFAULTS.colors.sidebarLine)
-      }
-    };
+    return await loadCachedBrandingConfig();
   } catch {
     return BRANDING_DEFAULTS;
   }
 }
+
+export async function readBrandingConfigFromDatabase(): Promise<BrandingConfig> {
+  const items = await prisma.configuracao.findMany({
+    where: {
+      chave: {
+        in: Object.values(BRANDING_KEYS)
+      }
+    }
+  });
+
+  const byKey = new Map(items.map((item) => [item.chave, item.valor]));
+  return {
+    academyName: byKey.get(BRANDING_KEYS.academyName) || BRANDING_DEFAULTS.academyName,
+    logoUrl: byKey.get(BRANDING_KEYS.logoUrl) || BRANDING_DEFAULTS.logoUrl,
+    colors: {
+      bg: normalizeHex(byKey.get(BRANDING_KEYS.bg) || "", BRANDING_DEFAULTS.colors.bg),
+      ink: normalizeHex(byKey.get(BRANDING_KEYS.ink) || "", BRANDING_DEFAULTS.colors.ink),
+      muted: normalizeHex(byKey.get(BRANDING_KEYS.muted) || "", BRANDING_DEFAULTS.colors.muted),
+      line: normalizeHex(byKey.get(BRANDING_KEYS.line) || "", BRANDING_DEFAULTS.colors.line),
+      accent: normalizeHex(byKey.get(BRANDING_KEYS.accent) || "", BRANDING_DEFAULTS.colors.accent),
+      accentDark: normalizeHex(byKey.get(BRANDING_KEYS.accentDark) || "", BRANDING_DEFAULTS.colors.accentDark),
+      accentSoft: normalizeHex(byKey.get(BRANDING_KEYS.accentSoft) || "", BRANDING_DEFAULTS.colors.accentSoft),
+      sidebar: normalizeHex(byKey.get(BRANDING_KEYS.sidebar) || "", BRANDING_DEFAULTS.colors.sidebar),
+      sidebarLine: normalizeHex(byKey.get(BRANDING_KEYS.sidebarLine) || "", BRANDING_DEFAULTS.colors.sidebarLine)
+    }
+  };
+}
+
+const loadCachedBrandingConfig = unstable_cache(
+  readBrandingConfigFromDatabase,
+  ["branding-config-v1"],
+  {
+    revalidate: 300,
+    tags: [BRANDING_CACHE_TAG]
+  }
+);
 
 export async function saveBrandingConfig(input: BrandingConfig) {
   const safe: BrandingConfig = {
@@ -217,8 +231,6 @@ export async function saveBrandingConfig(input: BrandingConfig) {
       sidebarLine: normalizeHex(input.colors.sidebarLine, BRANDING_DEFAULTS.colors.sidebarLine)
     }
   };
-
-  await ensureBrandingDefaults();
 
   const entries: Array<{ chave: string; valor: string; descricao: string }> = [
     { chave: BRANDING_KEYS.academyName, valor: safe.academyName, descricao: "Nome exibido no sistema" },
@@ -241,6 +253,9 @@ export async function saveBrandingConfig(input: BrandingConfig) {
       create: entry
     });
   }
+
+  revalidateTag(BRANDING_CACHE_TAG);
+  revalidatePath("/", "layout");
 
   return safe;
 }

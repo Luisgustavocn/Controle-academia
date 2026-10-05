@@ -6,6 +6,7 @@ import {
   FIRST_ACCESS_DEFAULT_EMAIL,
   FIRST_ACCESS_PENDING_KEY
 } from "../lib/auth/first-access";
+import { initializeBrandingDefaults } from "../lib/services/branding";
 
 async function bootstrapFirstAdmin() {
   const placeholderPasswordHash = await hash(randomBytes(48).toString("base64url"), 10);
@@ -52,6 +53,8 @@ async function bootstrapFirstAdmin() {
     },
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
   );
+
+  await initializeBrandingDefaults();
 
   console.log("Bootstrap concluído. Complete o primeiro acesso pela tela de login.");
 }
