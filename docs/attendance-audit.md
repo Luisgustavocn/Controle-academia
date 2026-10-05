@@ -320,3 +320,7 @@ Alternativas avaliadas:
 Não há dados ambíguos atuais nem necessidade de limpeza neste instante, mas a garantia diária, o tipo `DATE`, a idempotência, o retroativo e a integração com Agenda exigem mudança coordenada de schema e aplicação.
 
 **FASE 6 EXIGE MIGRATION CONTROLADA**
+
+## Implementação local da Fase 6A
+
+A estratégia recomendada nesta auditoria foi implementada localmente na migration `0003_attendance_civil_date`. O contrato e o procedimento controlado estão documentados em [attendance-model.md](attendance-model.md). Produção permanece no schema anterior até aprovação explícita de push e deploy.

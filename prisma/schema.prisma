@@ -203,7 +203,7 @@ model DespesaAcademia {
 model Presenca {
   id          String   @id @default(cuid())
   alunoId     String
-  data        DateTime
+  data        DateTime @db.Date
   horario     String?
   tipoAula    String
   presente    Boolean  @default(true)
@@ -212,7 +212,7 @@ model Presenca {
 
   aluno       Aluno    @relation(fields: [alunoId], references: [id], onDelete: Cascade)
 
-  @@unique([alunoId, data, horario])
+  @@unique([alunoId, data])
   @@index([data])
 }
 

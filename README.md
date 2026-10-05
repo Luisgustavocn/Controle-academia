@@ -417,7 +417,7 @@ Antes de substituir o database ativo, valide `npm run migrate:deploy`, o health 
 
 ## Timezone, encoding e locale
 
-Configure tanto o sistema/Node quanto o PostgreSQL com `America/Sao_Paulo`; a aplicação documenta `TZ=America/Sao_Paulo`. O schema usa `TIMESTAMP(3)` sem timezone e o código mistura datas locais, UTC e strings ISO. Manter Node e PostgreSQL no mesmo timezone reduz mudanças de dia ou competência, mas não elimina o risco nas transições entre UTC e horário local. Uma revisão das regras de datas deve ocorrer separadamente, sem ser misturada à implantação.
+Configure tanto o sistema/Node quanto o PostgreSQL com `America/Sao_Paulo`; a aplicação documenta `TZ=America/Sao_Paulo`. Instantes operacionais continuam usando `TIMESTAMP(3)` sem timezone conforme o schema legado. `Presenca.data` é uma exceção intencional: usa PostgreSQL `DATE`, trafega como `YYYY-MM-DD` e representa o dia civil sem conversão de offset. Consulte `docs/attendance-model.md` antes de alterar esse contrato.
 
 O database deve usar encoding UTF8. Não é necessário forçar um locale específico neste momento; escolha um locale UTF-8 disponível no sistema e mantenha-o consistente. Alterar collation posteriormente pode exigir recriação de índices ou do database.
 
@@ -428,7 +428,7 @@ Os principais acessos já possuem cobertura básica:
 - `Aluno`: nome, telefone e status;
 - `Mensalidade`: unicidade por aluno/competência e índice por competência/status;
 - `MovimentacaoCaixa`: competência/tipo;
-- `Presenca`: data e unicidade por aluno/data/horário;
+- `Presenca`: índice por data e unicidade diária por aluno/data;
 - `PedidoProduto`: data do pedido;
 - `LogAuditoria`: módulo/data de criação.
 
