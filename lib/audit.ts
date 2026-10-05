@@ -1,3 +1,4 @@
+import { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type AuditPayload = {
@@ -10,11 +11,13 @@ type AuditPayload = {
   depois?: unknown;
 };
 
-export async function logAudit(payload: AuditPayload) {
+type AuditClient = PrismaClient | Prisma.TransactionClient;
+
+export async function logAudit(payload: AuditPayload, client: AuditClient = prisma) {
   let safeUserId: string | null = payload.userId ?? null;
 
   if (safeUserId) {
-    const userExists = await prisma.user.findUnique({
+    const userExists = await client.user.findUnique({
       where: { id: safeUserId },
       select: { id: true }
     });
@@ -23,7 +26,7 @@ export async function logAudit(payload: AuditPayload) {
     }
   }
 
-  await prisma.logAuditoria.create({
+  await client.logAuditoria.create({
     data: {
       userId: safeUserId,
       modulo: payload.modulo,
