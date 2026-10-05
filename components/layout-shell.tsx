@@ -45,17 +45,18 @@ type ShellNavigationProps = {
   groups: ReturnType<typeof filterNavigationByCapabilities>;
   pathname: string;
   compact?: boolean;
+  dense?: boolean;
   onNavigate?: () => void;
 };
 
-function ShellNavigation({ groups, pathname, compact, onNavigate }: ShellNavigationProps) {
+function ShellNavigation({ groups, pathname, compact, dense, onNavigate }: ShellNavigationProps) {
   return (
-    <nav aria-label="Navegação principal" className="space-y-3">
+    <nav aria-label="Navegação principal" className={dense ? "space-y-2" : "space-y-4"}>
       {groups.map((group) => {
         const groupId = `nav-${group.label.toLowerCase().replace(/\W+/g, "-")}`;
         return (
           <section key={group.label} aria-labelledby={groupId}>
-            <h2 id={groupId} className={clsx("mb-1.5 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-white/45", compact && "sr-only")}>
+            <h2 id={groupId} className={clsx("px-3 font-semibold uppercase tracking-[0.14em] text-white/45", dense ? "mb-1 text-[0.625rem]" : "mb-1.5 text-[0.68rem]", compact && "sr-only")}>
               {group.label}
             </h2>
             <div className="space-y-1">
@@ -69,16 +70,17 @@ function ShellNavigation({ groups, pathname, compact, onNavigate }: ShellNavigat
                     aria-label={compact ? item.label : undefined}
                     onClick={onNavigate}
                     className={clsx(
-                      "group flex min-h-10 items-center rounded-ds-lg text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
-                      compact ? "justify-center px-2" : "gap-3 px-3",
+                      "group flex items-center rounded-ds-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                      dense ? "min-h-9 text-[0.8125rem]" : "min-h-10 text-sm",
+                      compact ? "w-9 justify-center px-0" : "gap-3 px-3",
                       active ? "bg-white text-sidebar shadow-surface-sm" : "text-white/72 hover:bg-white/10 hover:text-white"
                     )}
                   >
-                    <Icon className="h-[1.125rem] w-[1.125rem] shrink-0" aria-hidden />
+                    <Icon className={clsx("shrink-0", dense ? "h-4 w-4" : "h-[1.125rem] w-[1.125rem]")} aria-hidden />
                     {!compact ? <span className="truncate font-medium">{item.label}</span> : null}
                   </Link>
                 );
-                return compact ? <Tooltip key={item.href} content={item.label} side="right">{link}</Tooltip> : <div key={item.href}>{link}</div>;
+                return compact ? <Tooltip key={item.href} content={item.label} side="right" className="w-full justify-center">{link}</Tooltip> : <div key={item.href}>{link}</div>;
               })}
             </div>
           </section>
@@ -106,18 +108,18 @@ export function LayoutShell({ children, user, branding }: PropsWithChildren<{ us
   return (
     <CapabilityProvider capabilities={capabilities}>
     <div className="min-h-screen bg-bg text-ink">
-      <aside className={clsx("fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-sidebarLine bg-sidebar text-white transition-[width] duration-200 md:flex md:w-20 md:flex-col", collapsed ? "xl:w-20" : "xl:w-72")}>
-        <div className={clsx("flex h-[4.75rem] items-center border-b border-white/10 px-3", collapsed ? "justify-center" : "justify-center xl:justify-start xl:gap-3 xl:px-5")}>
-          <Avatar src={branding.logoUrl} name={branding.academyName} alt={branding.academyName} size="md" className="border-white/20" />
+      <aside className={clsx("fixed inset-y-0 left-0 z-40 hidden overflow-visible border-r border-sidebarLine bg-sidebar text-white md:flex md:w-20 md:flex-col", collapsed ? "xl:w-20" : "xl:w-72")}>
+        <div className={clsx("flex h-16 items-center border-b border-white/10 px-3", collapsed ? "justify-center" : "justify-center xl:justify-start xl:gap-3 xl:px-5")}>
+          <Avatar src={branding.logoUrl} name={branding.academyName} alt={branding.academyName} size="sm" className="border-white/20" />
           {!collapsed ? <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-semibold text-white">{branding.academyName}</p><p className="text-xs text-white/50">Painel de gestão</p></div> : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-hidden px-3 py-3">
-          <div className={clsx(!collapsed && "xl:hidden")}><ShellNavigation groups={groups} pathname={pathname} compact /></div>
-          {!collapsed ? <div className="hidden xl:block"><ShellNavigation groups={groups} pathname={pathname} /></div> : null}
+        <div className="min-h-0 flex-1 overflow-visible px-3 py-2">
+          <div className={clsx(!collapsed && "xl:hidden")}><ShellNavigation groups={groups} pathname={pathname} compact dense /></div>
+          {!collapsed ? <div className="hidden xl:block"><ShellNavigation groups={groups} pathname={pathname} dense /></div> : null}
         </div>
 
-        <div className="hidden border-t border-white/10 p-3 xl:block">
+        <div className="hidden border-t border-white/10 p-2 xl:block">
           <Button
             variant="ghost"
             size="sm"
@@ -131,7 +133,7 @@ export function LayoutShell({ children, user, branding }: PropsWithChildren<{ us
         </div>
       </aside>
 
-      <div className={clsx("min-h-screen transition-[margin] duration-200 md:ml-20", collapsed ? "xl:ml-20" : "xl:ml-72")}>
+      <div className={clsx("min-h-screen md:ml-20", collapsed ? "xl:ml-20" : "xl:ml-72")}>
         <header className="sticky top-0 z-30 flex min-h-[4.75rem] items-center justify-between gap-3 border-b border-line bg-card/95 px-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu principal"><Menu className="h-5 w-5" aria-hidden="true" /></Button>
