@@ -4,15 +4,66 @@
 
 :root {
   --bg: #f5f1f0;
+  --bg-rgb: 245 241 240;
   --card: #ffffff;
+  --card-rgb: 255 255 255;
   --ink: #1f1718;
+  --ink-rgb: 31 23 24;
   --muted: #6f6466;
+  --muted-rgb: 111 100 102;
   --accent: #c51623;
+  --accent-rgb: 197 22 35;
   --accent-dark: #8e1018;
+  --accent-dark-rgb: 142 16 24;
   --line: #ddd2d4;
+  --line-rgb: 221 210 212;
   --accent-soft: #fbeaec;
+  --accent-soft-rgb: 251 234 236;
   --sidebar: #181113;
+  --sidebar-rgb: 24 17 19;
   --sidebar-line: #2e2025;
+  --sidebar-line-rgb: 46 32 37;
+
+  /* Semantic colors keep their meaning across branded primary palettes. */
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-dark);
+  --color-primary-soft: var(--accent-soft);
+  --color-success: #1f7a4d;
+  --color-success-soft: #e8f7ef;
+  --color-warning: #9a5a0a;
+  --color-warning-soft: #fff3df;
+  --color-danger: #b4232f;
+  --color-danger-soft: #fdebed;
+  --color-info: #2856a6;
+  --color-info-soft: #eaf1ff;
+  --color-surface: var(--card);
+  --color-background: var(--bg);
+  --color-border: var(--line);
+  --color-text-primary: var(--ink);
+  --color-text-secondary: #4f4547;
+  --color-text-muted: var(--muted);
+
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 0.75rem;
+  --space-lg: 1rem;
+  --space-xl: 1.5rem;
+  --space-2xl: 2rem;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgb(31 23 24 / 0.06);
+  --shadow-md: 0 8px 24px rgb(31 23 24 / 0.1);
+
+  --control-sm: 2rem;
+  --control-md: 2.5rem;
+  --control-lg: 3rem;
+
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 * {
@@ -28,6 +79,16 @@ body {
     linear-gradient(135deg, #f6f2f2 0%, var(--bg) 50%, #ece7e8 100%);
   color: var(--ink);
   min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+  color: var(--color-text-primary);
 }
 
 body::before {
