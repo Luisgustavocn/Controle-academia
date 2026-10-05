@@ -9,6 +9,7 @@
     "dev": "next dev",
     "dev:fast": "next dev --turbo",
     "build": "next build",
+    "test": "tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts tests/*.test.tsx",
     "start": "node scripts/start-production.mjs",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -40,7 +41,10 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jsdom": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.8",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
@@ -48,6 +52,7 @@
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-config-next": "15.5.27",
+    "jsdom": "^29.1.1",
     "postcss": "8.5.28",
     "prisma": "6.19.3",
     "tailwindcss": "^3.4.17",
