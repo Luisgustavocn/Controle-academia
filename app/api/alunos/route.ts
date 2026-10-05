@@ -1,6 +1,7 @@
 import { AlunoStatus, MensalidadeStatus, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
+import { hasCapability } from "@/lib/auth/capabilities";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { currentCompetencia, toCompetencia } from "@/lib/competencia";
@@ -54,6 +55,7 @@ function parseOptionalMensalidadeStatus(value: unknown) {
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "students.read");
   if (auth instanceof Response) return auth;
+  const showFinancial = hasCapability(auth.role, "finance.monthlies.read");
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
   const status = request.nextUrl.searchParams.get("status") ?? "";
@@ -114,22 +116,24 @@ export async function GET(request: NextRequest) {
   });
 
   const items = alunos.map((aluno) => {
-    const { _count, ...alunoData } = aluno;
+    const { _count, mensalidades, ...alunoData } = aluno;
     return {
       ...alunoData,
       dataInicio: toDateInputValue(aluno.dataInicio),
       dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
       modalidadeNome: aluno.modalidade?.nome ?? "",
       valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
-      inadimplente: _count.mensalidades > 0,
-      mensalidadeAtual: aluno.mensalidades[0] ?? null,
-      mensalidadeValor: aluno.mensalidades[0] ? Number(aluno.mensalidades[0].valor) : "",
-      mensalidadeStatus: aluno.mensalidades[0]?.status ?? "",
-      mensalidadeDataPagamento: aluno.mensalidades[0]?.dataPagamento
-        ? toDateInputValue(aluno.mensalidades[0].dataPagamento)
-        : "",
-      mensalidadeFormaPagamento: aluno.mensalidades[0]?.formaPagamento ?? "",
-      mensalidadeObservacao: aluno.mensalidades[0]?.observacao ?? "",
+      ...(showFinancial ? {
+        inadimplente: _count.mensalidades > 0,
+        mensalidadeAtual: mensalidades[0] ?? null,
+        mensalidadeValor: mensalidades[0] ? Number(mensalidades[0].valor) : "",
+        mensalidadeStatus: mensalidades[0]?.status ?? "",
+        mensalidadeDataPagamento: mensalidades[0]?.dataPagamento
+          ? toDateInputValue(mensalidades[0].dataPagamento)
+          : "",
+        mensalidadeFormaPagamento: mensalidades[0]?.formaPagamento ?? "",
+        mensalidadeObservacao: mensalidades[0]?.observacao ?? ""
+      } : {}),
       proximoVencimento: (() => {
         const hoje = new Date();
         const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
