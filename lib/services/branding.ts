@@ -73,6 +73,15 @@ function normalizeHex(value: string, fallback: string) {
   return fallback;
 }
 
+export function normalizeBrandingLogoUrl(value: string) {
+  const normalized = value.trim();
+  if (!normalized) return BRANDING_DEFAULTS.logoUrl;
+  if (normalized.startsWith("/") || /^https?:\/\//i.test(normalized) || normalized.startsWith("data:image/")) {
+    return normalized;
+  }
+  return `/${normalized.replace(/^\.\//, "")}`;
+}
+
 export async function initializeBrandingDefaults() {
   if (!process.env.DATABASE_URL) {
     return;
@@ -191,7 +200,7 @@ export async function readBrandingConfigFromDatabase(): Promise<BrandingConfig> 
   const byKey = new Map(items.map((item) => [item.chave, item.valor]));
   return {
     academyName: byKey.get(BRANDING_KEYS.academyName) || BRANDING_DEFAULTS.academyName,
-    logoUrl: byKey.get(BRANDING_KEYS.logoUrl) || BRANDING_DEFAULTS.logoUrl,
+    logoUrl: normalizeBrandingLogoUrl(byKey.get(BRANDING_KEYS.logoUrl) || BRANDING_DEFAULTS.logoUrl),
     colors: {
       bg: normalizeHex(byKey.get(BRANDING_KEYS.bg) || "", BRANDING_DEFAULTS.colors.bg),
       ink: normalizeHex(byKey.get(BRANDING_KEYS.ink) || "", BRANDING_DEFAULTS.colors.ink),
@@ -218,7 +227,7 @@ const loadCachedBrandingConfig = unstable_cache(
 export async function saveBrandingConfig(input: BrandingConfig) {
   const safe: BrandingConfig = {
     academyName: input.academyName.trim() || BRANDING_DEFAULTS.academyName,
-    logoUrl: input.logoUrl.trim() || BRANDING_DEFAULTS.logoUrl,
+    logoUrl: normalizeBrandingLogoUrl(input.logoUrl),
     colors: {
       bg: normalizeHex(input.colors.bg, BRANDING_DEFAULTS.colors.bg),
       ink: normalizeHex(input.colors.ink, BRANDING_DEFAULTS.colors.ink),
