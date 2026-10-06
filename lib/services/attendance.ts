@@ -10,6 +10,7 @@ import {
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { isStudentActiveOnDate } from "@/lib/services/enrollment-periods";
+import { ensureMensalidadeForActivity } from "@/lib/services/mensalidades";
 
 export class AttendanceValidationError extends Error {}
 export class AttendanceNotFoundError extends Error {}
@@ -107,6 +108,7 @@ export async function confirmAttendance(
       const record = await transaction.presenca.create({
         data: { alunoId, data: prismaDate, horario, tipoAula, presente: true, observacao }
       });
+      await ensureMensalidadeForActivity(transaction, alunoId, data.slice(0, 7), referenceDate);
       await logAudit({
         userId: actor.id,
         modulo: "presencas",
@@ -128,6 +130,7 @@ export async function confirmAttendance(
 
   const updated = await prisma.$transaction(async (transaction) => {
     const record = await transaction.presenca.update({ where: { id: existing.id }, data: { presente: true } });
+    await ensureMensalidadeForActivity(transaction, existing.alunoId, prismaDateToCivil(existing.data).slice(0, 7), referenceDate);
     await logAudit({
       userId: actor.id,
       modulo: "presencas",
@@ -150,6 +153,7 @@ export async function confirmAttendanceById(id: string, actor: AttendanceActor, 
 
   const updated = await prisma.$transaction(async (transaction) => {
     const record = await transaction.presenca.update({ where: { id }, data: { presente: true } });
+    await ensureMensalidadeForActivity(transaction, existing.alunoId, prismaDateToCivil(existing.data).slice(0, 7), referenceDate);
     await logAudit({
       userId: actor.id,
       modulo: "presencas",

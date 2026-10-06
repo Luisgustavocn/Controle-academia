@@ -6,7 +6,7 @@ import { currentCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
-import { buildVencimentoDate, garantirMensalidadesDoMesAtual, resolveFutureMonthlyValue } from "@/lib/services/mensalidades";
+import { buildVencimentoDate, resolveFutureMonthlyValue } from "@/lib/services/mensalidades";
 import { findEnrollmentForCompetence } from "@/lib/services/enrollment-periods";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
@@ -75,8 +75,6 @@ function toCompetenciaIfValid(value: unknown) {
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "finance.monthlies.read");
   if (auth instanceof Response) return auth;
-
-  await garantirMensalidadesDoMesAtual();
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
   const competencia = request.nextUrl.searchParams.get("competencia") ?? "";

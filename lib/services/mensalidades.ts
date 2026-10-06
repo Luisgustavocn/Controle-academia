@@ -1,29 +1,16 @@
-import { MensalidadeStatus } from "@prisma/client";
+import { MensalidadeStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { endOfMonth, format, startOfDay, startOfMonth } from "date-fns";
 import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
-import { enrollmentCoversCompetenceWhere } from "@/lib/services/enrollment-periods";
+import { civilMonthRange } from "@/lib/attendance-date";
+import { findEnrollmentForCompetence } from "@/lib/services/enrollment-periods";
+
+type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export function buildVencimentoDate(competencia: string, vencimentoDia: number) {
   const [year, month] = competencia.split("-").map(Number);
   const ultimoDiaDoMes = new Date(year, month, 0).getDate();
   return new Date(year, month - 1, Math.min(ultimoDiaDoMes, Math.max(1, vencimentoDia)));
-}
-
-function competenciasBetween(startCompetencia: string, endCompetencia: string) {
-  const [startYear, startMonth] = startCompetencia.split("-").map(Number);
-  const [endYear, endMonth] = endCompetencia.split("-").map(Number);
-  const start = new Date(startYear, startMonth - 1, 1);
-  const end = new Date(endYear, endMonth - 1, 1);
-  const competencias: string[] = [];
-  const cursor = new Date(start);
-
-  while (cursor.getTime() <= end.getTime()) {
-    competencias.push(format(cursor, "yyyy-MM"));
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-
-  return competencias;
 }
 
 export function competenciaFromUtcDate(date: Date) {
@@ -46,175 +33,75 @@ export function resolveFutureMonthlyValue(input: {
   return null;
 }
 
-export async function generateMensalidadesCompetencia(competencia: string) {
-  const periods = await prisma.periodoMatricula.findMany({
-    where: enrollmentCoversCompetenceWhere(competencia),
-    include: { aluno: true, modalidade: true },
-    orderBy: [{ dataInicio: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+export async function ensureMensalidadeForActivity(
+  client: DbClient,
+  alunoId: string,
+  competencia: string,
+  referenceDate = new Date()
+) {
+  const existing = await client.mensalidade.findUnique({
+    where: { alunoId_competencia: { alunoId, competencia } }
   });
-  const alunos = Array.from(new Map(periods.map((period) => [period.alunoId, period])).values());
+  if (existing) return { mensalidade: existing, created: false };
 
-  if (alunos.length === 0) {
-    return {
-      competencia,
-      totalGerado: 0
-    };
-  }
-
-  const alunoIds = alunos.map((period) => period.alunoId);
-  const existingCurrent = await prisma.mensalidade.findMany({
-    where: {
-      alunoId: { in: alunoIds },
-      competencia
-    },
-    select: {
-      alunoId: true
-    }
+  const period = await findEnrollmentForCompetence(client, alunoId, competencia);
+  if (!period) return { mensalidade: null, created: false };
+  const valor = resolveFutureMonthlyValue({
+    individualValue: period.valorMensal === null ? null : Number(period.valorMensal),
+    useModalityDefault: period.usarValorPadrao,
+    modalityDefaultValue: period.modalidade?.valorPadrao === null || period.modalidade?.valorPadrao === undefined
+      ? null
+      : Number(period.modalidade.valorPadrao)
   });
+  if (valor === null) return { mensalidade: null, created: false };
 
-  const existingCurrentSet = new Set(existingCurrent.map((item) => item.alunoId));
+  const vencimento = buildVencimentoDate(competencia, period.diaVencimento);
+  const status = vencimento < startOfDay(referenceDate) ? MensalidadeStatus.ATRASADO : MensalidadeStatus.PENDENTE;
+  const mensalidade = await client.mensalidade.upsert({
+    where: { alunoId_competencia: { alunoId, competencia } },
+    create: { alunoId, competencia, valor, vencimento, status },
+    update: {}
+  });
+  return { mensalidade, created: true };
+}
 
-  const created: string[] = [];
-  const createData: Array<{
-    alunoId: string;
-    competencia: string;
-    valor: number;
-    vencimento: Date;
-    status: MensalidadeStatus;
-  }> = [];
-
-  for (const period of alunos) {
-    if (existingCurrentSet.has(period.alunoId)) continue;
-
-    const vencimento = buildVencimentoDate(competencia, period.diaVencimento);
-    const valor = resolveFutureMonthlyValue({
-      individualValue: period.valorMensal === null ? null : Number(period.valorMensal),
-      useModalityDefault: period.usarValorPadrao,
-      modalityDefaultValue: period.modalidade?.valorPadrao === null || period.modalidade?.valorPadrao === undefined
-        ? null
-        : Number(period.modalidade.valorPadrao)
-    });
-    if (valor === null) continue;
-
-    createData.push({
-      alunoId: period.alunoId,
-      competencia,
-      valor,
-      vencimento,
-      status: MensalidadeStatus.PENDENTE
-    });
-    created.push(period.alunoId);
+export async function generateMensalidadesCompetencia(competencia: string, referenceDate = new Date()) {
+  const { start, end } = civilMonthRange(competencia);
+  const activeStudents = await prisma.presenca.groupBy({
+    by: ["alunoId"],
+    where: { presente: true, data: { gte: start, lt: end } }
+  });
+  let totalGerado = 0;
+  for (const { alunoId } of activeStudents) {
+    const result = await ensureMensalidadeForActivity(prisma, alunoId, competencia, referenceDate);
+    if (result.created) totalGerado += 1;
   }
-
-  if (createData.length > 0) {
-    await prisma.mensalidade.createMany({
-      data: createData,
-      skipDuplicates: true
-    });
-  }
-
-  return {
-    competencia,
-    totalGerado: created.length
-  };
+  return { competencia, totalGerado };
 }
 
 export async function generateMensalidadesAteCompetencia(
   competenciaLimite = currentCompetencia(),
   alunoIds?: string[]
 ) {
-  const periods = await prisma.periodoMatricula.findMany({
+  const presencas = await prisma.presenca.findMany({
     where: {
-      dataInicio: { not: null },
+      presente: true,
+      data: { lt: civilMonthRange(competenciaLimite).end },
       ...(alunoIds && alunoIds.length > 0 ? { alunoId: { in: alunoIds } } : {})
     },
-    include: {
-      modalidade: true
-    }
+    select: { alunoId: true, data: true }
   });
-
-  if (periods.length === 0) {
-    return {
-      competenciaLimite,
-      totalGerado: 0
-    };
+  const activityKeys = new Map<string, { alunoId: string; competencia: string }>();
+  for (const presence of presencas) {
+    const competencia = competenciaFromUtcDate(presence.data);
+    activityKeys.set(`${presence.alunoId}:${competencia}`, { alunoId: presence.alunoId, competencia });
   }
-
-  const existentes = await prisma.mensalidade.findMany({
-    where: {
-      alunoId: { in: Array.from(new Set(periods.map((period) => period.alunoId))) },
-      competencia: { lte: competenciaLimite }
-    },
-    select: {
-      alunoId: true,
-      competencia: true,
-      valor: true
-    }
-  });
-
-  const existentesByAluno = new Map<string, Map<string, number>>();
-  for (const item of existentes) {
-    const byCompetencia = existentesByAluno.get(item.alunoId) ?? new Map<string, number>();
-    byCompetencia.set(item.competencia, Number(item.valor));
-    existentesByAluno.set(item.alunoId, byCompetencia);
+  let totalGerado = 0;
+  for (const activity of activityKeys.values()) {
+    const result = await ensureMensalidadeForActivity(prisma, activity.alunoId, activity.competencia);
+    if (result.created) totalGerado += 1;
   }
-
-  const novosRegistros: Array<{
-    alunoId: string;
-    competencia: string;
-    valor: number;
-    vencimento: Date;
-    status: MensalidadeStatus;
-  }> = [];
-
-  for (const period of periods) {
-    if (!period.dataInicio) continue;
-    const competenciaInicio = competenciaFromUtcDate(period.dataInicio);
-    if (competenciaInicio > competenciaLimite) {
-      continue;
-    }
-
-    const existingForAluno = existentesByAluno.get(period.alunoId) ?? new Map<string, number>();
-    const valor = resolveFutureMonthlyValue({
-      individualValue: period.valorMensal === null ? null : Number(period.valorMensal),
-      useModalityDefault: period.usarValorPadrao,
-      modalityDefaultValue: period.modalidade?.valorPadrao === null || period.modalidade?.valorPadrao === undefined
-        ? null
-        : Number(period.modalidade.valorPadrao)
-    });
-    if (valor === null) continue;
-    const competenciaFim = period.dataSaida
-      ? [competenciaFromUtcDate(period.dataSaida), competenciaLimite].sort()[0]
-      : competenciaLimite;
-    const competencias = competenciasBetween(competenciaInicio, competenciaFim);
-
-    for (const competencia of competencias) {
-      const valorExistente = existingForAluno.get(competencia);
-      if (valorExistente !== undefined) {
-        continue;
-      }
-
-      novosRegistros.push({
-        alunoId: period.alunoId,
-        competencia,
-        valor,
-        vencimento: buildVencimentoDate(competencia, period.diaVencimento),
-        status: MensalidadeStatus.PENDENTE
-      });
-    }
-  }
-
-  if (novosRegistros.length > 0) {
-    await prisma.mensalidade.createMany({
-      data: novosRegistros,
-      skipDuplicates: true
-    });
-  }
-
-  return {
-    competenciaLimite,
-    totalGerado: novosRegistros.length
-  };
+  return { competenciaLimite, totalGerado };
 }
 
 export async function atualizarStatusMensalidadesAtrasadas() {
@@ -248,12 +135,12 @@ export async function atualizarStatusMensalidadesAtrasadas() {
 }
 
 export async function garantirMensalidadesDoMesAtual(competencia = currentCompetencia()) {
-  const geracao = await generateMensalidadesAteCompetencia(competencia);
   const atualizadasAtrasadas = await atualizarStatusMensalidadesAtrasadas();
 
   return {
     competencia,
-    totalGerado: geracao.totalGerado,
+    // Leituras não materializam cobranças. Presença ou pagamento explícito fazem isso.
+    totalGerado: 0,
     // Mensalidades emitidas são snapshots. Mudanças cadastrais não recalculam vencimentos existentes.
     totalVencimentosSincronizados: 0,
     totalAtrasadasAtualizadas: atualizadasAtrasadas

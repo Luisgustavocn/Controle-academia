@@ -4,7 +4,6 @@ import { requireCapability } from "@/lib/auth/guards";
 import { currentCompetencia } from "@/lib/competencia";
 import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { garantirMensalidadesDoMesAtual } from "@/lib/services/mensalidades";
 
 const MONTH_SHORT_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
 
@@ -83,8 +82,6 @@ function serializeItem(item: {
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "finance.monthlies.read");
   if (auth instanceof Response) return auth;
-
-  await garantirMensalidadesDoMesAtual();
 
   const q = request.nextUrl.searchParams.get("q") ?? "";
   const referencia = toValidCompetencia(request.nextUrl.searchParams.get("competencia")) || currentCompetencia();
