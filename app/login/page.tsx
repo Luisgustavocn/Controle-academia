@@ -27,7 +27,14 @@ const neutralLoginTheme = {
   "--accent-dark": "#111827",
   "--accent-dark-rgb": "17 24 39",
   "--accent-soft": "#f3f4f6",
-  "--accent-soft-rgb": "243 244 246"
+  "--accent-soft-rgb": "243 244 246",
+  "--color-primary": "#1f2937",
+  "--color-primary-hover": "#111827",
+  "--color-primary-soft": "#f3f4f6",
+  "--color-text-primary": "#1c1917",
+  "--color-text-secondary": "#44403c",
+  "--color-text-muted": "#57534e",
+  "--focus-ring": "0 0 0 3px rgb(31 41 55 / 0.24)"
 } as CSSProperties;
 
 export default function LoginPage() {
