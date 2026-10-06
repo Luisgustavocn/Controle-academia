@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     select: {
       id: true,
       nomeCompleto: true,
-      status: true
+      status: true,
+      modalidade: { select: { nome: true } }
     },
     orderBy: {
       nomeCompleto: "asc"

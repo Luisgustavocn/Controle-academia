@@ -17,6 +17,7 @@ import {
   removeAttendance
 } from "../lib/services/attendance";
 import { inspectAttendanceMigration } from "../lib/services/attendance-preflight";
+import { getAttendanceHistory, getAttendanceRoster } from "../lib/services/attendance-workspace";
 
 process.env.JWT_SECRET = "attendance-integration-test-secret-with-enough-entropy";
 const reference = new Date("2026-10-05T15:00:00.000Z");
@@ -126,6 +127,20 @@ async function main() {
     sort: "name.asc"
   }, UserRole.ADMIN);
   assert.equal(listing.items[0]?.lastAttendanceAt, "2026-10-05");
+
+  const roster = await getAttendanceRoster({ date: "2026-10-05", q: `primary-${suffix}`, page: 1, pageSize: 12 });
+  assert.equal(roster.items.length, 1);
+  assert.equal(roster.items[0]?.attendance?.id, concurrent[0]?.item.id);
+  const workspaceHistory = await getAttendanceHistory({
+    from: "2026-10-01",
+    to: "2026-10-31",
+    q: `primary-${suffix}`,
+    alunoId: "",
+    page: 1,
+    pageSize: 20
+  });
+  assert.equal(workspaceHistory.items.some((item) => item.date === "2026-10-05"), true);
+  assert.equal(workspaceHistory.pagination.totalItems, 2);
 
   const migratedSchemaPreflight = await inspectAttendanceMigration(prisma);
   assert.equal(migratedSchemaPreflight.safe, true);
