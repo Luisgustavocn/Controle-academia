@@ -11,6 +11,7 @@ import { runProductionCli } from "@/scripts/cli-runtime";
 
 type Mode = "dry-run" | "apply";
 type ExistingStudent = Awaited<ReturnType<typeof snapshot>>["students"][number];
+const PRODUCTION_PRECEDENCE_STUDENTS = new Set(["adelar decezaro"]);
 
 function args(argv: string[]) {
   const mode: Mode | null = argv.includes("--dry-run") ? "dry-run" : argv.includes("--apply") ? "apply" : null;
@@ -65,7 +66,9 @@ function buildPlan(pkg: CanonicalPackage, db: Awaited<ReturnType<typeof snapshot
     const modality=modalityPlan.get(normalizePersonName(item.modality));
     if(!modality||modality.action==="CONFLITO") blockers.push(`${item.name}: modalidade não resolvida`);
     const sourceAlias=normalizePersonName(item.sourceName)!==normalizePersonName(item.name);
-    return {...item,match:existing?(sourceAlias?"MATCH_MANUAL_APROVADO":"EXISTENTE_EXATO"):"NOVO",existing,modality};
+    const productionPrecedence=Boolean(existing&&PRODUCTION_PRECEDENCE_STUDENTS.has(normalizePersonName(item.name)));
+    const match=productionPrecedence?"EXISTENTE":existing?(sourceAlias?"MATCH_MANUAL_APROVADO":"EXISTENTE_EXATO"):"NOVO";
+    return {...item,match,existing,modality,productionPrecedence,observation:productionPrecedence?"override humano: PRODUÇÃO_PREVALECE":null};
   });
   const byName=new Map(students.map((item)=>[normalizePersonName(item.name),item]));
   const periods=pkg.periods.map((item)=>{
@@ -81,13 +84,14 @@ function buildPlan(pkg: CanonicalPackage, db: Awaited<ReturnType<typeof snapshot
     if(open.length===0&&student?.existing){
       const proposedStart=item.startDate?civilDateToPrisma(item.startDate):null;
       const overlap=student.existing.periodosMatricula.some((period)=>period.dataSaida===null||proposedStart===null||period.dataSaida>=proposedStart);
-      if(overlap) blockers.push(`${item.student}: período histórico existente conflita com o início canônico`);
+      if(overlap&&student.productionPrecedence) action="PERIODO_EXISTENTE_PRESERVADO";
+      else if(overlap) blockers.push(`${item.student}: período histórico existente conflita com o início canônico`);
     }
     return {...item,studentPlan:student,action};
   });
   const existingAttendance=new Set(db.attendance.map((item)=>`${item.alunoId}:${prismaDateToCivil(item.data)}`));
   const attendance=pkg.attendance.map((item)=>{const student=byName.get(normalizePersonName(item.student));const exists=student?.existing?existingAttendance.has(`${student.existing.id}:${item.date}`):false;return {...item,studentPlan:student,action:exists?"REUTILIZAR":"CRIAR"};});
-  return {blockers:[...new Set(blockers)],modalities,students,periods,attendance,summary:{students:students.length,existing:students.filter(x=>x.existing).length,newStudents:students.filter(x=>!x.existing).length,ambiguous:blockers.filter(x=>x.includes("aluno canônico")||x.includes("telefone coincide")).length,modalitiesToCreate:modalities.filter(x=>x.action==="CRIAR").length,periodsToCreate:periods.filter(x=>x.action==="CRIAR").length,attendanceToCreate:attendance.filter(x=>x.action==="CRIAR").length}};
+  return {blockers:[...new Set(blockers)],modalities,students,periods,attendance,summary:{students:students.length,existing:students.filter(x=>x.existing).length,newStudents:students.filter(x=>!x.existing).length,ambiguous:blockers.filter(x=>x.includes("aluno canônico")||x.includes("telefone coincide")).length,productionPrecedence:students.filter(x=>x.productionPrecedence).length,effectiveActive:students.filter(x=>x.status==="ATIVO"&&!x.productionPrecedence).length,modalitiesToCreate:modalities.filter(x=>x.action==="CRIAR").length,periodsToCreate:periods.filter(x=>x.action==="CRIAR").length,periodsPreserved:periods.filter(x=>x.action==="PERIODO_EXISTENTE_PRESERVADO").length,attendanceToCreate:attendance.filter(x=>x.action==="CRIAR").length}};
 }
 
 async function apply(pkg: CanonicalPackage, plan: ReturnType<typeof buildPlan>, sha: string) {
@@ -100,6 +104,7 @@ async function apply(pkg: CanonicalPackage, plan: ReturnType<typeof buildPlan>, 
     }
     const studentIds=new Map<string,string>();
     for(const item of plan.students){
+      if(item.existing&&item.productionPrecedence){studentIds.set(normalizePersonName(item.name),item.existing.id);continue;}
       const data={nomeCompleto:item.name,telefone:item.phone,modalidadeId:modalityIds.get(normalizePersonName(item.modality))!,vencimentoDia:item.dueDay,status:item.status==="ATIVO"?AlunoStatus.ATIVO:AlunoStatus.INATIVO,dataInicio:item.startDate?civilDateToPrisma(item.startDate):null,valorMensal:item.monthlyValue,usarValorPadrao:item.useDefault,dataSaidaCancelamento:null};
       const row=item.existing?await tx.aluno.update({where:{id:item.existing.id},data}):await tx.aluno.create({data});
       studentIds.set(normalizePersonName(item.name),row.id);
@@ -117,7 +122,7 @@ void runProductionCli("import-october-2026-canonical",async()=>{
   const pkg=parseCanonicalOctoberWorkbook(workbook);
   const before=options.snapshotStdin?await snapshotFromStdin():await snapshot(); const plan=buildPlan(pkg,before);
   await mkdir(options.reportDir,{recursive:true,mode:0o700});
-  const manifest={version:2,priceRule:CANONICAL_PRICE_RULE,sourceSha256:sha,students:pkg.students.length,modalities:pkg.modalities.length,periods:pkg.periods.length,attendance:pkg.attendance.length,...pkg.summary,blockers:plan.blockers.length};
+  const manifest={version:2,priceRule:CANONICAL_PRICE_RULE,sourceSha256:sha,humanOverrides:[{student:"Adelar Decezaro",rule:"PRODUÇÃO_PREVALECE",action:"PERÍODO_EXISTENTE_PRESERVADO / SEM_NOVO_PERÍODO"}],students:pkg.students.length,modalities:pkg.modalities.length,periods:pkg.periods.length,attendance:pkg.attendance.length,...pkg.summary,blockers:plan.blockers.length};
   const manifestPath=path.join(options.reportDir,"manifest.json"); await writeFile(manifestPath,JSON.stringify(manifest,null,2)+"\n",{mode:0o600}); await chmod(manifestPath,0o600);
   for(const [sheet,file] of [["Alunos","alunos.csv"],["Modalidades","modalidades.csv"],["Periodos_Matricula","periodos_matricula.csv"],["Presencas","presencas.csv"],["Aliases","aliases.csv"],["Pendencias","pendencias.csv"]] as const){
     const target=path.join(options.reportDir,file); await writeFile(target,XLSX.utils.sheet_to_csv(workbook.Sheets[sheet]),{mode:0o600}); await chmod(target,0o600);
