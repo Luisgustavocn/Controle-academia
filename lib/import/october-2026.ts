@@ -12,6 +12,51 @@ const EXPECTED = {
   activeWithoutMonthlyValue: 3
 } as const;
 
+const MANUAL_STUDENT_ALIASES: Record<string, string> = {
+  "adelar de cezaro": "adelar decezaro",
+  "andressa da rosa": "andressa de souza rosa",
+  "javier gonzalez": "javier gonsalez",
+  "kevin picoli": "kevin picolli"
+};
+
+const MODALITY_NAMES: Record<string, string> = {
+  "1xfuncional": "1x Funcional",
+  "1xfuncionalkids": "1x Funcional Kids",
+  "1xfut": "1x Futebol",
+  "1xmusc": "1x Musculação",
+  "2xfuncional": "2x Funcional",
+  "2xfuncionalkids": "2x Funcional Kids",
+  "2xpersonal": "2x Personal",
+  "2xpersonal1xmusc": "2x Personal + 1x Musculação",
+  "2xpersonal1xsozinha": "2x Personal + 1x Sozinha",
+  "2xpersonal1xsozinho": "2x Personal + 1x Sozinho",
+  "2xpersonal2xfuncional": "2x Personal + 2x Funcional",
+  "2xpersonal2xsozinha": "2x Personal + 2x Sozinha",
+  "2xpersonal2xsozinho": "2x Personal + 2x Sozinho",
+  "2xpersonal3xsozinho": "2x Personal + 3x Sozinho",
+  "3xmusc": "3x Musculação",
+  "3xmusc2xfuncional": "3x Musculação + 2x Funcional",
+  "3xpersonal": "3x Personal",
+  "3xpersonal1funcional": "3x Personal + 1x Funcional",
+  "3xpersonal1xsozinho": "3x Personal + 1x Sozinho",
+  "3xpersonal2xsozinha": "3x Personal + 2x Sozinha",
+  "futtodososdias": "Futebol + Todos os Dias",
+  "todososdias": "Todos os Dias"
+};
+
+const APPROVED_DEFAULT_VALUES: Record<string, number | null | undefined> = {
+  "1xfuncional": null,
+  "2xpersonal": 290,
+  "2xpersonal2xfuncional": null,
+  "3xpersonal": 350
+};
+
+const STUDENTS_WITHOUT_AUTOMATIC_VALUE = new Set([
+  "diego roberto dos santos",
+  "luis henrique arruda da silva",
+  "elisiane de fatima cuchinski"
+]);
+
 export type SourceStudentStatus = "ACTIVE" | "INACTIVE" | "NOT_ENROLLED";
 export type ProductionMatch = "EXISTENTE_EXATO" | "EXISTENTE_PROVAVEL" | "NOVO" | "AMBIGUO";
 export type PlannedAction = "CRIAR" | "ATUALIZAR" | "PULAR" | "REVISAR";
@@ -66,7 +111,7 @@ export type ExistingStudentSnapshot = {
 export type ExistingModalitySnapshot = {
   id: string;
   name: string;
-  defaultValue: number;
+  defaultValue: number | null;
   active: boolean;
 };
 
@@ -89,6 +134,11 @@ export type StudentDryRunRow = OctoberSourceStudent & {
   existingAttendance: number;
   newAttendance: number;
   observation: string;
+  plannedStatus: "ATIVO" | "INATIVO";
+  plannedModalityName: string;
+  plannedMonthlyValue: number | null;
+  plannedUseDefaultValue: boolean;
+  plannedStartDate: null;
 };
 
 export type ModalityDryRunRow = {
@@ -97,6 +147,8 @@ export type ModalityDryRunRow = {
   sourceStudents: number;
   sourceValues: number[];
   existingName: string | null;
+  plannedName: string;
+  plannedDefaultValue: number | null;
   action: "REUTILIZAR" | "CRIAR" | "REVISAR";
   observation: string;
 };
@@ -113,6 +165,7 @@ export type OctoberDryRunSummary = {
   withoutMonthlyValue: number;
   modalitiesFound: number;
   sourceAttendance: number;
+  unmatchedAttendance: number;
   existingAttendance: number;
   newAttendance: number;
   duplicatesPrevented: number;
@@ -147,6 +200,18 @@ export function normalizeModalityKey(value: unknown) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
+}
+
+function canonicalModalityKey(value: unknown) {
+  const key = normalizeModalityKey(value);
+  if (key === "3xnusc" || key === "3xmusculacao") return "3xmusc";
+  if (key === "2xpersonal1sozinho") return "2xpersonal1xsozinho";
+  return key;
+}
+
+function approvedPersonKey(value: unknown) {
+  const key = normalizePersonName(value);
+  return MANUAL_STUDENT_ALIASES[key] ?? key;
 }
 
 export function normalizePhone(value: unknown): string | null {
@@ -260,7 +325,7 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
     const nameCell = cellAt(studentsSheet, row, 0);
     const status = statusFromCell(nameCell);
     const sourceModality = cellText(studentsSheet, row, 2);
-    const modalityKey = normalizeModalityKey(sourceModality);
+    const modalityKey = canonicalModalityKey(sourceModality);
     const dueDay = Number(cellAt(studentsSheet, row, 3)?.v);
     const phone = normalizePhone(cellAt(studentsSheet, row, 1)?.v);
 
@@ -321,15 +386,15 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
       .filter(({ column }) => String(cellAt(attendanceSheet, row, column)?.v ?? "").trim() === "1")
       .map(({ day }) => `2026-10-${String(day).padStart(2, "0")}`);
     sourceAttendanceCount += dates.length;
-    const matches = names.get(normalizePersonName(name)) ?? [];
+    const matches = names.get(approvedPersonKey(name)) ?? [];
     if (matches.length === 1) {
       matches[0].attendanceDates.push(...dates);
       continue;
     }
 
     const suggestions = closestNames(name, students.map((student) => student.name)).map((item) => item.candidate);
-    unmatchedAttendanceRows.push({ sourceRow: row, name, normalizedName: normalizePersonName(name), dates, suggestions });
     if (dates.length > 0) {
+      unmatchedAttendanceRows.push({ sourceRow: row, name, normalizedName: normalizePersonName(name), dates, suggestions });
       issues.push({
         code: "ATTENDANCE_WITHOUT_STUDENT",
         message: `${dates.length} presença(s) sem aluno exato na linha ${row} da aba Out`,
@@ -340,15 +405,6 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
   }
 
   issues.push(...sanityIssues(students, sourceAttendanceCount));
-  const notEnrolled = students.filter((student) => student.status === "NOT_ENROLLED");
-  if (notEnrolled.length > 0) {
-    issues.push({
-      code: "STATUS_COLOR_SPEC_MISMATCH",
-      message: "O único candidato a 'ainda não matriculado' usa preenchimento C0C0C0, não verde-escuro como documentado; exige confirmação antes do apply",
-      blocking: true,
-      sourceRow: notEnrolled[0].sourceRow
-    });
-  }
   return { students, sourceAttendanceCount, unmatchedAttendanceRows, modalityLabels, issues };
 }
 
@@ -365,17 +421,13 @@ function conservativeProbableMatch(source: OctoberSourceStudent, existing: Exist
   return existing.find((student) => student.name === ranked[0].candidate);
 }
 
-function desiredStatus(status: SourceStudentStatus) {
-  return status === "ACTIVE" ? "ATIVO" : "INATIVO";
+function desiredStatus(student: OctoberSourceStudent) {
+  if (student.normalizedName === "marileia da silva") return "ATIVO" as const;
+  return student.status === "ACTIVE" ? "ATIVO" as const : "INATIVO" as const;
 }
 
 export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production: ProductionSnapshot): OctoberDryRunPlan {
   const issues = [...parsed.issues];
-  issues.push({
-    code: "STUDENT_MONTHLY_VALUE_SCHEMA_MISSING",
-    message: "Aluno não possui campo nullable de valor mensal; Modalidade.valorPadrao não preserva valores diferentes por aluno",
-    blocking: true
-  });
 
   const existingNames = new Map<string, ExistingStudentSnapshot[]>();
   for (const student of production.students) {
@@ -387,7 +439,7 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
 
   const existingModalities = new Map<string, ExistingModalitySnapshot[]>();
   for (const modality of production.modalities) {
-    const key = normalizeModalityKey(modality.name);
+    const key = canonicalModalityKey(modality.name);
     const group = existingModalities.get(key) ?? [];
     group.push(modality);
     existingModalities.set(key, group);
@@ -398,40 +450,55 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
     const sourceStudents = parsed.students.filter((student) => student.modalityKey === key);
     const values = [...new Set(sourceStudents.map((student) => student.monthlyValue).filter((value): value is number => value !== null))].sort((a, b) => a - b);
     const matches = existingModalities.get(key) ?? [];
+    const plannedName = MODALITY_NAMES[key];
     let action: ModalityDryRunRow["action"] = "CRIAR";
     let existingName: string | null = null;
-    let observation = "Modalidade nova preservando a nomenclatura da fonte";
+    let observation = "Modalidade nova com nome normalizado e valores individuais preservados";
     if (matches.length === 1) {
       action = "REUTILIZAR";
       existingName = matches[0].name;
-      observation = "Correspondência por normalização de caixa, espaços e acentos";
-    } else if (matches.length > 1 || key === "3xnusc" || values.length > 1) {
+      observation = "Correspondência aprovada; o preço padrão existente será preservado quando não houver decisão explícita";
+    } else if (matches.length > 1 || !plannedName) {
       action = "REVISAR";
       observation = matches.length > 1
         ? "Mais de uma modalidade existente corresponde ao mesmo nome normalizado"
-        : key === "3xnusc"
-          ? "Possível erro de digitação; não será fundido automaticamente"
-          : "A mesma modalidade possui valores mensais diferentes e não cabe em valorPadrao";
+        : "Modalidade sem decisão de nomenclatura aprovada";
       issues.push({ code: "UNRESOLVED_MODALITY", message: `${[...labels].join(" / ")}: ${observation}`, blocking: true });
     }
-    if (values.length === 0) {
-      action = "REVISAR";
-      observation = "Sem valor confiável para preencher Modalidade.valorPadrao";
-      issues.push({ code: "MODALITY_WITHOUT_VALUE", message: `${[...labels].join(" / ")}: modalidade sem valor padrão confiável`, blocking: true });
-    }
-    modalityRows.push({ key, sourceLabels: [...labels].sort(), sourceStudents: sourceStudents.length, sourceValues: values, existingName, action, observation });
+    const hasApprovedDefault = Object.prototype.hasOwnProperty.call(APPROVED_DEFAULT_VALUES, key);
+    const plannedDefaultValue = hasApprovedDefault
+      ? APPROVED_DEFAULT_VALUES[key] ?? null
+      : matches.length === 1
+        ? matches[0].defaultValue
+        : sourceStudents.length > 1 && values.length === 1
+          ? values[0]
+          : null;
+    modalityRows.push({
+      key,
+      sourceLabels: [...labels].sort(),
+      sourceStudents: sourceStudents.length,
+      sourceValues: values,
+      existingName,
+      plannedName: plannedName ?? [...labels][0],
+      plannedDefaultValue,
+      action,
+      observation
+    });
   }
+  const plannedModalities = new Map(modalityRows.map((row) => [row.key, row]));
 
   const existingAttendance = new Set(production.attendance.map((item) => `${item.studentId}:${item.date}`));
   const studentRows: StudentDryRunRow[] = [];
   for (const source of parsed.students) {
-    const exact = existingNames.get(source.normalizedName) ?? [];
+    const approvedMatchKey = approvedPersonKey(source.name);
+    const exact = existingNames.get(approvedMatchKey) ?? [];
     let match: ProductionMatch;
     let matched: ExistingStudentSnapshot | null = null;
     let observation = "";
     if (exact.length === 1) {
       match = "EXISTENTE_EXATO";
       matched = exact[0];
+      if (approvedMatchKey !== source.normalizedName) observation = "Alias/match manual aprovado";
     } else if (exact.length > 1) {
       match = "AMBIGUO";
       observation = "Mais de um aluno existente possui o mesmo nome normalizado";
@@ -459,11 +526,22 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       : 0;
     const newCount = source.attendanceDates.length - existingCount;
     let action: PlannedAction = match === "NOVO" ? "CRIAR" : match === "EXISTENTE_EXATO" ? "ATUALIZAR" : "REVISAR";
+    const plannedStatus = desiredStatus(source);
+    const plannedModality = plannedModalities.get(source.modalityKey);
+    const withoutAutomaticValue = STUDENTS_WITHOUT_AUTOMATIC_VALUE.has(source.normalizedName);
+    const plannedMonthlyValue = withoutAutomaticValue
+      ? null
+      : source.monthlyValue !== null && source.monthlyValue !== plannedModality?.plannedDefaultValue
+        ? source.monthlyValue
+        : null;
+    const plannedUseDefaultValue = !withoutAutomaticValue
+      && plannedMonthlyValue === null
+      && typeof plannedModality?.plannedDefaultValue === "number";
     if (match === "EXISTENTE_EXATO" && matched) {
       const unchanged = normalizePhone(matched.phone) === source.normalizedPhone
         && matched.dueDay === source.dueDay
-        && matched.status === desiredStatus(source.status)
-        && normalizeModalityKey(matched.modalityName) === source.modalityKey;
+        && matched.status === plannedStatus
+        && canonicalModalityKey(matched.modalityName) === source.modalityKey;
       if (unchanged && newCount === 0) action = "PULAR";
     }
     studentRows.push({
@@ -474,7 +552,12 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       action,
       existingAttendance: existingCount,
       newAttendance: newCount,
-      observation
+      observation,
+      plannedStatus,
+      plannedModalityName: plannedModality?.plannedName ?? source.sourceModality,
+      plannedMonthlyValue,
+      plannedUseDefaultValue,
+      plannedStartDate: null
     });
   }
 
@@ -482,15 +565,9 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
   const probableMatches = studentRows.filter((row) => row.match === "EXISTENTE_PROVAVEL").length;
   const newStudents = studentRows.filter((row) => row.match === "NOVO").length;
   const ambiguousStudents = studentRows.filter((row) => row.match === "AMBIGUO").length;
-  if (newStudents > 0) {
-    issues.push({
-      code: "NEW_STUDENTS_WITHOUT_START_DATE",
-      message: `${newStudents} aluno(s) novo(s) sem data de início confiável; Aluno.dataInicio é obrigatório`,
-      blocking: true
-    });
-  }
   const existingAttendanceCount = studentRows.reduce((total, row) => total + row.existingAttendance, 0);
   const newAttendanceCount = studentRows.reduce((total, row) => total + row.newAttendance, 0);
+  const unmatchedAttendanceCount = parsed.unmatchedAttendanceRows.reduce((total, row) => total + row.dates.length, 0);
   const uniqueIssues = [...new Map(issues.map((issue) => [`${issue.code}:${issue.sourceRow ?? ""}:${issue.message}`, issue])).values()];
 
   return {
@@ -506,6 +583,7 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       withoutMonthlyValue: parsed.students.filter((student) => student.status === "ACTIVE" && student.monthlyValue === null).length,
       modalitiesFound: parsed.modalityLabels.size,
       sourceAttendance: parsed.sourceAttendanceCount,
+      unmatchedAttendance: unmatchedAttendanceCount,
       existingAttendance: existingAttendanceCount,
       newAttendance: newAttendanceCount,
       duplicatesPrevented: existingAttendanceCount,
@@ -529,7 +607,12 @@ export function createOctoberDryRunWorkbook(plan: OctoberDryRunPlan) {
     Modalidade: student.sourceModality,
     Vencimento: student.dueDay,
     Status: student.status,
+    "Status planejado": student.plannedStatus,
     "Valor mensal": student.monthlyValue ?? "",
+    "Valor individual planejado": student.plannedMonthlyValue ?? "",
+    "Usar valor padrão": student.plannedUseDefaultValue ? "SIM" : "NÃO",
+    "Data de início planejada": "",
+    "Modalidade planejada": student.plannedModalityName,
     "Nº de presenças em outubro": student.attendanceDates.length,
     "Datas de presença": student.attendanceDates.map((date) => `${date.slice(8, 10)}/10`).join(", "),
     "Match produção": student.match,
@@ -542,6 +625,8 @@ export function createOctoberDryRunWorkbook(plan: OctoberDryRunPlan) {
     Alunos: modality.sourceStudents,
     Valores: modality.sourceValues.join(" / "),
     "Modalidade existente": modality.existingName ?? "",
+    "Nome planejado": modality.plannedName,
+    "Valor padrão planejado": modality.plannedDefaultValue ?? "",
     Ação: modality.action,
     Observação: modality.observation
   }))), "Modalidades");

@@ -52,7 +52,7 @@ test("parser reads status colors, October attendance and unresolved names", () =
   assert.ok(parsed.issues.some((issue) => issue.code === "ATTENDANCE_WITHOUT_STUDENT"));
 });
 
-test("dry-run never auto-matches a merely probable student and exposes schema blockers", () => {
+test("dry-run never auto-matches a merely probable student after structural blockers are resolved", () => {
   const parsed = parseOctober2026Workbook(sourceWorkbook());
   const production: ProductionSnapshot = {
     students: [{ id: "student-1", name: "Pessoa Ativaa", phone: "5511999990000", dueDay: 10, status: "ATIVO", modalityId: "mod-1", modalityName: "3xmusc" }],
@@ -63,6 +63,6 @@ test("dry-run never auto-matches a merely probable student and exposes schema bl
   const active = plan.students.find((student) => student.name === "Pessoa Ativa");
   assert.equal(active?.match, "EXISTENTE_PROVAVEL");
   assert.equal(active?.action, "REVISAR");
-  assert.ok(plan.issues.some((issue) => issue.code === "STUDENT_MONTHLY_VALUE_SCHEMA_MISSING"));
+  assert.ok(!plan.issues.some((issue) => issue.code === "STUDENT_MONTHLY_VALUE_SCHEMA_MISSING"));
   assert.ok(plan.summary.blockers > 0);
 });

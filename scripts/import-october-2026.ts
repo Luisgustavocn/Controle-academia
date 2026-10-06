@@ -63,7 +63,7 @@ async function productionSnapshot(): Promise<ProductionSnapshot> {
     modalities: modalities.map((modality) => ({
       id: modality.id,
       name: modality.nome,
-      defaultValue: Number(modality.valorPadrao),
+      defaultValue: modality.valorPadrao === null ? null : Number(modality.valorPadrao),
       active: modality.ativa
     })),
     attendance: attendance.map((item) => ({ studentId: item.alunoId, date: prismaDateToCivil(item.data) }))
