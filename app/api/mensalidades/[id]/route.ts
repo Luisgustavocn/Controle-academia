@@ -5,8 +5,6 @@ import { logAudit } from "@/lib/audit";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
-import { buildVencimentoDate } from "@/lib/services/mensalidades";
-import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const MONTH_BY_PT_SHORT: Record<string, number> = {
@@ -124,33 +122,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     dataPagamento = new Date();
   }
 
-  const aluno = await prisma.aluno.findUnique({
-    where: { id: previous.alunoId },
-    select: {
-      vencimentoDia: true,
-      modalidade: {
-        select: {
-          nome: true,
-          valorPadrao: true
-        }
-      }
-    }
-  });
-  if (!aluno) {
-    return fail("Aluno da mensalidade não encontrado", 404);
-  }
-
-  const valorCalculado = isModalidadePersonalizada(aluno.modalidade?.nome)
-    ? Number(previous.valor)
-    : Number(aluno.modalidade?.valorPadrao ?? previous.valor);
-
-  const vencimento = buildVencimentoDate(previous.competencia, aluno.vencimentoDia);
-
   const updated = await prisma.mensalidade.update({
     where: { id },
     data: {
-      valor: valorCalculado,
-      vencimento,
       dataPagamento,
       formaPagamento: body.formaPagamento === "" ? null : (body.formaPagamento as string | undefined),
       status,

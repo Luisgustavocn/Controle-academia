@@ -1,22 +1,16 @@
-import { AlunoStatus, MensalidadeStatus } from "@prisma/client";
+import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { currentCompetencia, toCompetencia } from "@/lib/competencia";
-import {
-    buildVencimentoDate,
-    cancelarMensalidadesFuturasDoAluno,
-    generateMensalidadesAteCompetencia,
-    competenciaFromUtcDate,
-    sincronizarMensalidadesComDataInicio,
-    sincronizarVencimentoMensalidadesPorAluno
-  } from "@/lib/services/mensalidades";
+import { toCompetencia } from "@/lib/competencia";
+import { cancelarMensalidadesFuturasDoAluno } from "@/lib/services/mensalidades";
 import { createBackupFile } from "@/lib/services/backup";
-import { isModalidadePersonalizada } from "@/lib/services/modalidades";
-
-const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
+import {
+  StudentRegistrationNotFoundError,
+  updateStudentRegistration
+} from "@/lib/services/student-registration";
 
 function toDateInputValue(date: Date | null | undefined) {
   return date ? date.toISOString().slice(0, 10) : "";
@@ -29,28 +23,6 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   const parsed = new Date(String(value));
   if (Number.isNaN(parsed.getTime())) {
     throw new Error(`${fieldName} inválida`);
-  }
-  return parsed;
-}
-
-function parseOptionalNumber(value: unknown, fieldName: string) {
-  if (value === undefined || value === null || value === "") {
-    return null;
-  }
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) {
-    throw new Error(`${fieldName} inválido`);
-  }
-  return parsed;
-}
-
-function parseOptionalMensalidadeStatus(value: unknown) {
-  if (value === undefined || value === null || value === "") {
-    return null;
-  }
-  const parsed = String(value).toUpperCase() as MensalidadeStatus;
-  if (!MENSALIDADE_STATUS_VALUES.has(parsed)) {
-    throw new Error("status da mensalidade inválido");
   }
   return parsed;
 }
@@ -104,176 +76,45 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   const { id } = await context.params;
   const body = (await request.json()) as Record<string, unknown>;
-  const hasMensalidadePayload =
-    "mensalidadeValor" in body ||
-    "mensalidadeStatus" in body ||
-    "mensalidadeDataPagamento" in body ||
-    "mensalidadeFormaPagamento" in body ||
-    "mensalidadeObservacao" in body;
-
-  let mensalidadeValor: number | null = null;
-  let mensalidadeDataPagamento: Date | null = null;
-  let mensalidadeStatus: MensalidadeStatus | null = null;
   let dataSaidaCancelamento: Date | null | undefined = undefined;
   const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : undefined;
 
   try {
-    mensalidadeValor = parseOptionalNumber(body.mensalidadeValor, "valor da mensalidade");
-    mensalidadeDataPagamento = parseOptionalDate(body.mensalidadeDataPagamento, "data de pagamento da mensalidade");
-    mensalidadeStatus = parseOptionalMensalidadeStatus(body.mensalidadeStatus);
     if ("dataSaidaCancelamento" in body) {
       dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
     }
   } catch (error) {
-    return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
+    return fail(error instanceof Error ? error.message : "Dados do aluno inválidos", 400);
   }
 
-  const previous = await prisma.aluno.findUnique({
-    where: { id },
-    include: { modalidade: true }
-  });
-
-  if (!previous) {
-    return fail("Aluno não encontrado", 404);
-  }
-
-  const inicioMesAtual = new Date();
-  inicioMesAtual.setHours(0, 0, 0, 0);
-  inicioMesAtual.setDate(1);
-
-  let statusFinal = statusInformado ?? previous.status;
-  let dataSaidaFinal = dataSaidaCancelamento;
   const hasDataSaidaPayload = "dataSaidaCancelamento" in body;
-
-  if (dataSaidaCancelamento) {
-    statusFinal = AlunoStatus.CANCELADO;
-  }
-
-  if (statusFinal === AlunoStatus.ATIVO) {
-    dataSaidaFinal = null;
-  } else if (statusFinal === AlunoStatus.CANCELADO || statusFinal === AlunoStatus.TRANCADO) {
-    if (dataSaidaFinal === undefined) {
-      dataSaidaFinal = previous.dataSaidaCancelamento ?? inicioMesAtual;
-    }
-    if (hasDataSaidaPayload && dataSaidaFinal === null) {
-      dataSaidaFinal = inicioMesAtual;
-    }
-  } else if (!hasDataSaidaPayload) {
-    dataSaidaFinal = undefined;
-  }
-
-  const updated = await prisma.aluno.update({
-    where: { id },
-    data: {
+  let result;
+  try {
+    result = await updateStudentRegistration(id, {
       nomeCompleto: body.nomeCompleto ? String(body.nomeCompleto) : undefined,
       telefone: body.telefone ? String(body.telefone) : undefined,
       modalidadeId: body.modalidadeId === "" ? null : (body.modalidadeId as string | undefined),
       vencimentoDia: body.vencimentoDia ? Math.min(31, Math.max(1, Number(body.vencimentoDia))) : undefined,
-      status: statusFinal,
+      status: statusInformado,
       dataInicio: body.dataInicio ? new Date(String(body.dataInicio)) : undefined,
-      dataSaidaCancelamento: dataSaidaFinal,
+      dataSaidaCancelamento,
+      hasDataSaidaPayload,
       observacoes: body.observacoes === "" ? null : (body.observacoes as string | undefined)
-    },
-    include: { modalidade: true }
-  });
-
-  if (previous.modalidadeId !== updated.modalidadeId) {
-    await prisma.historicoPlano.create({
-      data: {
-        alunoId: id,
-        modalidadeAnterior: previous.modalidade?.nome,
-        modalidadeNova: updated.modalidade?.nome ?? "Sem modalidade",
-        valorAnterior: previous.modalidade?.valorPadrao,
-        valorNovo: updated.modalidade?.valorPadrao,
-        observacao: `Alterado por ${auth.name}`
-      }
-    });
+    }, { id: auth.id, name: auth.name });
+  } catch (error) {
+    if (error instanceof StudentRegistrationNotFoundError) {
+      return fail("Aluno não encontrado", 404);
+    }
+    throw error;
   }
 
-  const modalidadeAlterada = previous.modalidadeId !== updated.modalidadeId;
-
-  if (updated.status === AlunoStatus.ATIVO && (hasMensalidadePayload || modalidadeAlterada)) {
-    const competenciaPadrao = toCompetencia(new Date());
-    const competenciaMensalidade = competenciaPadrao;
-
-    const existingMensalidade = await prisma.mensalidade.findUnique({
-      where: {
-        alunoId_competencia: {
-          alunoId: id,
-          competencia: competenciaMensalidade
-        }
-      }
-    });
-
-    const vencimentoPadrao = buildVencimentoDate(competenciaMensalidade, updated.vencimentoDia);
-    const valorPadraoModalidade = Number(updated.modalidade?.valorPadrao ?? 0);
-    const modalidadePersonalizada = isModalidadePersonalizada(updated.modalidade?.nome);
-
-    const statusMensalidade = mensalidadeStatus ?? existingMensalidade?.status ?? MensalidadeStatus.PENDENTE;
-    const valorMensalidade = modalidadePersonalizada
-      ? mensalidadeValor ?? Number(existingMensalidade?.valor ?? valorPadraoModalidade)
-      : valorPadraoModalidade;
-    const vencimentoMensalidade = vencimentoPadrao;
-    const dataPagamento =
-      mensalidadeDataPagamento ??
-      existingMensalidade?.dataPagamento ??
-      ((statusMensalidade === MensalidadeStatus.PAGO || statusMensalidade === MensalidadeStatus.PARCIAL) ? new Date() : null);
-
-    await prisma.mensalidade.upsert({
-      where: {
-        alunoId_competencia: {
-          alunoId: id,
-          competencia: competenciaMensalidade
-        }
-      },
-      create: {
-        alunoId: id,
-        competencia: competenciaMensalidade,
-        valor: valorMensalidade,
-        vencimento: vencimentoMensalidade,
-        status: statusMensalidade,
-        dataPagamento,
-        formaPagamento: body.mensalidadeFormaPagamento
-          ? String(body.mensalidadeFormaPagamento)
-          : existingMensalidade?.formaPagamento ?? null,
-        observacao: body.mensalidadeObservacao
-          ? String(body.mensalidadeObservacao)
-          : existingMensalidade?.observacao ?? null
-      },
-      update: {
-        valor: valorMensalidade,
-        vencimento: vencimentoMensalidade,
-        status: statusMensalidade,
-        dataPagamento,
-        formaPagamento: body.mensalidadeFormaPagamento === ""
-          ? existingMensalidade?.formaPagamento ?? null
-          : (body.mensalidadeFormaPagamento as string | undefined),
-        observacao: body.mensalidadeObservacao === ""
-          ? existingMensalidade?.observacao ?? null
-          : (body.mensalidadeObservacao as string | undefined)
-      }
-    });
-  }
-
-  if (previous.vencimentoDia !== updated.vencimentoDia) {
-    await sincronizarVencimentoMensalidadesPorAluno(id);
-  }
-
-  const competenciaAnteriorInicio = competenciaFromUtcDate(previous.dataInicio);
-  const competenciaAtualInicio = competenciaFromUtcDate(updated.dataInicio);
-  if (competenciaAnteriorInicio !== competenciaAtualInicio) {
-    await sincronizarMensalidadesComDataInicio(id, updated.dataInicio);
-  }
+  const { updated } = result;
 
   if (updated.status === AlunoStatus.CANCELADO || updated.status === AlunoStatus.TRANCADO) {
-    const referenciaSaida = updated.dataSaidaCancelamento ?? inicioMesAtual;
+    const referenciaSaida = updated.dataSaidaCancelamento ?? new Date();
     await cancelarMensalidadesFuturasDoAluno(id, referenciaSaida);
   } else if (updated.dataSaidaCancelamento) {
     await cancelarMensalidadesFuturasDoAluno(id, updated.dataSaidaCancelamento);
-  }
-
-  if (updated.status === AlunoStatus.ATIVO) {
-    await generateMensalidadesAteCompetencia(currentCompetencia(), [id]);
   }
 
   return ok({ item: updated });

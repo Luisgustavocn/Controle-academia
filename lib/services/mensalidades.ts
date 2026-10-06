@@ -26,18 +26,18 @@ function competenciasBetween(startCompetencia: string, endCompetencia: string) {
   return competencias;
 }
 
-function isSameLocalDate(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 export function competenciaFromUtcDate(date: Date) {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+}
+
+export function resolveFutureMonthlyValue(input: {
+  individualValue?: number | null;
+  modalityDefaultValue: number;
+  legacyPersonalizedValue?: number | null;
+}) {
+  return input.individualValue ?? input.legacyPersonalizedValue ?? input.modalityDefaultValue;
 }
 
 export async function generateMensalidadesCompetencia(competencia: string) {
@@ -104,7 +104,11 @@ export async function generateMensalidadesCompetencia(competencia: string) {
     const vencimento = buildVencimentoDate(competencia, aluno.vencimentoDia);
     const valorPadrao = Number(aluno.modalidade?.valorPadrao ?? 0);
     const usarUltimoValor = isModalidadePersonalizada(aluno.modalidade?.nome);
-    const valor = usarUltimoValor ? latestValueByAluno.get(aluno.id) ?? valorPadrao : valorPadrao;
+    const valor = resolveFutureMonthlyValue({
+      individualValue: null,
+      modalityDefaultValue: valorPadrao,
+      legacyPersonalizedValue: usarUltimoValor ? latestValueByAluno.get(aluno.id) : null
+    });
 
     createData.push({
       alunoId: aluno.id,
@@ -202,7 +206,11 @@ export async function generateMensalidadesAteCompetencia(
       novosRegistros.push({
         alunoId: aluno.id,
         competencia,
-        valor: usarUltimoValor ? valorAtual : valorPadrao,
+        valor: resolveFutureMonthlyValue({
+          individualValue: null,
+          modalityDefaultValue: valorPadrao,
+          legacyPersonalizedValue: usarUltimoValor ? valorAtual : null
+        }),
         vencimento: buildVencimentoDate(competencia, aluno.vencimentoDia),
         status: MensalidadeStatus.PENDENTE
       });
@@ -252,69 +260,15 @@ export async function atualizarStatusMensalidadesAtrasadas() {
   return ficaramAtrasadas.count + voltaramPendentes.count;
 }
 
-export async function sincronizarVencimentoMensalidadesPorAluno(alunoId?: string) {
-  const mensalidades = await prisma.mensalidade.findMany({
-    where: alunoId ? { alunoId } : undefined,
-    include: {
-      aluno: {
-        select: {
-          vencimentoDia: true
-        }
-      }
-    }
-  });
-
-  let atualizadas = 0;
-  for (const mensalidade of mensalidades) {
-    const vencimentoCorreto = buildVencimentoDate(mensalidade.competencia, mensalidade.aluno.vencimentoDia);
-    if (isSameLocalDate(vencimentoCorreto, mensalidade.vencimento)) {
-      continue;
-    }
-
-    await prisma.mensalidade.update({
-      where: { id: mensalidade.id },
-      data: { vencimento: vencimentoCorreto }
-    });
-    atualizadas += 1;
-  }
-
-  return atualizadas;
-}
-
-export async function sincronizarMensalidadesComDataInicio(alunoId: string, dataInicio: Date) {
-  const competenciaInicio = competenciaFromUtcDate(dataInicio);
-
-  const ajustadas = await prisma.mensalidade.updateMany({
-    where: {
-      alunoId,
-      competencia: {
-        lt: competenciaInicio
-      },
-      status: {
-        in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO]
-      }
-    },
-    data: {
-      status: MensalidadeStatus.ISENTO,
-      observacao: `Competência anterior à data de início (${competenciaInicio}) preservada por segurança em vez de removida automaticamente.`
-    }
-  });
-
-  return {
-    competenciaInicio,
-    ajustadas: ajustadas.count
-  };
-}
-
 export async function garantirMensalidadesDoMesAtual(competencia = currentCompetencia()) {
   const geracao = await generateMensalidadesAteCompetencia(competencia);
-  const sincronizadas = await sincronizarVencimentoMensalidadesPorAluno();
   const atualizadasAtrasadas = await atualizarStatusMensalidadesAtrasadas();
 
   return {
     competencia,
     totalGerado: geracao.totalGerado,
-    totalVencimentosSincronizados: sincronizadas,
+    // Mensalidades emitidas são snapshots. Mudanças cadastrais não recalculam vencimentos existentes.
+    totalVencimentosSincronizados: 0,
     totalAtrasadasAtualizadas: atualizadasAtrasadas
   };
 }
