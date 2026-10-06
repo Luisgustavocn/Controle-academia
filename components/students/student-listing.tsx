@@ -30,10 +30,11 @@ type Student = {
   name: string;
   phone: string;
   status: "ATIVO" | "INATIVO" | "CANCELADO" | "TRANCADO";
+  activeEnrollment: boolean;
   dueDay: number;
   modality: { id: string; name: string } | null;
   lastAttendanceAt: string | null;
-  financialStatus?: "EM_DIA" | "INADIMPLENTE";
+  financialStatus?: "EM_DIA" | "EM_ATRASO" | "SEM_PENDENCIAS" | "COM_PENDENCIA";
 };
 type ListingResponse = {
   items: Student[];
@@ -169,40 +170,18 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
     return `/alunos/${studentId}?returnTo=${encodeURIComponent(returnTo)}`;
   }
 
-  async function cancelStudent(student: Student) {
-    if (!window.confirm(`Cancelar o cadastro de ${student.name}?`)) return;
-    const response = await fetch(`/api/alunos/${student.id}`, { method: "DELETE" });
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) {
-      window.alert(payload.error ?? "Não foi possível cancelar o cadastro");
-      return;
-    }
-    refresh();
-  }
-
-  async function reactivateStudent(student: Student) {
-    if (!window.confirm(`Criar um novo cadastro ativo para ${student.name}?`)) return;
-    const response = await fetch(`/api/alunos/${student.id}/reativar`, { method: "POST" });
-    const payload = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) {
-      window.alert(payload.error ?? "Não foi possível reativar o aluno");
-      return;
-    }
-    refresh();
-  }
-
   function Actions({ student }: { student: Student }) {
     return (
       <DropdownMenu trigger={<MoreHorizontal className="h-4 w-4" aria-hidden="true" />} label={`Ações de ${student.name}`}>
         <DropdownMenuItem onSelect={() => router.push(profileHref(student.id))}>Ver aluno</DropdownMenuItem>
         {canUpdate ? <DropdownMenuItem onSelect={() => void openEdit(student.id)}>Editar cadastro</DropdownMenuItem> : null}
         {canViewFinancial ? <DropdownMenuItem onSelect={() => router.push("/mensalidades")}>Abrir mensalidades</DropdownMenuItem> : null}
-        {canChangeStatus && ["CANCELADO", "TRANCADO"].includes(student.status)
-          ? <DropdownMenuItem onSelect={() => void reactivateStudent(student)}>Reativar como novo</DropdownMenuItem>
+        {canChangeStatus && !student.activeEnrollment
+          ? <DropdownMenuItem onSelect={() => router.push(profileHref(student.id))}>Retomar matrícula</DropdownMenuItem>
           : null}
-        {canChangeStatus && student.status !== "CANCELADO" ? <DropdownMenuSeparator /> : null}
-        {canChangeStatus && student.status !== "CANCELADO"
-          ? <DropdownMenuItem destructive onSelect={() => void cancelStudent(student)}>Cancelar cadastro</DropdownMenuItem>
+        {canChangeStatus && student.activeEnrollment ? <DropdownMenuSeparator /> : null}
+        {canChangeStatus && student.activeEnrollment
+          ? <DropdownMenuItem destructive onSelect={() => router.push(profileHref(student.id))}>Encerrar matrícula</DropdownMenuItem>
           : null}
       </DropdownMenu>
     );
@@ -220,7 +199,7 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
         <DataTableBody>{items.map((student) => <DataTableRow key={student.id}>
           <DataTableCell><div className="flex items-center gap-3"><Avatar name={student.name} size="sm" /><div><Link href={profileHref(student.id)} className="font-semibold hover:text-accentDark hover:underline">{student.name}</Link><a className="block text-helper text-muted hover:text-accentDark" href={`tel:${student.phone}`}>{student.phone}</a></div></div></DataTableCell>
           <DataTableCell>{student.modality?.name ?? "Sem modalidade"}<span className="block text-helper text-muted">Vence dia {student.dueDay}</span></DataTableCell>
-          {canViewFinancial ? <DataTableCell>{student.financialStatus === "INADIMPLENTE" ? <StatusBadge status="Atrasado" label="Inadimplente" /> : <StatusBadge status="Pago" label="Em dia" />}</DataTableCell> : null}
+          {canViewFinancial ? <DataTableCell>{student.financialStatus === "EM_DIA" ? <StatusBadge status="Pago" label="Em dia" /> : student.financialStatus === "SEM_PENDENCIAS" ? <StatusBadge status="Pago" label="Sem pendências" /> : student.financialStatus === "COM_PENDENCIA" ? <StatusBadge status="Atrasado" label="Com pendência" /> : <StatusBadge status="Atrasado" label="Em atraso" />}</DataTableCell> : null}
           <DataTableCell>{formatStudentAttendance(student.lastAttendanceAt)}</DataTableCell>
           <DataTableCell><StatusBadge status={STATUS_LABEL[student.status]} /></DataTableCell>
           {hasActions ? <DataTableCell className="w-24 px-3 text-right"><Actions student={student} /></DataTableCell> : null}
@@ -232,7 +211,7 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
   const mobile = <div className="space-y-2">{items.map((student) => <Card key={student.id} className="p-4">
     <div className="flex items-start gap-3"><Avatar name={student.name} /><div className="min-w-0 flex-1"><Link href={profileHref(student.id)} className="block truncate font-semibold text-ink hover:text-accentDark hover:underline">{student.name}</Link><a className="text-helper text-muted" href={`tel:${student.phone}`}>{student.phone}</a></div>{hasActions ? <Actions student={student} /> : null}</div>
     <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm"><div><p className="text-helper text-muted">Modalidade</p><p>{student.modality?.name ?? "Sem modalidade"}</p></div><div><p className="text-helper text-muted">Última presença</p><p>{formatStudentAttendance(student.lastAttendanceAt)}</p></div></div>
-    <div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={STATUS_LABEL[student.status]} />{canViewFinancial ? student.financialStatus === "INADIMPLENTE" ? <StatusBadge status="Atrasado" label="Inadimplente" /> : <StatusBadge status="Pago" label="Em dia" /> : null}</div>
+    <div className="mt-3 flex flex-wrap gap-2"><StatusBadge status={STATUS_LABEL[student.status]} />{canViewFinancial ? student.financialStatus === "EM_DIA" ? <StatusBadge status="Pago" label="Em dia" /> : student.financialStatus === "SEM_PENDENCIAS" ? <StatusBadge status="Pago" label="Sem pendências" /> : student.financialStatus === "COM_PENDENCIA" ? <StatusBadge status="Atrasado" label="Com pendência" /> : <StatusBadge status="Atrasado" label="Em atraso" /> : null}</div>
   </Card>)}</div>;
 
   return (

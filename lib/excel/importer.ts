@@ -182,33 +182,61 @@ async function upsertAluno(data: {
   }
 
   if (existing) {
-    return prisma.aluno.update({
-      where: { id: existing.id },
-      data: {
-        modalidadeId: modalidadeId ?? existing.modalidadeId,
-        vencimentoDia: data.vencimentoDia ?? existing.vencimentoDia,
-        dataInicio: data.dataInicio === undefined ? existing.dataInicio : data.dataInicio,
-        valorMensal: data.valorMensal === undefined ? existing.valorMensal : data.valorMensal,
-        usarValorPadrao: data.usarValorPadrao ?? existing.usarValorPadrao,
-        status: data.status ?? existing.status,
-        telefone: normalizedTelefone,
-        observacoes: data.observacoes || existing.observacoes
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.aluno.update({
+        where: { id: existing.id },
+        data: {
+          modalidadeId: modalidadeId ?? existing.modalidadeId,
+          vencimentoDia: data.vencimentoDia ?? existing.vencimentoDia,
+          dataInicio: data.dataInicio === undefined ? existing.dataInicio : data.dataInicio,
+          valorMensal: data.valorMensal === undefined ? existing.valorMensal : data.valorMensal,
+          usarValorPadrao: data.usarValorPadrao ?? existing.usarValorPadrao,
+          status: data.status ?? existing.status,
+          telefone: normalizedTelefone,
+          observacoes: data.observacoes || existing.observacoes
+        }
+      });
+      if ((data.status ?? existing.status) === AlunoStatus.ATIVO) {
+        const open = await tx.periodoMatricula.findFirst({ where: { alunoId: existing.id, dataSaida: null } });
+        if (open) {
+          await tx.periodoMatricula.update({ where: { id: open.id }, data: {
+            modalidadeId: updated.modalidadeId, diaVencimento: updated.vencimentoDia,
+            valorMensal: updated.valorMensal, usarValorPadrao: updated.usarValorPadrao
+          } });
+        } else {
+          await tx.periodoMatricula.create({ data: {
+            alunoId: existing.id, dataInicio: updated.dataInicio, modalidadeId: updated.modalidadeId,
+            diaVencimento: updated.vencimentoDia, valorMensal: updated.valorMensal,
+            usarValorPadrao: updated.usarValorPadrao
+          } });
+        }
       }
+      return updated;
     });
   }
 
-  return prisma.aluno.create({
-    data: {
-      nomeCompleto: data.nomeCompleto,
-      telefone: normalizedTelefone,
-      modalidadeId,
-      vencimentoDia: data.vencimentoDia ?? 10,
-      dataInicio: data.dataInicio ?? null,
-      valorMensal: data.valorMensal ?? null,
-      usarValorPadrao: data.usarValorPadrao ?? true,
-      status: data.status ?? AlunoStatus.ATIVO,
-      observacoes: data.observacoes || null
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.aluno.create({
+      data: {
+        nomeCompleto: data.nomeCompleto,
+        telefone: normalizedTelefone,
+        modalidadeId,
+        vencimentoDia: data.vencimentoDia ?? 10,
+        dataInicio: data.dataInicio ?? null,
+        valorMensal: data.valorMensal ?? null,
+        usarValorPadrao: data.usarValorPadrao ?? true,
+        status: data.status ?? AlunoStatus.ATIVO,
+        observacoes: data.observacoes || null
+      }
+    });
+    if (created.status === AlunoStatus.ATIVO) {
+      await tx.periodoMatricula.create({ data: {
+        alunoId: created.id, dataInicio: created.dataInicio, modalidadeId: created.modalidadeId,
+        diaVencimento: created.vencimentoDia, valorMensal: created.valorMensal,
+        usarValorPadrao: created.usarValorPadrao
+      } });
     }
+    return created;
   });
 }
 

@@ -4,10 +4,11 @@ import { requireCapability } from "@/lib/auth/guards";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { academyToday } from "@/lib/attendance-date";
+import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 import { currentCompetencia, toCompetencia } from "@/lib/competencia";
 import {
   buildVencimentoDate,
-  cancelarMensalidadesFuturasDoAluno,
   generateMensalidadesAteCompetencia,
   resolveFutureMonthlyValue
 } from "@/lib/services/mensalidades";
@@ -68,8 +69,10 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q") ?? "";
   const status = request.nextUrl.searchParams.get("status") ?? "";
   const modalidadeId = request.nextUrl.searchParams.get("modalidadeId") ?? "";
+  const onlyActiveEnrollment = request.nextUrl.searchParams.get("matriculaAtiva") === "true";
 
   const where: Prisma.AlunoWhereInput = {
+    ...(onlyActiveEnrollment ? studentActiveOnDateWhere(academyToday()) : {}),
     ...(status
       ? { status: status as never }
       : {
@@ -118,24 +121,33 @@ export async function GET(request: NextRequest) {
         where: {
           competencia: competenciaAtual
         }
+      },
+      periodosMatricula: {
+        include: { modalidade: true },
+        orderBy: [{ dataInicio: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
       }
     },
     orderBy: { nomeCompleto: "asc" }
   });
 
   const items = alunos.map((aluno) => {
-    const { _count, mensalidades, ...alunoData } = aluno;
+    const { _count, mensalidades, periodosMatricula, ...alunoData } = aluno;
+    const today = new Date(`${academyToday()}T00:00:00.000Z`);
+    const activePeriod = periodosMatricula.find((periodo) =>
+      (!periodo.dataInicio || periodo.dataInicio <= today) && (!periodo.dataSaida || periodo.dataSaida >= today)
+    );
+    const displayPeriod = activePeriod ?? periodosMatricula[0];
     return {
       ...alunoData,
       dataInicio: toDateInputValue(aluno.dataInicio),
       dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
-      modalidadeNome: aluno.modalidade?.nome ?? "",
+      modalidadeNome: displayPeriod?.modalidade?.nome ?? aluno.modalidade?.nome ?? "",
       valorPlano: resolveFutureMonthlyValue({
-        individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
-        useModalityDefault: aluno.usarValorPadrao,
-        modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+        individualValue: displayPeriod?.valorMensal === null || displayPeriod?.valorMensal === undefined ? null : Number(displayPeriod.valorMensal),
+        useModalityDefault: displayPeriod?.usarValorPadrao ?? aluno.usarValorPadrao,
+        modalityDefaultValue: displayPeriod?.modalidade?.valorPadrao === null || displayPeriod?.modalidade?.valorPadrao === undefined
           ? null
-          : Number(aluno.modalidade.valorPadrao)
+          : Number(displayPeriod.modalidade.valorPadrao)
       }),
       ...(showFinancial ? {
         inadimplente: _count.mensalidades > 0,
@@ -148,11 +160,11 @@ export async function GET(request: NextRequest) {
         mensalidadeFormaPagamento: mensalidades[0]?.formaPagamento ?? "",
         mensalidadeObservacao: mensalidades[0]?.observacao ?? ""
       } : {}),
-      proximoVencimento: (() => {
+      proximoVencimento: activePeriod ? (() => {
         const hoje = new Date();
         const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-        return new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(ultimoDia, aluno.vencimentoDia));
-      })()
+        return new Date(hoje.getFullYear(), hoje.getMonth(), Math.min(ultimoDia, activePeriod.diaVencimento));
+      })() : null
     };
   });
 
@@ -211,6 +223,20 @@ export async function POST(request: NextRequest) {
         observacoes: body.observacoes ? String(body.observacoes) : null
       }
     });
+
+    if (aluno.status === AlunoStatus.ATIVO) {
+      await tx.periodoMatricula.create({
+        data: {
+          alunoId: aluno.id,
+          dataInicio: aluno.dataInicio,
+          modalidadeId: aluno.modalidadeId,
+          valorMensal: aluno.valorMensal,
+          usarValorPadrao: aluno.usarValorPadrao,
+          diaVencimento: aluno.vencimentoDia,
+          createdBy: auth.id
+        }
+      });
+    }
 
     if (aluno.status === AlunoStatus.ATIVO && aluno.dataInicio) {
       const competencia = toCompetencia(new Date());
@@ -271,10 +297,6 @@ export async function POST(request: NextRequest) {
 
   if (created.status === AlunoStatus.ATIVO && created.dataInicio) {
     await generateMensalidadesAteCompetencia(currentCompetencia(), [created.id]);
-  }
-
-  if (created.dataSaidaCancelamento || created.status === AlunoStatus.TRANCADO) {
-    await cancelarMensalidadesFuturasDoAluno(created.id, created.dataSaidaCancelamento ?? inicioMesAtual);
   }
 
   return ok({ item: created }, 201);

@@ -1,9 +1,9 @@
-import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { CivilDateValidationError, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enrollmentCoversCompetenceWhere } from "@/lib/services/enrollment-periods";
 
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "attendance.read");
@@ -23,11 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   const alunos = await prisma.aluno.findMany({
-    where: {
-      status: {
-        in: [AlunoStatus.ATIVO, AlunoStatus.TRANCADO]
-      }
-    },
+    where: { periodosMatricula: { some: enrollmentCoversCompetenceWhere(competencia) } },
     select: {
       id: true,
       nomeCompleto: true,

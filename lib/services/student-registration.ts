@@ -1,6 +1,7 @@
 import { AlunoStatus, PrismaClient } from "@prisma/client";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { prismaDateToCivil } from "@/lib/attendance-date";
 
 type TransactionRunner = Pick<PrismaClient, "$transaction">;
 
@@ -40,7 +41,10 @@ export async function updateStudentRegistration(
   return client.$transaction(async (tx) => {
     const previous = await tx.aluno.findUnique({
       where: { id: studentId },
-      include: { modalidade: true }
+      include: {
+        modalidade: true,
+        periodosMatricula: { where: { dataSaida: null }, orderBy: { createdAt: "desc" }, take: 1 }
+      }
     });
 
     if (!previous) {
@@ -49,22 +53,25 @@ export async function updateStudentRegistration(
 
     let statusFinal = patch.status ?? previous.status;
     let exitDate = patch.dataSaidaCancelamento;
+    const periodsLoaded = Array.isArray(previous.periodosMatricula);
+    const currentPeriod = previous.periodosMatricula?.[0] ?? null;
 
     if (exitDate) {
       statusFinal = AlunoStatus.CANCELADO;
     }
 
     if (statusFinal === AlunoStatus.ATIVO) {
+      if (periodsLoaded && !currentPeriod) {
+        throw new Error("Use Retomar matrícula para ativar um aluno sem vínculo aberto");
+      }
       exitDate = null;
-    } else if (statusFinal === AlunoStatus.CANCELADO || statusFinal === AlunoStatus.TRANCADO) {
+    } else {
       if (exitDate === undefined) {
         exitDate = previous.dataSaidaCancelamento ?? currentMonthStart;
       }
       if (patch.hasDataSaidaPayload && exitDate === null) {
         exitDate = currentMonthStart;
       }
-    } else if (!patch.hasDataSaidaPayload) {
-      exitDate = undefined;
     }
 
     const updated = await tx.aluno.update({
@@ -90,6 +97,37 @@ export async function updateStudentRegistration(
     const updatedMonthlyValue = updated.valorMensal === null ? null : Number(updated.valorMensal);
     const monthlyValueChanged = previousMonthlyValue !== updatedMonthlyValue;
     const defaultValueRuleChanged = previous.usarValorPadrao !== updated.usarValorPadrao;
+
+    if (currentPeriod && statusFinal !== AlunoStatus.ATIVO && !currentPeriod.dataSaida) {
+      const closingDate = exitDate ?? currentMonthStart;
+      if (currentPeriod.dataInicio && closingDate < currentPeriod.dataInicio) {
+        throw new Error("A saída não pode ser anterior ao início da matrícula");
+      }
+      const closed = await tx.periodoMatricula.update({
+        where: { id: currentPeriod.id },
+        data: { dataSaida: closingDate, encerradoPor: actor.id }
+      });
+      await logAudit({
+        userId: actor.id,
+        modulo: "alunos",
+        entidade: "PeriodoMatricula",
+        entidadeId: currentPeriod.id,
+        acao: "END_ENROLLMENT",
+        antes: { dataSaida: null, status: previous.status },
+        depois: { dataSaida: prismaDateToCivil(closed.dataSaida!), status: statusFinal }
+      }, tx);
+    } else if (currentPeriod && statusFinal === AlunoStatus.ATIVO) {
+      await tx.periodoMatricula.update({
+        where: { id: currentPeriod.id },
+        data: {
+          dataInicio: patch.dataInicio,
+          modalidadeId: patch.modalidadeId,
+          diaVencimento: patch.vencimentoDia,
+          valorMensal: patch.valorMensal,
+          usarValorPadrao: patch.usarValorPadrao
+        }
+      });
+    }
 
     if (modalityChanged) {
       const previousName = previous.modalidade?.nome ?? "Sem modalidade";

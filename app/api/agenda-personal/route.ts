@@ -1,4 +1,7 @@
 import { createListCreateHandlers } from "@/lib/api/crud";
+import { academyToday } from "@/lib/attendance-date";
+import { prisma } from "@/lib/prisma";
+import { isStudentActiveOnDate } from "@/lib/services/enrollment-periods";
 
 function normalizeHorario(raw: unknown) {
   const value = String(raw ?? "").trim();
@@ -87,6 +90,13 @@ export const { GET, POST } = createListCreateHandlers({
       return "Selecione um aluno ou preencha o campo Aluno (texto livre)";
     }
 
+    return null;
+  },
+  validateAsync: async (data) => {
+    const alunoId = String(data.alunoId ?? "").trim();
+    if (alunoId && !await isStudentActiveOnDate(prisma, alunoId, academyToday())) {
+      return "Aluno sem matrícula ativa não pode receber novo agendamento";
+    }
     return null;
   },
   queryFilters: (request) => {

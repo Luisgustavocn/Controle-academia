@@ -563,7 +563,7 @@ export default function AgendaPersonalPage() {
             required: true,
             options: defaultSlots().map((slot) => ({ label: slot, value: slot }))
           },
-          { key: "alunoId", label: "Aluno" },
+          { key: "alunoId", label: "Aluno", lookupEndpoint: "/api/alunos?matriculaAtiva=true" },
           { key: "alunoNome", label: "Aluno (texto livre)" },
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}

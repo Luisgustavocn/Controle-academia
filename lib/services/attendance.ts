@@ -9,6 +9,7 @@ import {
 } from "@/lib/attendance-date";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { isStudentActiveOnDate } from "@/lib/services/enrollment-periods";
 
 export class AttendanceValidationError extends Error {}
 export class AttendanceNotFoundError extends Error {}
@@ -97,6 +98,9 @@ export async function confirmAttendance(
 
   const student = await prisma.aluno.findUnique({ where: { id: alunoId }, select: { id: true } });
   if (!student) throw new AttendanceNotFoundError("Aluno não encontrado");
+  if (!await isStudentActiveOnDate(prisma, alunoId, data)) {
+    throw new AttendanceValidationError("Aluno sem matrícula ativa nesta data");
+  }
 
   try {
     const created = await prisma.$transaction(async (transaction) => {

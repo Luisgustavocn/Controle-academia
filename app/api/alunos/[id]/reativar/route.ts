@@ -1,10 +1,8 @@
-import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
-import { prisma } from "@/lib/prisma";
-import { currentCompetencia } from "@/lib/competencia";
-import { generateMensalidadesAteCompetencia } from "@/lib/services/mensalidades";
+import { EnrollmentNotFoundError, EnrollmentValidationError, resumeEnrollment } from "@/lib/services/enrollment-periods";
+import { CivilDateValidationError } from "@/lib/attendance-date";
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = requireCapability(request, "students.status");
@@ -12,44 +10,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   const { id } = await context.params;
 
-  const origem = await prisma.aluno.findUnique({
-    where: { id },
-    include: {
-      modalidade: true
-    }
-  });
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const modalidadeId = String(body.modalidadeId ?? "").trim() || null;
+  const dueDay = Number(body.diaVencimento);
+  const rawValue = body.valorMensal;
+  const monthlyValue = rawValue === null || rawValue === undefined || rawValue === "" ? null : Number(rawValue);
+  if (typeof body.usarValorPadrao !== "boolean") return fail("Confirme a regra de valor padrão", 400);
 
-  if (!origem) {
-    return fail("Aluno não encontrado", 404);
+  try {
+    const result = await resumeEnrollment(id, {
+      startDate: String(body.dataRetorno ?? ""),
+      modalidadeId,
+      monthlyValue,
+      useDefaultValue: body.usarValorPadrao,
+      dueDay
+    }, { id: auth.id, name: auth.name });
+    return ok({ item: result.student, periodo: result.period });
+  } catch (error) {
+    if (error instanceof EnrollmentNotFoundError) return fail(error.message, 404);
+    if (error instanceof EnrollmentValidationError || error instanceof CivilDateValidationError) return fail(error.message, 400);
+    throw error;
   }
-
-  if (origem.status !== AlunoStatus.CANCELADO && origem.status !== AlunoStatus.TRANCADO) {
-    return fail("Só é possível reativar como novo cadastro alunos cancelados ou trancados", 400);
-  }
-
-  const hoje = new Date();
-
-  const novoCadastro = await prisma.aluno.create({
-    data: {
-      nomeCompleto: origem.nomeCompleto,
-      telefone: origem.telefone,
-      modalidadeId: origem.modalidadeId,
-      vencimentoDia: origem.vencimentoDia,
-      status: AlunoStatus.ATIVO,
-      dataInicio: hoje,
-      valorMensal: origem.valorMensal,
-      usarValorPadrao: origem.usarValorPadrao,
-      dataSaidaCancelamento: null,
-      observacoes: origem.observacoes
-        ? `${origem.observacoes}\n\nReativado como novo cadastro em ${hoje.toLocaleDateString("pt-BR")} (origem: ${origem.id})`
-        : `Reativado como novo cadastro em ${hoje.toLocaleDateString("pt-BR")} (origem: ${origem.id})`
-    }
-  });
-
-  await generateMensalidadesAteCompetencia(currentCompetencia(), [novoCadastro.id]);
-
-  return ok({
-    item: novoCadastro,
-    origemId: origem.id
-  });
 }

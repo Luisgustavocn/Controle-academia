@@ -39,7 +39,14 @@ function overview(role: "ADMIN" | "FINANCEIRO" | "RECEPCAO" | "PERSONAL"): Stude
       exitDate: null,
       createdAt: "2026-01-09T12:00:00.000Z",
       notes: null,
-      modality: { id: "mod-1", name: "Musculação" }
+      modality: { id: "mod-1", name: "Musculação" },
+      activeEnrollment: true,
+      hasOpenEnrollment: true,
+      enrollment: {
+        id: "period-1", startDate: "2026-01-10", exitDate: null,
+        monthlyValue: 120, useDefaultValue: false, dueDay: 10,
+        modality: { id: "mod-1", name: "Musculação" }
+      }
     },
     summary: {
       ...(attendance ? { attendance: { lastAttendanceAt: null, thisMonth: 0, last30Days: 0 } } : {}),

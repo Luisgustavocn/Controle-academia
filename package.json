@@ -12,6 +12,7 @@
     "test": "tsx --tsconfig tests/tsconfig.json --test tests/*.test.ts tests/*.test.tsx",
     "test:attendance:postgres": "tsx tests/attendance-postgres.integration.ts",
     "test:student-plan:postgres": "tsx tests/student-plan-postgres.integration.ts",
+    "test:enrollment:postgres": "tsx tests/enrollment-lifecycle-postgres.integration.ts",
     "start": "node scripts/start-production.mjs",
     "lint": "next lint",
     "postinstall": "prisma generate",

@@ -42,6 +42,9 @@ async function main() {
   const apiStudent = await prisma.aluno.create({
     data: { id: `attendance-api-${suffix}`, nomeCompleto: "Attendance API Test", telefone: `api-${suffix}`, vencimentoDia: 10, status: "ATIVO", dataInicio: new Date("2026-01-01T00:00:00.000Z") }
   });
+  await prisma.periodoMatricula.createMany({ data: [student.id, apiStudent.id].map((alunoId) => ({
+    alunoId, dataInicio: new Date("2026-01-01T00:00:00.000Z"), diaVencimento: 10, usarValorPadrao: true
+  })) });
 
   const input = { alunoId: student.id, data: "2026-10-05", horario: null, tipoAula: "musculacao" };
   const concurrent = await Promise.all(

@@ -1,7 +1,8 @@
 import { AlunoStatus, MensalidadeStatus, Prisma, UserRole } from "@prisma/client";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { prisma } from "@/lib/prisma";
-import { prismaDateToCivil } from "@/lib/attendance-date";
+import { academyToday, civilDateToPrisma, prismaDateToCivil } from "@/lib/attendance-date";
+import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 
 export const STUDENT_PAGE_SIZES = [10, 20, 50] as const;
 export const STUDENT_SORTS = ["name.asc", "name.desc", "status.asc", "dueDay.asc", "dueDay.desc"] as const;
@@ -49,7 +50,7 @@ export function parseStudentListParams(searchParams: URLSearchParams): StudentLi
   };
 }
 
-export function buildStudentWhere(params: StudentListParams): Prisma.AlunoWhereInput {
+export function buildStudentWhere(params: StudentListParams, dateKey = academyToday()): Prisma.AlunoWhereInput {
   const filters: Prisma.AlunoWhereInput[] = [];
   if (params.q) {
     filters.push({
@@ -59,12 +60,23 @@ export function buildStudentWhere(params: StudentListParams): Prisma.AlunoWhereI
       ]
     });
   }
-  if (params.status) filters.push({ status: params.status });
+  if (params.status === AlunoStatus.ATIVO) {
+    filters.push(studentActiveOnDateWhere(dateKey));
+  } else if (params.status === AlunoStatus.INATIVO) {
+    filters.push({
+      AND: [
+        { NOT: studentActiveOnDateWhere(dateKey) },
+        { status: { in: [AlunoStatus.ATIVO, AlunoStatus.INATIVO] } }
+      ]
+    });
+  } else if (params.status) {
+    filters.push({ status: params.status, NOT: studentActiveOnDateWhere(dateKey) });
+  }
   if (params.modalidadeId) filters.push({ modalidadeId: params.modalidadeId });
   if (params.financial === "INADIMPLENTE") {
-    filters.push({ mensalidades: { some: { status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] } } } });
+    filters.push({ mensalidades: { some: { status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO, MensalidadeStatus.PARCIAL] } } } });
   } else if (params.financial === "EM_DIA") {
-    filters.push({ mensalidades: { none: { status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] } } } });
+    filters.push({ mensalidades: { none: { status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO, MensalidadeStatus.PARCIAL] } } } });
   }
   return filters.length ? { AND: filters } : {};
 }
@@ -90,6 +102,7 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
   }
 
   const where = buildStudentWhere(params);
+  const today = civilDateToPrisma(academyToday());
   const [totalItems, students, modalidades] = await Promise.all([
     prisma.aluno.count({ where }),
     prisma.aluno.findMany({
@@ -100,7 +113,11 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
         telefone: true,
         status: true,
         vencimentoDia: true,
-        modalidade: { select: { id: true, nome: true } }
+        modalidade: { select: { id: true, nome: true } },
+        periodosMatricula: {
+          select: { id: true, dataInicio: true, dataSaida: true, diaVencimento: true, modalidade: { select: { id: true, nome: true } } },
+          orderBy: [{ dataInicio: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
+        }
       },
       orderBy: buildStudentOrderBy(params.sort),
       skip: (params.page - 1) * params.pageSize,
@@ -125,7 +142,7 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
               by: ["alunoId"],
               where: {
                 alunoId: { in: studentIds },
-                status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] }
+                status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO, MensalidadeStatus.PARCIAL] }
               },
               _count: { _all: true }
             })
@@ -138,18 +155,27 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
   const totalPages = Math.max(1, Math.ceil(totalItems / params.pageSize));
 
   return {
-    items: students.map((student) => ({
+    items: students.map((student) => {
+      const activePeriod = student.periodosMatricula.find((period) =>
+        (!period.dataInicio || period.dataInicio <= today) && (!period.dataSaida || period.dataSaida >= today)
+      );
+      const displayPeriod = activePeriod ?? student.periodosMatricula[0];
+      const hasDebt = (financialByStudent.get(student.id) ?? 0) > 0;
+      return {
       id: student.id,
       name: student.nomeCompleto,
       phone: student.telefone,
-      status: student.status,
-      dueDay: student.vencimentoDia,
-      modality: student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null,
+      status: activePeriod ? AlunoStatus.ATIVO : (student.status === AlunoStatus.ATIVO ? AlunoStatus.INATIVO : student.status),
+      activeEnrollment: Boolean(activePeriod),
+      dueDay: displayPeriod?.diaVencimento ?? student.vencimentoDia,
+      modality: displayPeriod?.modalidade
+        ? { id: displayPeriod.modalidade.id, name: displayPeriod.modalidade.nome }
+        : student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null,
       lastAttendanceAt: attendanceByStudent.get(student.id) ? prismaDateToCivil(attendanceByStudent.get(student.id)!) : null,
       ...(showFinancial
-        ? { financialStatus: (financialByStudent.get(student.id) ?? 0) > 0 ? "INADIMPLENTE" as const : "EM_DIA" as const }
+        ? { financialStatus: activePeriod ? (hasDebt ? "EM_ATRASO" as const : "EM_DIA" as const) : (hasDebt ? "COM_PENDENCIA" as const : "SEM_PENDENCIAS" as const) }
         : {})
-    })),
+    };}),
     pagination: {
       page: Math.min(params.page, totalPages),
       pageSize: params.pageSize,

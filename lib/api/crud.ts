@@ -23,6 +23,7 @@ type CrudConfig = {
   defaultValues?: Record<string, unknown>;
   queryFilters?: (request: NextRequest) => Record<string, unknown>;
   validate?: (data: Record<string, unknown>, mode: "create" | "update") => string | null;
+  validateAsync?: (data: Record<string, unknown>, mode: "create" | "update", previous?: Record<string, unknown>) => Promise<string | null>;
   deleteBlockedReason?: string;
 };
 
@@ -172,6 +173,8 @@ export function createListCreateHandlers(config: CrudConfig) {
     if (validationError) {
       return fail(validationError, 400);
     }
+    const asyncValidationError = await config.validateAsync?.(data, "create");
+    if (asyncValidationError) return fail(asyncValidationError, 400);
 
     try {
       const delegate = getDelegate(config.model);
@@ -218,6 +221,8 @@ export function createByIdHandlers(config: CrudConfig) {
     if (!previous) {
       return fail("Registro não encontrado", 404);
     }
+    const asyncValidationError = await config.validateAsync?.(data, "update", previous);
+    if (asyncValidationError) return fail(asyncValidationError, 400);
 
     const updated = await delegate.update({ where: { id }, data });
 

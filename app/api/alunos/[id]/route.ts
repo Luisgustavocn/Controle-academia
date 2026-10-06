@@ -1,11 +1,11 @@
 import { AlunoStatus } from "@prisma/client";
 import { NextRequest } from "next/server";
-import { logAudit } from "@/lib/audit";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { cancelarMensalidadesFuturasDoAluno } from "@/lib/services/mensalidades";
 import { createBackupFile } from "@/lib/services/backup";
+import { academyToday, CivilDateValidationError } from "@/lib/attendance-date";
+import { endEnrollment, EnrollmentNotFoundError, EnrollmentValidationError } from "@/lib/services/enrollment-periods";
 import {
   StudentRegistrationNotFoundError,
   updateStudentRegistration
@@ -128,13 +128,6 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   const { updated } = result;
 
-  if (updated.status === AlunoStatus.CANCELADO || updated.status === AlunoStatus.TRANCADO) {
-    const referenciaSaida = updated.dataSaidaCancelamento ?? new Date();
-    await cancelarMensalidadesFuturasDoAluno(id, referenciaSaida);
-  } else if (updated.dataSaidaCancelamento) {
-    await cancelarMensalidadesFuturasDoAluno(id, updated.dataSaidaCancelamento);
-  }
-
   return ok({ item: updated });
 }
 
@@ -149,26 +142,16 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   }
 
   const backup = await createBackupFile();
-  const dataSaida = previous.dataSaidaCancelamento ?? new Date();
-  const updated = await prisma.aluno.update({
-    where: { id },
-    data: {
-      status: AlunoStatus.CANCELADO,
-      dataSaidaCancelamento: dataSaida
-    }
-  });
-
-  await cancelarMensalidadesFuturasDoAluno(id, dataSaida);
-
-  await logAudit({
-    userId: auth.id,
-    modulo: "alunos",
-    entidade: "Aluno",
-    entidadeId: id,
-    acao: "ARCHIVE",
-    antes: previous,
-    depois: updated
-  });
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const exitDate = String(body.dataSaida ?? academyToday());
+  const targetStatus = String(body.status ?? "CANCELADO") === "TRANCADO" ? AlunoStatus.TRANCADO : AlunoStatus.CANCELADO;
+  try {
+    await endEnrollment(id, { exitDate, status: targetStatus, reason: String(body.motivo ?? "").trim() || null }, { id: auth.id, name: auth.name });
+  } catch (error) {
+    if (error instanceof EnrollmentNotFoundError) return fail(error.message, 404);
+    if (error instanceof EnrollmentValidationError || error instanceof CivilDateValidationError) return fail(error.message, 409);
+    throw error;
+  }
 
   return ok({ ok: true, archived: true, backupFilePath: backup.filePath });
 }

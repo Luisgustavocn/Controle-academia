@@ -7,6 +7,7 @@ import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 import { buildVencimentoDate, garantirMensalidadesDoMesAtual, resolveFutureMonthlyValue } from "@/lib/services/mensalidades";
+import { findEnrollmentForCompetence } from "@/lib/services/enrollment-periods";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
 
   const competenciaInformada = toCompetenciaIfValid(body.competencia);
   const competencia = competenciaInformada || currentCompetencia();
+  const period = await findEnrollmentForCompetence(prisma, alunoId, competencia);
 
   let dataPagamento: Date | null = null;
   try {
@@ -171,15 +173,15 @@ export async function POST(request: NextRequest) {
     return fail(error instanceof Error ? error.message : "Data inválida", 400);
   }
 
-  const vencimentoPadrao = buildVencimentoDate(competencia, aluno.vencimentoDia);
+  const vencimentoPadrao = buildVencimentoDate(competencia, period?.diaVencimento ?? aluno.vencimentoDia);
 
   const valorInformado = body.valor === undefined || body.valor === null || body.valor === ""
     ? resolveFutureMonthlyValue({
-        individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
-        useModalityDefault: aluno.usarValorPadrao,
-        modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+        individualValue: period?.valorMensal === null || period?.valorMensal === undefined ? null : Number(period.valorMensal),
+        useModalityDefault: period?.usarValorPadrao ?? aluno.usarValorPadrao,
+        modalityDefaultValue: period?.modalidade?.valorPadrao === null || period?.modalidade?.valorPadrao === undefined
           ? null
-          : Number(aluno.modalidade.valorPadrao)
+          : Number(period.modalidade.valorPadrao)
       })
     : Number(body.valor);
 
@@ -219,8 +221,6 @@ export async function POST(request: NextRequest) {
       observacao: body.observacao ? String(body.observacao) : null
     },
     update: {
-      valor: valorInformado,
-      vencimento: vencimentoPadrao,
       dataPagamento,
       formaPagamento: body.formaPagamento === "" ? null : (body.formaPagamento as string | undefined),
       status,

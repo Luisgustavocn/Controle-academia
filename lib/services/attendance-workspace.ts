@@ -1,4 +1,4 @@
-import { AlunoStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import {
   academyToday,
   addCivilDays,
@@ -10,6 +10,7 @@ import {
   prismaDateToCivil
 } from "@/lib/attendance-date";
 import { prisma } from "@/lib/prisma";
+import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 
 const ROSTER_PAGE_SIZES = [12, 24, 48] as const;
 const HISTORY_PAGE_SIZES = [10, 20, 50] as const;
@@ -59,11 +60,12 @@ export async function getAttendanceRoster(params: AttendanceRosterParams, client
         ]
       }
     : {};
-  const where: Prisma.AlunoWhereInput = { status: AlunoStatus.ATIVO, ...search };
+  const activeWhere = studentActiveOnDateWhere(params.date);
+  const where: Prisma.AlunoWhereInput = { AND: [activeWhere, search] };
 
   const [activeStudents, presentToday, totalItems, students] = await Promise.all([
-    client.aluno.count({ where: { status: AlunoStatus.ATIVO } }),
-    client.presenca.count({ where: { data: date, presente: true, aluno: { status: AlunoStatus.ATIVO } } }),
+    client.aluno.count({ where: activeWhere }),
+    client.presenca.count({ where: { data: date, presente: true, aluno: activeWhere } }),
     client.aluno.count({ where }),
     client.aluno.findMany({
       where,

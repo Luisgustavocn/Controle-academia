@@ -11,6 +11,7 @@ import {
   type AcademyDateContext
 } from "@/lib/timezone";
 import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
+import { enrollmentCoversCompetenceWhere, studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 
 export const NO_ATTENDANCE_ALERT_DAYS = 10;
 
@@ -109,7 +110,7 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
     pedidosPagosMes,
     controle
   ] = await Promise.all([
-    prisma.aluno.count({ where: { status: AlunoStatus.ATIVO } }),
+    prisma.aluno.count({ where: { periodosMatricula: { some: enrollmentCoversCompetenceWhere(referenceCompetencia) } } }),
     prisma.mensalidade.count({
       where: {
         competencia: referenceCompetencia,
@@ -451,6 +452,7 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
   const lastRange = academyMonthRange(competencias[competencias.length - 1] ?? context.competencia);
   const needsOperationalData = role === "ADMIN" || role === "RECEPCAO";
   const needsFinancialSeries = role === "ADMIN" || role === "FINANCEIRO";
+  const activeStudentWhere = studentActiveOnDateWhere(context.dateKey);
 
   const [
     activeStudents,
@@ -463,10 +465,9 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
     expenses,
     orders
   ] = await Promise.all([
-    prisma.aluno.count({ where: { status: AlunoStatus.ATIVO } }),
+    prisma.aluno.count({ where: activeStudentWhere }),
     prisma.mensalidade.findMany({
       where: {
-        aluno: { status: AlunoStatus.ATIVO },
         OR: [
           { competencia: context.competencia, status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] } },
           { status: MensalidadeStatus.ATRASADO }
@@ -490,12 +491,13 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
       where: {
         ativo: true,
         diaSemana: context.weekday,
-        semanaRef: { in: ["", context.weekRef] }
+        semanaRef: { in: ["", context.weekRef] },
+        OR: [{ alunoId: null }, { aluno: activeStudentWhere }]
       }
     }) : Promise.resolve(0),
     needsOperationalData ? prisma.presenca.groupBy({
       by: ["alunoId"],
-      where: { presente: true, aluno: { status: AlunoStatus.ATIVO } },
+      where: { presente: true, aluno: activeStudentWhere },
       _max: { data: true }
     }) : Promise.resolve([]),
     needsOperationalData ? prisma.aluno.findMany({

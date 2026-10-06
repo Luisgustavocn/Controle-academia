@@ -16,6 +16,7 @@ type Field = {
   type?: "text" | "number" | "date" | "datetime-local" | "textarea" | "select" | "multi-select";
   required?: boolean;
   options?: Array<{ label: string; value: string }>;
+  lookupEndpoint?: string;
 };
 
 type ListField = string | { key: string; label: string };
@@ -600,6 +601,7 @@ export function CrudModule({
 
     for (const fieldKey of relationFieldKeys) {
       const config = LOOKUP_CONFIGS[fieldKey];
+      const field = fields.find((entry) => entry.key === fieldKey);
       if (!config) {
         continue;
       }
@@ -608,7 +610,7 @@ export function CrudModule({
       controllers.push(controller);
       setLookupLoading((prev) => ({ ...prev, [fieldKey]: true }));
 
-      const lookupEndpoint = resolveLookupEndpoint(config, selectedTipo);
+      const lookupEndpoint = field?.lookupEndpoint ?? resolveLookupEndpoint(config, selectedTipo);
       void fetch(lookupEndpoint, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) {
@@ -663,7 +665,7 @@ export function CrudModule({
         controller.abort();
       }
     };
-  }, [formOpen, relationFieldKeys, selectedTipo]);
+  }, [formOpen, relationFieldKeys, selectedTipo, fields]);
 
   function onChange(key: string, value: string) {
     setForm((prev) => {
@@ -842,36 +844,6 @@ export function CrudModule({
     if (!res.ok) {
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       alert(payload.error ?? "Não foi possível atualizar o registro");
-      return;
-    }
-
-    await fetchItems();
-    await notifyDataChanged();
-    setOpenActions(null);
-  }
-
-  async function reativarComoNovoCadastro(item: Record<string, unknown>) {
-    const id = String(item.id ?? "");
-    if (!id) return;
-
-    const status = String(item.status ?? "").toUpperCase();
-    if (status !== "CANCELADO" && status !== "TRANCADO") {
-      alert("A ação de reativar como novo cadastro é apenas para alunos cancelados ou trancados.");
-      return;
-    }
-
-    const confirmed = window.confirm("Criar um novo cadastro ativo com os mesmos dados deste aluno?");
-    if (!confirmed) {
-      return;
-    }
-
-    const res = await fetch(`${endpoint}/${id}/reativar`, {
-      method: "POST"
-    });
-
-    if (!res.ok) {
-      const payload = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(payload.error ?? "Não foi possível criar o novo cadastro");
       return;
     }
 
@@ -1102,19 +1074,6 @@ export function CrudModule({
                       : quickBooleanField === "presente"
                         ? "Marcar presente"
                         : "Ativar"}
-                  </Button>
-                ) : null}
-
-                {canUpdate && endpoint === "/api/alunos" &&
-                ["CANCELADO", "TRANCADO"].includes(String(openActions.item.status ?? "").toUpperCase()) &&
-                openActions.item.id !== undefined ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="justify-start"
-                    onClick={() => void reativarComoNovoCadastro(openActions.item)}
-                  >
-                    Reativar como novo
                   </Button>
                 ) : null}
 

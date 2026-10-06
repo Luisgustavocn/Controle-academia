@@ -49,7 +49,12 @@ const student = {
   dataSaidaCancelamento: null,
   createdAt: new Date("2026-01-09T12:00:00.000Z"),
   observacoes: "Observação confiável",
-  modalidade: { id: "mod-1", nome: "Musculação" }
+  modalidade: { id: "mod-1", nome: "Musculação" },
+  periodosMatricula: [{
+    id: "period-1", dataInicio: new Date("2026-01-10T00:00:00.000Z"), dataSaida: null,
+    valorMensal: 120, usarValorPadrao: false, diaVencimento: 10,
+    modalidade: { id: "mod-1", nome: "Musculação" }
+  }]
 };
 
 function installDefaults() {
@@ -59,7 +64,8 @@ function installDefaults() {
   db.presenca.count = async () => (++countCall === 1 ? 4 : 7);
   db.presenca.findMany = async () => [];
   db.mensalidade.findUnique = async () => ({ competencia: "2026-10", valor: 120, vencimento: new Date("2026-10-10T03:00:00.000Z"), dataPagamento: null, status: MensalidadeStatus.PENDENTE });
-  db.mensalidade.count = async () => 2;
+  let monthlyCountCall = 0;
+  db.mensalidade.count = async () => (++monthlyCountCall === 1 ? 2 : 0);
   db.mensalidade.findFirst = async () => ({ dataPagamento: new Date("2026-09-10T13:00:00.000Z") });
   db.mensalidade.findMany = async () => [];
   db.pagamento.findMany = async () => [];
@@ -87,7 +93,7 @@ test("profile overview consolidates reliable student, finance and attendance dat
   assert.equal(result.student.status, AlunoStatus.ATIVO);
   assert.equal(result.summary.attendance?.thisMonth, 4);
   assert.equal(result.summary.attendance?.last30Days, 7);
-  assert.equal(result.summary.financial?.status, "INADIMPLENTE");
+  assert.equal(result.summary.financial?.status, "EM_ATRASO");
   assert.equal(result.summary.financial?.currentMonthly?.value, 120);
   assert.equal(result.summary.financial?.openCount, 2);
 });
@@ -126,7 +132,9 @@ test("capability actions preserve the current role matrix and status rules", () 
   assert.equal(studentProfileCapabilities(UserRole.FINANCEIRO, AlunoStatus.ATIVO).changeStatus, false);
   assert.equal(studentProfileCapabilities(UserRole.PERSONAL, AlunoStatus.ATIVO).writeAttendance, true);
   assert.equal(financialStatusFromOpenCount(0), "EM_DIA");
-  assert.equal(financialStatusFromOpenCount(1), "INADIMPLENTE");
+  assert.equal(financialStatusFromOpenCount(1), "EM_ATRASO");
+  assert.equal(financialStatusFromOpenCount(0, false), "SEM_PENDENCIAS");
+  assert.equal(financialStatusFromOpenCount(1, false), "COM_PENDENCIA");
 });
 
 test("financial section limits and maps monthly and explicit payment history", async () => {
@@ -152,7 +160,7 @@ test("attendance section returns recent confirmed attendance in descending sourc
 });
 
 test("history includes only persisted registration, current exit and plan changes", async () => {
-  db.aluno.findUnique = async () => ({ id: "student-1", createdAt: new Date("2026-01-09T12:00:00Z"), status: AlunoStatus.CANCELADO, dataSaidaCancelamento: new Date("2026-10-01T12:00:00Z") });
+  db.aluno.findUnique = async () => ({ id: "student-1", createdAt: new Date("2026-01-09T12:00:00Z"), status: AlunoStatus.CANCELADO, dataSaidaCancelamento: new Date("2026-10-01T12:00:00Z"), periodosMatricula: [] });
   db.historicoPlano.findMany = async () => [{ id: "h1", modalidadeAnterior: "A", modalidadeNova: "B", dataMudanca: new Date("2026-05-01T12:00:00Z"), observacao: null }];
   const result = await getStudentProfileHistory("student-1");
   assert.equal(result.registration.type, "REGISTRATION");
