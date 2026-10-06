@@ -83,6 +83,23 @@ async function main() {
     }
   });
 
+  await prisma.periodoMatricula.upsert({
+    where: { id: "cl_seed_periodo_ana" },
+    update: {},
+    create: {
+      id: "cl_seed_periodo_ana", alunoId: alunoA.id, dataInicio: new Date("2025-11-05T00:00:00.000Z"),
+      modalidadeId: todosDias?.id, diaVencimento: 10, usarValorPadrao: true
+    }
+  });
+  await prisma.periodoMatricula.upsert({
+    where: { id: "cl_seed_periodo_bruno" },
+    update: {},
+    create: {
+      id: "cl_seed_periodo_bruno", alunoId: alunoB.id, dataInicio: new Date("2026-01-03T00:00:00.000Z"),
+      modalidadeId: funcional?.id, diaVencimento: 15, usarValorPadrao: true
+    }
+  });
+
   await prisma.mensalidade.upsert({
     where: {
       alunoId_competencia: {

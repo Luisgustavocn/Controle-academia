@@ -107,6 +107,15 @@ async function main() {
         }
       ]
     });
+    await prisma.periodoMatricula.createMany({
+      data: [
+        ...[studentId, paidStudentId, noFeeStudentId, rollbackStudentId].map((alunoId) => ({ alunoId, dataInicio: new Date("2026-09-01T00:00:00.000Z"), modalidadeId: oldModalityId, diaVencimento: 10, usarValorPadrao: true })),
+        { alunoId: individualStudentId, dataInicio: new Date("2026-12-01T00:00:00.000Z"), modalidadeId: newModalityId, diaVencimento: 12, valorMensal: 250, usarValorPadrao: true },
+        { alunoId: defaultStudentId, dataInicio: new Date("2026-12-01T00:00:00.000Z"), modalidadeId: newModalityId, diaVencimento: 15, usarValorPadrao: true },
+        { alunoId: unconfiguredStudentId, dataInicio: new Date("2026-12-01T00:00:00.000Z"), modalidadeId: noDefaultModalityId, diaVencimento: 18, usarValorPadrao: false },
+        { alunoId: unknownStartStudentId, dataInicio: null, modalidadeId: newModalityId, diaVencimento: 20, valorMensal: 210, usarValorPadrao: false }
+      ]
+    });
     await prisma.mensalidade.createMany({
       data: [
         { alunoId: studentId, competencia: "2026-09", valor: 110, vencimento: new Date("2026-09-10T00:00:00.000Z"), status: MensalidadeStatus.PAGO, dataPagamento: new Date("2026-09-10T12:00:00.000Z"), formaPagamento: "PIX" },

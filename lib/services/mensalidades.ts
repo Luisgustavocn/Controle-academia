@@ -1,7 +1,8 @@
-import { AlunoStatus, MensalidadeStatus } from "@prisma/client";
+import { MensalidadeStatus } from "@prisma/client";
 import { endOfMonth, format, startOfDay, startOfMonth } from "date-fns";
 import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
+import { enrollmentCoversCompetenceWhere } from "@/lib/services/enrollment-periods";
 
 export function buildVencimentoDate(competencia: string, vencimentoDia: number) {
   const [year, month] = competencia.split("-").map(Number);
@@ -46,13 +47,12 @@ export function resolveFutureMonthlyValue(input: {
 }
 
 export async function generateMensalidadesCompetencia(competencia: string) {
-  const alunos = await prisma.aluno.findMany({
-    where: {
-      status: AlunoStatus.ATIVO,
-      dataSaidaCancelamento: null
-    },
-    include: { modalidade: true }
+  const periods = await prisma.periodoMatricula.findMany({
+    where: enrollmentCoversCompetenceWhere(competencia),
+    include: { aluno: true, modalidade: true },
+    orderBy: [{ dataInicio: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }]
   });
+  const alunos = Array.from(new Map(periods.map((period) => [period.alunoId, period])).values());
 
   if (alunos.length === 0) {
     return {
@@ -61,7 +61,7 @@ export async function generateMensalidadesCompetencia(competencia: string) {
     };
   }
 
-  const alunoIds = alunos.map((aluno) => aluno.id);
+  const alunoIds = alunos.map((period) => period.alunoId);
   const existingCurrent = await prisma.mensalidade.findMany({
     where: {
       alunoId: { in: alunoIds },
@@ -83,28 +83,27 @@ export async function generateMensalidadesCompetencia(competencia: string) {
     status: MensalidadeStatus;
   }> = [];
 
-  for (const aluno of alunos) {
-    if (existingCurrentSet.has(aluno.id)) continue;
-    if (aluno.dataInicio && competenciaFromUtcDate(aluno.dataInicio) > competencia) continue;
+  for (const period of alunos) {
+    if (existingCurrentSet.has(period.alunoId)) continue;
 
-    const vencimento = buildVencimentoDate(competencia, aluno.vencimentoDia);
+    const vencimento = buildVencimentoDate(competencia, period.diaVencimento);
     const valor = resolveFutureMonthlyValue({
-      individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
-      useModalityDefault: aluno.usarValorPadrao,
-      modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+      individualValue: period.valorMensal === null ? null : Number(period.valorMensal),
+      useModalityDefault: period.usarValorPadrao,
+      modalityDefaultValue: period.modalidade?.valorPadrao === null || period.modalidade?.valorPadrao === undefined
         ? null
-        : Number(aluno.modalidade.valorPadrao)
+        : Number(period.modalidade.valorPadrao)
     });
     if (valor === null) continue;
 
     createData.push({
-      alunoId: aluno.id,
+      alunoId: period.alunoId,
       competencia,
       valor,
       vencimento,
       status: MensalidadeStatus.PENDENTE
     });
-    created.push(aluno.id);
+    created.push(period.alunoId);
   }
 
   if (createData.length > 0) {
@@ -124,18 +123,17 @@ export async function generateMensalidadesAteCompetencia(
   competenciaLimite = currentCompetencia(),
   alunoIds?: string[]
 ) {
-  const alunos = await prisma.aluno.findMany({
+  const periods = await prisma.periodoMatricula.findMany({
     where: {
-      status: AlunoStatus.ATIVO,
-      dataSaidaCancelamento: null,
-      ...(alunoIds && alunoIds.length > 0 ? { id: { in: alunoIds } } : {})
+      dataInicio: { not: null },
+      ...(alunoIds && alunoIds.length > 0 ? { alunoId: { in: alunoIds } } : {})
     },
     include: {
       modalidade: true
     }
   });
 
-  if (alunos.length === 0) {
+  if (periods.length === 0) {
     return {
       competenciaLimite,
       totalGerado: 0
@@ -144,7 +142,7 @@ export async function generateMensalidadesAteCompetencia(
 
   const existentes = await prisma.mensalidade.findMany({
     where: {
-      alunoId: { in: alunos.map((aluno) => aluno.id) },
+      alunoId: { in: Array.from(new Set(periods.map((period) => period.alunoId))) },
       competencia: { lte: competenciaLimite }
     },
     select: {
@@ -169,25 +167,26 @@ export async function generateMensalidadesAteCompetencia(
     status: MensalidadeStatus;
   }> = [];
 
-  for (const aluno of alunos) {
-    // Sem uma data histórica conhecida não existe marco autorizado para backfill.
-    // A cobrança futura continua sendo feita pelo job explícito de uma competência.
-    if (!aluno.dataInicio) continue;
-    const competenciaInicio = competenciaFromUtcDate(aluno.dataInicio);
+  for (const period of periods) {
+    if (!period.dataInicio) continue;
+    const competenciaInicio = competenciaFromUtcDate(period.dataInicio);
     if (competenciaInicio > competenciaLimite) {
       continue;
     }
 
-    const existingForAluno = existentesByAluno.get(aluno.id) ?? new Map<string, number>();
+    const existingForAluno = existentesByAluno.get(period.alunoId) ?? new Map<string, number>();
     const valor = resolveFutureMonthlyValue({
-      individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
-      useModalityDefault: aluno.usarValorPadrao,
-      modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+      individualValue: period.valorMensal === null ? null : Number(period.valorMensal),
+      useModalityDefault: period.usarValorPadrao,
+      modalityDefaultValue: period.modalidade?.valorPadrao === null || period.modalidade?.valorPadrao === undefined
         ? null
-        : Number(aluno.modalidade.valorPadrao)
+        : Number(period.modalidade.valorPadrao)
     });
     if (valor === null) continue;
-    const competencias = competenciasBetween(competenciaInicio, competenciaLimite);
+    const competenciaFim = period.dataSaida
+      ? [competenciaFromUtcDate(period.dataSaida), competenciaLimite].sort()[0]
+      : competenciaLimite;
+    const competencias = competenciasBetween(competenciaInicio, competenciaFim);
 
     for (const competencia of competencias) {
       const valorExistente = existingForAluno.get(competencia);
@@ -196,10 +195,10 @@ export async function generateMensalidadesAteCompetencia(
       }
 
       novosRegistros.push({
-        alunoId: aluno.id,
+        alunoId: period.alunoId,
         competencia,
         valor,
-        vencimento: buildVencimentoDate(competencia, aluno.vencimentoDia),
+        vencimento: buildVencimentoDate(competencia, period.diaVencimento),
         status: MensalidadeStatus.PENDENTE
       });
     }
@@ -300,30 +299,6 @@ export async function totalsMensalidadesPorMes(competencia: string) {
   };
 }
 
-export async function cancelarMensalidadesFuturasDoAluno(alunoId: string, dataSaidaCancelamento: Date) {
-  const competenciaSaida = competenciaFromUtcDate(dataSaidaCancelamento);
-
-  const result = await prisma.mensalidade.updateMany({
-    where: {
-      alunoId,
-      competencia: {
-        gt: competenciaSaida
-      },
-      status: {
-        in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO]
-      }
-    },
-    data: {
-      status: MensalidadeStatus.ISENTO,
-      dataPagamento: null,
-      formaPagamento: null,
-      observacao: "Mensalidade isenta por cancelamento do aluno"
-    }
-  });
-
-  return result.count;
-}
-
 export async function buildMonthlyStudentControl(competencia: string) {
   const date = new Date(`${competencia}-01T00:00:00.000Z`);
   const ini = startOfMonth(date);
@@ -331,17 +306,17 @@ export async function buildMonthlyStudentControl(competencia: string) {
 
   const inicioMes = await prisma.aluno.count({
     where: {
-      status: AlunoStatus.ATIVO,
-      AND: [
-        { OR: [{ dataInicio: null }, { dataInicio: { lt: ini } }] },
-        { OR: [{ dataSaidaCancelamento: null }, { dataSaidaCancelamento: { gte: ini } }] }
-      ]
+      periodosMatricula: { some: {
+        AND: [
+          { OR: [{ dataInicio: null }, { dataInicio: { lte: ini } }] },
+          { OR: [{ dataSaida: null }, { dataSaida: { gte: ini } }] }
+        ]
+      } }
     }
   });
 
-  const entrou = await prisma.aluno.count({
+  const entrou = await prisma.periodoMatricula.count({
     where: {
-      status: AlunoStatus.ATIVO,
       dataInicio: {
         gte: ini,
         lte: fim
@@ -349,16 +324,25 @@ export async function buildMonthlyStudentControl(competencia: string) {
     }
   });
 
-  const saiu = await prisma.aluno.count({
+  const saiu = await prisma.periodoMatricula.count({
     where: {
-      dataSaidaCancelamento: {
+      dataSaida: {
         gte: ini,
         lte: fim
       }
     }
   });
 
-  const totalFinal = inicioMes + entrou - saiu;
+  const totalFinal = await prisma.aluno.count({
+    where: {
+      periodosMatricula: { some: {
+        AND: [
+          { OR: [{ dataInicio: null }, { dataInicio: { lte: fim } }] },
+          { OR: [{ dataSaida: null }, { dataSaida: { gte: fim } }] }
+        ]
+      } }
+    }
+  });
 
   const saved = await prisma.controleMensalAlunos.upsert({
     where: { competencia },
