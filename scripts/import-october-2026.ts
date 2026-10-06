@@ -28,7 +28,19 @@ function parseArguments(argv: string[]) {
   const sourcePath = valueAfter("--source");
   if (!sourcePath) throw new Error("Informe a planilha descriptografada com --source <arquivo.xlsx>");
   const reportDir = valueAfter("--report-dir") ?? path.join(process.cwd(), "data", "import-october-2026", "reports");
-  return { mode, sourcePath: path.resolve(sourcePath), reportDir: path.resolve(reportDir) };
+  const snapshotStdin = argv.includes("--snapshot-stdin");
+  return { mode, sourcePath: path.resolve(sourcePath), reportDir: path.resolve(reportDir), snapshotStdin };
+}
+
+async function snapshotFromStdin(): Promise<ProductionSnapshot> {
+  let raw = "";
+  process.stdin.setEncoding("utf8");
+  for await (const chunk of process.stdin) raw += chunk;
+  const parsed = JSON.parse(raw) as ProductionSnapshot;
+  if (!Array.isArray(parsed.students) || !Array.isArray(parsed.modalities) || !Array.isArray(parsed.attendance)) {
+    throw new Error("Snapshot de produção inválido");
+  }
+  return parsed;
 }
 
 async function productionSnapshot(): Promise<ProductionSnapshot> {
@@ -41,7 +53,18 @@ async function productionSnapshot(): Promise<ProductionSnapshot> {
         vencimentoDia: true,
         status: true,
         modalidadeId: true,
-        modalidade: { select: { nome: true } }
+        modalidade: { select: { nome: true } },
+        periodosMatricula: {
+          select: {
+            id: true,
+            dataInicio: true,
+            dataSaida: true,
+            modalidadeId: true,
+            valorMensal: true,
+            usarValorPadrao: true,
+            diaVencimento: true
+          }
+        }
       }
     }),
     prisma.modalidade.findMany({ select: { id: true, nome: true, valorPadrao: true, ativa: true } }),
@@ -58,7 +81,16 @@ async function productionSnapshot(): Promise<ProductionSnapshot> {
       dueDay: student.vencimentoDia,
       status: student.status,
       modalityId: student.modalidadeId,
-      modalityName: student.modalidade?.nome ?? null
+      modalityName: student.modalidade?.nome ?? null,
+      enrollments: student.periodosMatricula.map((period) => ({
+        id: period.id,
+        startDate: period.dataInicio ? prismaDateToCivil(period.dataInicio) : null,
+        exitDate: period.dataSaida ? prismaDateToCivil(period.dataSaida) : null,
+        modalityId: period.modalidadeId,
+        monthlyValue: period.valorMensal === null ? null : Number(period.valorMensal),
+        useDefaultValue: period.usarValorPadrao,
+        dueDay: period.diaVencimento
+      }))
     })),
     modalities: modalities.map((modality) => ({
       id: modality.id,
@@ -77,7 +109,8 @@ void runProductionCli("import-october-2026", async () => {
   const sourceSha256 = createHash("sha256").update(source).digest("hex");
   const workbook = XLSX.read(source, { type: "buffer", cellDates: true, cellStyles: true });
   const parsed = parseOctober2026Workbook(workbook);
-  const plan = buildOctoberDryRunPlan(parsed, await productionSnapshot());
+  const snapshot = options.snapshotStdin ? await snapshotFromStdin() : await productionSnapshot();
+  const plan = buildOctoberDryRunPlan(parsed, snapshot);
   await mkdir(options.reportDir, { recursive: true, mode: 0o700 });
   const generatedAt = new Date();
   const reportName = `dry-run-outubro-2026-${generatedAt.toISOString().replace(/[:.]/g, "-")}.xlsx`;

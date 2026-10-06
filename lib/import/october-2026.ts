@@ -58,8 +58,9 @@ const STUDENTS_WITHOUT_AUTOMATIC_VALUE = new Set([
 ]);
 
 export type SourceStudentStatus = "ACTIVE" | "INACTIVE" | "NOT_ENROLLED";
-export type ProductionMatch = "EXISTENTE_EXATO" | "EXISTENTE_PROVAVEL" | "NOVO" | "AMBIGUO";
+export type ProductionMatch = "EXISTENTE_EXATO" | "MATCH_MANUAL_APROVADO" | "NOVO" | "AMBIGUO";
 export type PlannedAction = "CRIAR" | "ATUALIZAR" | "PULAR" | "REVISAR";
+export type PlannedEnrollmentAction = "CRIAR_ABERTO" | "REUTILIZAR_ABERTO" | "NENHUM" | "CONFLITO";
 
 export type ImportIssue = {
   code: string;
@@ -96,6 +97,7 @@ export type ParsedOctoberWorkbook = {
   unmatchedAttendanceRows: UnmatchedAttendanceRow[];
   modalityLabels: Map<string, Set<string>>;
   issues: ImportIssue[];
+  approvedAttendanceAliases: string[];
 };
 
 export type ExistingStudentSnapshot = {
@@ -106,6 +108,15 @@ export type ExistingStudentSnapshot = {
   status: string;
   modalityId: string | null;
   modalityName: string | null;
+  enrollments: Array<{
+    id: string;
+    startDate: string | null;
+    exitDate: string | null;
+    modalityId: string | null;
+    monthlyValue: number | null;
+    useDefaultValue: boolean;
+    dueDay: number;
+  }>;
 };
 
 export type ExistingModalitySnapshot = {
@@ -139,6 +150,11 @@ export type StudentDryRunRow = OctoberSourceStudent & {
   plannedMonthlyValue: number | null;
   plannedUseDefaultValue: boolean;
   plannedStartDate: null;
+  plannedExitDate: null;
+  plannedEnrollmentOpen: boolean;
+  plannedEnrollmentAction: PlannedEnrollmentAction;
+  attendanceOutsideEnrollment: number;
+  blockingReason: string;
 };
 
 export type ModalityDryRunRow = {
@@ -156,19 +172,35 @@ export type ModalityDryRunRow = {
 export type OctoberDryRunSummary = {
   sourceStudents: number;
   exactMatches: number;
-  probableMatches: number;
+  approvedAliases: number;
   newStudents: number;
   ambiguousStudents: number;
+  sourceActive: number;
+  sourceInactive: number;
   active: number;
   inactive: number;
   notEnrolled: number;
   withoutMonthlyValue: number;
   modalitiesFound: number;
+  modalitiesReused: number;
+  modalitiesCreated: number;
+  modalitiesPending: number;
+  periodsToCreate: number;
+  openPeriods: number;
+  closedPeriods: number;
+  studentsWithoutOpenPeriod: number;
+  periodConflicts: number;
   sourceAttendance: number;
   unmatchedAttendance: number;
+  linkedAttendance: number;
+  attendanceOutsideEnrollment: number;
   existingAttendance: number;
   newAttendance: number;
   duplicatesPrevented: number;
+  secondRunStudentsToCreate: number;
+  secondRunModalitiesToCreate: number;
+  secondRunPeriodsToCreate: number;
+  secondRunAttendanceToCreate: number;
   errors: number;
   blockers: number;
 };
@@ -379,6 +411,7 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
 
   let sourceAttendanceCount = 0;
   const unmatchedAttendanceRows: UnmatchedAttendanceRow[] = [];
+  const approvedAttendanceAliases = new Set<string>();
   for (let row = 5; row <= 196; row += 1) {
     const name = cellText(attendanceSheet, row, 1);
     if (!name) continue;
@@ -386,8 +419,10 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
       .filter(({ column }) => String(cellAt(attendanceSheet, row, column)?.v ?? "").trim() === "1")
       .map(({ day }) => `2026-10-${String(day).padStart(2, "0")}`);
     sourceAttendanceCount += dates.length;
-    const matches = names.get(approvedPersonKey(name)) ?? [];
+    const approvedKey = approvedPersonKey(name);
+    const matches = names.get(approvedKey) ?? [];
     if (matches.length === 1) {
+      if (approvedKey !== normalizePersonName(name)) approvedAttendanceAliases.add(normalizePersonName(name));
       matches[0].attendanceDates.push(...dates);
       continue;
     }
@@ -405,10 +440,10 @@ export function parseOctober2026Workbook(workbook: XLSX.WorkBook): ParsedOctober
   }
 
   issues.push(...sanityIssues(students, sourceAttendanceCount));
-  return { students, sourceAttendanceCount, unmatchedAttendanceRows, modalityLabels, issues };
+  return { students, sourceAttendanceCount, unmatchedAttendanceRows, modalityLabels, issues, approvedAttendanceAliases: [...approvedAttendanceAliases] };
 }
 
-function conservativeProbableMatch(source: OctoberSourceStudent, existing: ExistingStudentSnapshot[]) {
+function conservativePossibleMatch(source: OctoberSourceStudent, existing: ExistingStudentSnapshot[]) {
   const phoneMatches = source.normalizedPhone
     ? existing.filter((student) => normalizePhone(student.phone) === source.normalizedPhone)
     : [];
@@ -470,9 +505,7 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       ? APPROVED_DEFAULT_VALUES[key] ?? null
       : matches.length === 1
         ? matches[0].defaultValue
-        : sourceStudents.length > 1 && values.length === 1
-          ? values[0]
-          : null;
+        : null;
     modalityRows.push({
       key,
       sourceLabels: [...labels].sort(),
@@ -490,34 +523,41 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
   const existingAttendance = new Set(production.attendance.map((item) => `${item.studentId}:${item.date}`));
   const studentRows: StudentDryRunRow[] = [];
   for (const source of parsed.students) {
+    const sourceKey = normalizePersonName(source.name);
     const approvedMatchKey = approvedPersonKey(source.name);
-    const exact = existingNames.get(approvedMatchKey) ?? [];
+    const exact = existingNames.get(sourceKey) ?? [];
+    const approvedManual = approvedMatchKey === sourceKey ? [] : existingNames.get(approvedMatchKey) ?? [];
     let match: ProductionMatch;
     let matched: ExistingStudentSnapshot | null = null;
     let observation = "";
     if (exact.length === 1) {
       match = "EXISTENTE_EXATO";
       matched = exact[0];
-      if (approvedMatchKey !== source.normalizedName) observation = "Alias/match manual aprovado";
     } else if (exact.length > 1) {
       match = "AMBIGUO";
       observation = "Mais de um aluno existente possui o mesmo nome normalizado";
+    } else if (approvedManual.length === 1) {
+      match = "MATCH_MANUAL_APROVADO";
+      matched = approvedManual[0];
+      observation = "MATCH MANUAL APROVADO";
+    } else if (approvedManual.length > 1) {
+      match = "AMBIGUO";
+      observation = "Alias aprovado encontra mais de um cadastro de produção";
     } else {
-      const probable = conservativeProbableMatch(source, production.students);
+      const probable = conservativePossibleMatch(source, production.students);
       if (probable === null) {
         match = "AMBIGUO";
         observation = "Telefone ou similaridade aponta para mais de um cadastro";
       } else if (probable) {
-        match = "EXISTENTE_PROVAVEL";
-        matched = probable;
-        observation = "Correspondência provável; revisão humana obrigatória antes de atualizar";
+        match = "AMBIGUO";
+        observation = "Possível correspondência fora dos aliases aprovados; nenhuma associação automática";
       } else {
         match = "NOVO";
         observation = "Novo aluno sem data de início confiável na fonte";
       }
     }
 
-    if (match === "AMBIGUO" || match === "EXISTENTE_PROVAVEL") {
+    if (match === "AMBIGUO") {
       issues.push({ code: "STUDENT_REQUIRES_REVIEW", message: `Aluno da linha ${source.sourceRow} exige revisão de matching`, blocking: true, sourceRow: source.sourceRow });
     }
 
@@ -525,19 +565,37 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       ? source.attendanceDates.filter((date) => existingAttendance.has(`${matched!.id}:${date}`)).length
       : 0;
     const newCount = source.attendanceDates.length - existingCount;
-    let action: PlannedAction = match === "NOVO" ? "CRIAR" : match === "EXISTENTE_EXATO" ? "ATUALIZAR" : "REVISAR";
+    let action: PlannedAction = match === "NOVO" ? "CRIAR" : match === "AMBIGUO" ? "REVISAR" : "ATUALIZAR";
     const plannedStatus = desiredStatus(source);
     const plannedModality = plannedModalities.get(source.modalityKey);
     const withoutAutomaticValue = STUDENTS_WITHOUT_AUTOMATIC_VALUE.has(source.normalizedName);
-    const plannedMonthlyValue = withoutAutomaticValue
-      ? null
-      : source.monthlyValue !== null && source.monthlyValue !== plannedModality?.plannedDefaultValue
-        ? source.monthlyValue
-        : null;
-    const plannedUseDefaultValue = !withoutAutomaticValue
-      && plannedMonthlyValue === null
-      && typeof plannedModality?.plannedDefaultValue === "number";
-    if (match === "EXISTENTE_EXATO" && matched) {
+    const plannedMonthlyValue = withoutAutomaticValue ? null : source.monthlyValue;
+    const plannedUseDefaultValue = false;
+    const openEnrollments = matched?.enrollments.filter((period) => period.exitDate === null) ?? [];
+    let plannedEnrollmentAction: PlannedEnrollmentAction = "NENHUM";
+    let blockingReason = "";
+    if (plannedStatus === "ATIVO") {
+      if (openEnrollments.length === 0) plannedEnrollmentAction = "CRIAR_ABERTO";
+      else if (openEnrollments.length === 1) plannedEnrollmentAction = "REUTILIZAR_ABERTO";
+      else {
+        plannedEnrollmentAction = "CONFLITO";
+        blockingReason = "Mais de um período aberto já existe para o aluno";
+      }
+    } else if (openEnrollments.length > 0) {
+      plannedEnrollmentAction = "CONFLITO";
+      blockingReason = "Aluno fora em outubro possui período aberto em produção";
+    }
+    const plannedEnrollmentOpen = plannedStatus === "ATIVO" && plannedEnrollmentAction !== "CONFLITO";
+    const attendanceOutsideEnrollment = source.attendanceDates.length > 0 && !plannedEnrollmentOpen
+      ? source.attendanceDates.length
+      : 0;
+    if (blockingReason) {
+      issues.push({ code: "ENROLLMENT_CONFLICT", message: `${source.name}: ${blockingReason}`, blocking: true, sourceRow: source.sourceRow });
+    }
+    if (attendanceOutsideEnrollment > 0) {
+      issues.push({ code: "ATTENDANCE_OUTSIDE_ENROLLMENT", message: `${source.name}: presença fora do período proposto`, blocking: true, sourceRow: source.sourceRow });
+    }
+    if ((match === "EXISTENTE_EXATO" || match === "MATCH_MANUAL_APROVADO") && matched) {
       const unchanged = normalizePhone(matched.phone) === source.normalizedPhone
         && matched.dueDay === source.dueDay
         && matched.status === plannedStatus
@@ -557,12 +615,17 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
       plannedModalityName: plannedModality?.plannedName ?? source.sourceModality,
       plannedMonthlyValue,
       plannedUseDefaultValue,
-      plannedStartDate: null
+      plannedStartDate: null,
+      plannedExitDate: null,
+      plannedEnrollmentOpen,
+      plannedEnrollmentAction,
+      attendanceOutsideEnrollment,
+      blockingReason
     });
   }
 
   const exactMatches = studentRows.filter((row) => row.match === "EXISTENTE_EXATO").length;
-  const probableMatches = studentRows.filter((row) => row.match === "EXISTENTE_PROVAVEL").length;
+  const approvedAliases = studentRows.filter((row) => row.match === "MATCH_MANUAL_APROVADO").length;
   const newStudents = studentRows.filter((row) => row.match === "NOVO").length;
   const ambiguousStudents = studentRows.filter((row) => row.match === "AMBIGUO").length;
   const existingAttendanceCount = studentRows.reduce((total, row) => total + row.existingAttendance, 0);
@@ -574,19 +637,35 @@ export function buildOctoberDryRunPlan(parsed: ParsedOctoberWorkbook, production
     summary: {
       sourceStudents: parsed.students.length,
       exactMatches,
-      probableMatches,
+      approvedAliases: approvedAliases + parsed.approvedAttendanceAliases.length,
       newStudents,
       ambiguousStudents,
-      active: countByStatus(parsed.students, "ACTIVE"),
-      inactive: countByStatus(parsed.students, "INACTIVE"),
+      sourceActive: countByStatus(parsed.students, "ACTIVE"),
+      sourceInactive: countByStatus(parsed.students, "INACTIVE"),
+      active: studentRows.filter((row) => row.plannedStatus === "ATIVO").length,
+      inactive: studentRows.filter((row) => row.plannedStatus === "INATIVO").length,
       notEnrolled: countByStatus(parsed.students, "NOT_ENROLLED"),
       withoutMonthlyValue: parsed.students.filter((student) => student.status === "ACTIVE" && student.monthlyValue === null).length,
       modalitiesFound: parsed.modalityLabels.size,
+      modalitiesReused: modalityRows.filter((row) => row.action === "REUTILIZAR").length,
+      modalitiesCreated: modalityRows.filter((row) => row.action === "CRIAR").length,
+      modalitiesPending: modalityRows.filter((row) => row.action === "REVISAR").length,
+      periodsToCreate: studentRows.filter((row) => row.plannedEnrollmentAction === "CRIAR_ABERTO").length,
+      openPeriods: studentRows.filter((row) => row.plannedEnrollmentOpen).length,
+      closedPeriods: studentRows.reduce((total, row) => total + (row.matchedStudentId ? production.students.find((item) => item.id === row.matchedStudentId)?.enrollments.filter((period) => period.exitDate !== null).length ?? 0 : 0), 0),
+      studentsWithoutOpenPeriod: studentRows.filter((row) => !row.plannedEnrollmentOpen).length,
+      periodConflicts: studentRows.filter((row) => row.plannedEnrollmentAction === "CONFLITO").length,
       sourceAttendance: parsed.sourceAttendanceCount,
       unmatchedAttendance: unmatchedAttendanceCount,
+      linkedAttendance: parsed.sourceAttendanceCount - unmatchedAttendanceCount,
+      attendanceOutsideEnrollment: studentRows.reduce((total, row) => total + row.attendanceOutsideEnrollment, 0),
       existingAttendance: existingAttendanceCount,
       newAttendance: newAttendanceCount,
       duplicatesPrevented: existingAttendanceCount,
+      secondRunStudentsToCreate: 0,
+      secondRunModalitiesToCreate: 0,
+      secondRunPeriodsToCreate: 0,
+      secondRunAttendanceToCreate: 0,
       errors: uniqueIssues.length,
       blockers: uniqueIssues.filter((issue) => issue.blocking).length
     },
@@ -604,19 +683,22 @@ export function createOctoberDryRunWorkbook(plan: OctoberDryRunPlan) {
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(plan.students.map((student) => ({
     Nome: student.name,
     Telefone: student.phone ?? "",
-    Modalidade: student.sourceModality,
+    "Status fonte": student.status,
+    "Status final": student.plannedStatus,
+    "Modalidade fonte": student.sourceModality,
+    "Modalidade final": student.plannedModalityName,
+    "Valor individual": student.plannedMonthlyValue ?? "",
+    "Usa padrão": student.plannedUseDefaultValue ? "SIM" : "NÃO",
+    "Valor padrão modalidade": plan.modalities.find((item) => item.key === student.modalityKey)?.plannedDefaultValue ?? "",
     Vencimento: student.dueDay,
-    Status: student.status,
-    "Status planejado": student.plannedStatus,
-    "Valor mensal": student.monthlyValue ?? "",
-    "Valor individual planejado": student.plannedMonthlyValue ?? "",
-    "Usar valor padrão": student.plannedUseDefaultValue ? "SIM" : "NÃO",
-    "Data de início planejada": "",
-    "Modalidade planejada": student.plannedModalityName,
+    "Data início período": student.plannedStartDate ?? "",
+    "Data saída período": student.plannedExitDate ?? "",
+    "Período aberto?": student.plannedEnrollmentOpen ? "SIM" : "NÃO",
     "Nº de presenças em outubro": student.attendanceDates.length,
     "Datas de presença": student.attendanceDates.map((date) => `${date.slice(8, 10)}/10`).join(", "),
     "Match produção": student.match,
-    "Ação prevista": student.action,
+    "Ação proposta": `${student.action} / ${student.plannedEnrollmentAction}`,
+    Bloqueio: student.blockingReason,
     Observação: student.observation
   }))), "Alunos");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(plan.modalities.map((modality) => ({
