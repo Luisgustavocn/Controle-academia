@@ -59,6 +59,12 @@ function attendanceLabel(value: string | null | undefined, now = new Date()) {
   return relativeCivilDateLabel(value, now);
 }
 
+function enrollmentPriceLabel(period: { monthlyValue: number | null; useDefaultValue: boolean }) {
+  if (period.useDefaultValue) return "Valor padrão da modalidade";
+  if (period.monthlyValue === null) return "Sem valor definido";
+  return `Valor exclusivo: ${currency(period.monthlyValue)}`;
+}
+
 function SectionLoading() {
   return <div className="space-y-3" aria-label="Carregando seção"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>;
 }
@@ -197,7 +203,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
 
         <TabsContent value="history">
           {loadingSection === "history" ? <SectionLoading /> : sectionErrors.history ? <ErrorState message={sectionErrors.history} onRetry={() => void loadSection("history", true)} /> : history ? <div className="space-y-4">
-            <Card><CardHeader><CardTitle>Matrículas</CardTitle><CardDescription>Períodos de vínculo preservados, do mais recente ao mais antigo.</CardDescription></CardHeader>{history.enrollments.length === 0 ? <EmptyState title="Sem períodos registrados" description="Não há vínculo histórico confiável para exibir." /> : <ul className="divide-y divide-line">{history.enrollments.map((period) => <li key={period.id} className="py-3 first:pt-0 last:pb-0"><p className="font-semibold">{period.startDate ? date(period.startDate) : "Início desconhecido"} → {period.exitDate ? date(period.exitDate) : "Atual"}</p><p className="text-helper text-muted">{period.modality ?? "Sem modalidade"} · {period.monthlyValue === null ? "Valor padrão/sem valor individual" : currency(period.monthlyValue)} · vence dia {period.dueDay}</p></li>)}</ul>}</Card>
+            <Card><CardHeader><CardTitle>Matrículas</CardTitle><CardDescription>Períodos de vínculo preservados, do mais recente ao mais antigo.</CardDescription></CardHeader>{history.enrollments.length === 0 ? <EmptyState title="Sem períodos registrados" description="Não há vínculo histórico confiável para exibir." /> : <ul className="divide-y divide-line">{history.enrollments.map((period) => <li key={period.id} className="py-3 first:pt-0 last:pb-0"><p className="font-semibold">{period.startDate ? date(period.startDate) : "Início desconhecido"} → {period.exitDate ? date(period.exitDate) : "Atual"}</p><p className="text-helper text-muted">{period.modality ?? "Sem modalidade"} · {enrollmentPriceLabel(period)} · vence dia {period.dueDay}</p></li>)}</ul>}</Card>
             <Card><CardHeader><CardTitle>Eventos persistidos</CardTitle><CardDescription>Somente fatos registrados diretamente no banco.</CardDescription></CardHeader><ul className="space-y-3"><li className="rounded-ds-lg border border-line p-3"><p className="font-semibold">Cadastro criado</p><p className="text-helper text-muted">{dateTime(history.registration.occurredAt)}</p></li>{history.currentExit ? <li className="rounded-ds-lg border border-line p-3"><p className="font-semibold">Saída atual registrada</p><p className="text-helper text-muted">{date(history.currentExit.occurredAt)} · {STATUS_LABEL[history.currentExit.status] ?? history.currentExit.status}</p></li> : null}</ul></Card>
             <Card><CardHeader><CardTitle>Alterações de modalidade</CardTitle><CardDescription>Histórico registrado pelo fluxo atual de edição.</CardDescription></CardHeader>{history.planChanges.length === 0 ? <EmptyState title="Sem alterações de modalidade" description="Nenhuma mudança de plano foi registrada." /> : <ul className="divide-y divide-line">{history.planChanges.map((item) => <li key={item.id} className="py-3 first:pt-0 last:pb-0"><p className="font-semibold">{item.previousModality ?? "Sem modalidade"} → {item.newModality}</p><p className="text-helper text-muted">{dateTime(item.occurredAt)}</p>{item.note ? <p className="mt-1 text-sm text-muted">{item.note}</p> : null}</li>)}</ul>}{history.hasMore ? <p className="mt-3 text-helper text-muted">Há alterações anteriores fora do limite desta visualização.</p> : null}</Card>
           </div> : null}
