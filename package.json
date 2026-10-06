@@ -19,6 +19,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "admin:bootstrap": "tsx scripts/bootstrap-first-admin.ts",
+    "import:october-2026": "tsx scripts/import-october-2026.ts",
     "jobs:backup": "tsx scripts/run-backup.ts",
     "jobs:backup-prune": "tsx scripts/run-prune-json-backups.ts",
     "jobs:backup-postgres": "bash scripts/backup-postgres.sh",
