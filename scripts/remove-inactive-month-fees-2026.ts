@@ -3,7 +3,6 @@ import { prisma } from "../lib/prisma";
 
 const APPLY = process.argv.includes("--apply");
 const EXPECTED_MAXIMUM = 394;
-const AUTOMATIC_BATCH_CREATED_AT = new Date("2026-10-06T18:10:44.354Z");
 
 type Candidate = {
   id: string;
@@ -18,7 +17,9 @@ async function eligible(client: Prisma.TransactionClient | typeof prisma): Promi
     FROM "Mensalidade" m
     WHERE m.competencia BETWEEN '2026-01' AND '2026-10'
       AND m.status IN ('ATRASADO'::"MensalidadeStatus", 'PENDENTE'::"MensalidadeStatus")
-      AND m."createdAt" = ${AUTOMATIC_BATCH_CREATED_AT}
+      -- Prisma models this column as timestamp without time zone. Keep the
+      -- canonical database value explicit instead of coercing a JS Date.
+      AND m."createdAt" = timestamp '2026-10-06 18:10:44.354'
       AND m."dataPagamento" IS NULL
       AND m."formaPagamento" IS NULL
       AND m.observacao IS NULL
