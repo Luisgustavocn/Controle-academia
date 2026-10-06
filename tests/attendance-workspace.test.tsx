@@ -91,8 +91,8 @@ test("frequency page starts in Today and keeps the monthly grid compact and cont
 
   await user.click(screen.getByRole("tab", { name: /Visão mensal/ }));
   await waitFor(() => assert.ok(screen.getByRole("table")));
-  const studentHeader = screen.getByRole("columnheader", { name: "Aluno" });
-  assert.match(studentHeader.className, /w-\[160px\]/);
-  assert.match(studentHeader.className, /sm:w-\[176px\]/);
+  const studentColumn = screen.getByRole("table").querySelector("col");
+  assert.match(studentColumn?.className ?? "", /w-\[160px\]/);
+  assert.match(studentColumn?.className ?? "", /sm:w-\[176px\]/);
   assert.ok(screen.getByRole("table").parentElement?.className.includes("overflow-x-auto"));
 });
