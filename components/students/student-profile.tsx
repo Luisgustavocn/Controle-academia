@@ -173,7 +173,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
       <section aria-labelledby="student-summary-title">
         <h2 id="student-summary-title" className="sr-only">Resumo operacional</h2>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard label="Status" value={STATUS_LABEL[student.status] ?? student.status} detail={`Desde ${date(student.startDate)}`} />
+          <SummaryCard label="Status" value={STATUS_LABEL[student.status] ?? student.status} detail={student.startDate ? `Desde ${date(student.startDate)}` : "Data histórica desconhecida"} />
           <SummaryCard label="Modalidade" value={student.modality?.name ?? "Sem modalidade"} detail={`Vencimento dia ${student.dueDay}`} />
           {attendanceSummary ? <SummaryCard label="Última presença" value={attendanceLabel(attendanceSummary.lastAttendanceAt)} detail={`${attendanceSummary.last30Days} nos últimos 30 dias`} /> : null}
           {financialSummary ? <SummaryCard label="Próximo vencimento" value={date(financialSummary.nextDueAt)} detail={`${financialSummary.openCount} mensalidade(s) em aberto`} /> : null}

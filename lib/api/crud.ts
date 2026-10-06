@@ -16,6 +16,7 @@ type CrudConfig = {
   relationInclude?: Record<string, boolean | object>;
   orderBy?: Record<string, "asc" | "desc">;
   numericFields?: string[];
+  nullableNumericFields?: string[];
   intFields?: string[];
   dateFields?: string[];
   booleanFields?: string[];
@@ -33,8 +34,8 @@ function normalizePayload(payload: Record<string, unknown>, config: CrudConfig) 
       continue;
     }
 
-    // Empty relation keys should clear the relation on updates.
-    if (field.endsWith("Id")) {
+    // Empty relation and explicitly nullable numeric keys clear persisted values.
+    if (field.endsWith("Id") || config.nullableNumericFields?.includes(field)) {
       data[field] = null;
       continue;
     }
@@ -55,6 +56,17 @@ function normalizePayload(payload: Record<string, unknown>, config: CrudConfig) 
       continue;
     }
     data[field] = parsed;
+  }
+
+  for (const field of config.nullableNumericFields ?? []) {
+    const value = data[field];
+    if (value === undefined) continue;
+    if (value === null || value === "") {
+      data[field] = null;
+      continue;
+    }
+    const parsed = Number(value);
+    data[field] = Number.isFinite(parsed) ? parsed : null;
   }
 
   for (const field of config.intFields ?? []) {

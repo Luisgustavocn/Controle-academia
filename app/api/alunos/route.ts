@@ -8,9 +8,9 @@ import { currentCompetencia, toCompetencia } from "@/lib/competencia";
 import {
   buildVencimentoDate,
   cancelarMensalidadesFuturasDoAluno,
-  generateMensalidadesAteCompetencia
+  generateMensalidadesAteCompetencia,
+  resolveFutureMonthlyValue
 } from "@/lib/services/mensalidades";
-import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 
@@ -35,7 +35,7 @@ function parseOptionalNumber(value: unknown, fieldName: string) {
     return null;
   }
   const parsed = Number(value);
-  if (Number.isNaN(parsed)) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${fieldName} inválido`);
   }
   return parsed;
@@ -50,6 +50,14 @@ function parseOptionalMensalidadeStatus(value: unknown) {
     throw new Error("status da mensalidade inválido");
   }
   return parsed;
+}
+
+function parseBoolean(value: unknown, fallback: boolean) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("regra de valor padrão inválida");
 }
 
 export async function GET(request: NextRequest) {
@@ -122,7 +130,13 @@ export async function GET(request: NextRequest) {
       dataInicio: toDateInputValue(aluno.dataInicio),
       dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
       modalidadeNome: aluno.modalidade?.nome ?? "",
-      valorPlano: Number(aluno.modalidade?.valorPadrao ?? 0),
+      valorPlano: resolveFutureMonthlyValue({
+        individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
+        useModalityDefault: aluno.usarValorPadrao,
+        modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+          ? null
+          : Number(aluno.modalidade.valorPadrao)
+      }),
       ...(showFinancial ? {
         inadimplente: _count.mensalidades > 0,
         mensalidadeAtual: mensalidades[0] ?? null,
@@ -151,8 +165,8 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as Record<string, unknown>;
 
-  if (!body.nomeCompleto || !body.telefone || !body.vencimentoDia || !body.dataInicio) {
-    return fail("Campos obrigatórios: nomeCompleto, telefone, vencimentoDia, dataInicio", 400);
+  if (!body.nomeCompleto || !body.telefone || !body.vencimentoDia) {
+    return fail("Campos obrigatórios: nomeCompleto, telefone, vencimentoDia", 400);
   }
 
   const vencimentoDia = Math.min(31, Math.max(1, Number(body.vencimentoDia)));
@@ -161,12 +175,16 @@ export async function POST(request: NextRequest) {
   let mensalidadeDataPagamento: Date | null = null;
   let mensalidadeStatus: MensalidadeStatus | null = null;
   let dataSaidaCancelamento: Date | null = null;
+  let dataInicio: Date | null = null;
+  let usarValorPadrao = true;
 
   try {
-    mensalidadeValor = parseOptionalNumber(body.mensalidadeValor, "valor da mensalidade");
+    mensalidadeValor = parseOptionalNumber(body.valorMensal ?? body.mensalidadeValor, "valor mensal");
     mensalidadeDataPagamento = parseOptionalDate(body.mensalidadeDataPagamento, "data de pagamento da mensalidade");
     mensalidadeStatus = parseOptionalMensalidadeStatus(body.mensalidadeStatus);
     dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
+    dataInicio = parseOptionalDate(body.dataInicio, "data de início");
+    usarValorPadrao = parseBoolean(body.usarValorPadrao, true);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
   }
@@ -186,13 +204,15 @@ export async function POST(request: NextRequest) {
         modalidadeId: body.modalidadeId ? String(body.modalidadeId) : null,
         vencimentoDia,
         status,
-        dataInicio: new Date(String(body.dataInicio)),
+        dataInicio,
+        valorMensal: mensalidadeValor,
+        usarValorPadrao,
         dataSaidaCancelamento: dataSaidaFinal,
         observacoes: body.observacoes ? String(body.observacoes) : null
       }
     });
 
-    if (aluno.status === AlunoStatus.ATIVO) {
+    if (aluno.status === AlunoStatus.ATIVO && aluno.dataInicio) {
       const competencia = toCompetencia(new Date());
 
       const modalidade = aluno.modalidadeId
@@ -201,8 +221,9 @@ export async function POST(request: NextRequest) {
             select: { nome: true, valorPadrao: true }
           })
         : null;
-      const valorPadrao = Number(modalidade?.valorPadrao ?? 0);
-      const modalidadePersonalizada = isModalidadePersonalizada(modalidade?.nome);
+      const valorPadrao = modalidade?.valorPadrao === null || modalidade?.valorPadrao === undefined
+        ? null
+        : Number(modalidade.valorPadrao);
 
       const competenciaMensalidade = competencia;
       const vencimentoPadrao = buildVencimentoDate(competenciaMensalidade, aluno.vencimentoDia);
@@ -210,10 +231,14 @@ export async function POST(request: NextRequest) {
       const dataPagamento =
         mensalidadeDataPagamento ??
         ((statusMensalidade === MensalidadeStatus.PAGO || statusMensalidade === MensalidadeStatus.PARCIAL) ? new Date() : null);
-      const valorMensalidade = modalidadePersonalizada ? mensalidadeValor ?? valorPadrao : valorPadrao;
+      const valorMensalidade = resolveFutureMonthlyValue({
+        individualValue: mensalidadeValor,
+        useModalityDefault: usarValorPadrao,
+        modalityDefaultValue: valorPadrao
+      });
       const vencimentoMensalidade = vencimentoPadrao;
 
-      await tx.mensalidade.upsert({
+      if (valorMensalidade !== null) await tx.mensalidade.upsert({
         where: {
           alunoId_competencia: {
             alunoId: aluno.id,
@@ -244,7 +269,7 @@ export async function POST(request: NextRequest) {
     return aluno;
   });
 
-  if (created.status === AlunoStatus.ATIVO) {
+  if (created.status === AlunoStatus.ATIVO && created.dataInicio) {
     await generateMensalidadesAteCompetencia(currentCompetencia(), [created.id]);
   }
 

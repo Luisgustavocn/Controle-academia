@@ -23,7 +23,7 @@ export type StudentProfileOverview = {
     phone: string;
     status: AlunoStatus;
     dueDay: number;
-    startDate: string;
+    startDate: string | null;
     exitDate: string | null;
     createdAt: string;
     notes: string | null;
@@ -132,7 +132,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
       phone: student.telefone,
       status: student.status,
       dueDay: student.vencimentoDia,
-      startDate: student.dataInicio.toISOString(),
+      startDate: iso(student.dataInicio),
       exitDate: iso(student.dataSaidaCancelamento),
       createdAt: student.createdAt.toISOString(),
       notes: student.observacoes,

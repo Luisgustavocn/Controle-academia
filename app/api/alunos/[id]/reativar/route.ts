@@ -37,6 +37,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       vencimentoDia: origem.vencimentoDia,
       status: AlunoStatus.ATIVO,
       dataInicio: hoje,
+      valorMensal: origem.valorMensal,
+      usarValorPadrao: origem.usarValorPadrao,
       dataSaidaCancelamento: null,
       observacoes: origem.observacoes
         ? `${origem.observacoes}\n\nReativado como novo cadastro em ${hoje.toLocaleDateString("pt-BR")} (origem: ${origem.id})`

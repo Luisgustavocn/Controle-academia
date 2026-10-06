@@ -48,8 +48,10 @@ export async function POST(request: NextRequest) {
     return fail("Nome da modalidade é obrigatório", 400);
   }
 
-  const valorPadrao = Number(body.valorPadrao);
-  if (!Number.isFinite(valorPadrao)) {
+  const valorPadrao = body.valorPadrao === undefined || body.valorPadrao === null || body.valorPadrao === ""
+    ? null
+    : Number(body.valorPadrao);
+  if (valorPadrao !== null && (!Number.isFinite(valorPadrao) || valorPadrao <= 0)) {
     return fail("Valor padrão inválido", 400);
   }
 

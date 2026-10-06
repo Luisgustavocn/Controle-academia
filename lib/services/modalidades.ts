@@ -33,7 +33,7 @@ export async function ensureModalidadePersonalizada() {
     return await prisma.modalidade.create({
       data: {
         nome: MODALIDADE_PERSONALIZADA,
-        valorPadrao: 0,
+        valorPadrao: null,
         ativa: true
       }
     });

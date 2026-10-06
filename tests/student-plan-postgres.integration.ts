@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { AlunoStatus, MensalidadeStatus, UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { generateMensalidadesAteCompetencia } from "../lib/services/mensalidades";
+import { generateMensalidadesAteCompetencia, generateMensalidadesCompetencia } from "../lib/services/mensalidades";
 import { updateStudentRegistration } from "../lib/services/student-registration";
 
 function snapshotFee(item: {
@@ -31,6 +31,11 @@ async function main() {
   const paidStudentId = `plan-paid-${suffix}`;
   const noFeeStudentId = `plan-no-fee-${suffix}`;
   const rollbackStudentId = `plan-rollback-${suffix}`;
+  const individualStudentId = `plan-individual-${suffix}`;
+  const defaultStudentId = `plan-default-${suffix}`;
+  const unconfiguredStudentId = `plan-unconfigured-${suffix}`;
+  const unknownStartStudentId = `plan-unknown-start-${suffix}`;
+  const noDefaultModalityId = `plan-no-default-${suffix}`;
   const triggerName = `test_plan_history_${suffix}`;
   const functionName = `test_plan_history_fn_${suffix}`;
   let triggerCreated = false;
@@ -42,11 +47,12 @@ async function main() {
     await prisma.modalidade.createMany({
       data: [
         { id: oldModalityId, nome: `Plan Old ${suffix}`, valorPadrao: 110 },
-        { id: newModalityId, nome: `Plan New ${suffix}`, valorPadrao: 300 }
+        { id: newModalityId, nome: `Plan New ${suffix}`, valorPadrao: 300 },
+        { id: noDefaultModalityId, nome: `Plan No Default ${suffix}`, valorPadrao: null }
       ]
     });
     await prisma.aluno.createMany({
-      data: [studentId, paidStudentId, noFeeStudentId, rollbackStudentId].map((id) => ({
+      data: [...[studentId, paidStudentId, noFeeStudentId, rollbackStudentId].map((id) => ({
         id,
         nomeCompleto: `Plan Student ${id}`,
         telefone: id,
@@ -54,7 +60,52 @@ async function main() {
         vencimentoDia: 10,
         status: AlunoStatus.ATIVO,
         dataInicio: new Date("2026-09-01T00:00:00.000Z")
-      }))
+      })),
+        {
+          id: individualStudentId,
+          nomeCompleto: `Plan Student ${individualStudentId}`,
+          telefone: individualStudentId,
+          modalidadeId: newModalityId,
+          vencimentoDia: 12,
+          status: AlunoStatus.ATIVO,
+          dataInicio: new Date("2026-12-01T00:00:00.000Z"),
+          valorMensal: 250,
+          usarValorPadrao: true
+        },
+        {
+          id: defaultStudentId,
+          nomeCompleto: `Plan Student ${defaultStudentId}`,
+          telefone: defaultStudentId,
+          modalidadeId: newModalityId,
+          vencimentoDia: 15,
+          status: AlunoStatus.ATIVO,
+          dataInicio: new Date("2026-12-01T00:00:00.000Z"),
+          valorMensal: null,
+          usarValorPadrao: true
+        },
+        {
+          id: unconfiguredStudentId,
+          nomeCompleto: `Plan Student ${unconfiguredStudentId}`,
+          telefone: unconfiguredStudentId,
+          modalidadeId: noDefaultModalityId,
+          vencimentoDia: 18,
+          status: AlunoStatus.ATIVO,
+          dataInicio: new Date("2026-12-01T00:00:00.000Z"),
+          valorMensal: null,
+          usarValorPadrao: false
+        },
+        {
+          id: unknownStartStudentId,
+          nomeCompleto: `Plan Student ${unknownStartStudentId}`,
+          telefone: unknownStartStudentId,
+          modalidadeId: newModalityId,
+          vencimentoDia: 20,
+          status: AlunoStatus.ATIVO,
+          dataInicio: null,
+          valorMensal: 210,
+          usarValorPadrao: false
+        }
+      ]
     });
     await prisma.mensalidade.createMany({
       data: [
@@ -104,6 +155,15 @@ async function main() {
     assert.equal(Number(december.valor), 300);
     assert.equal(december.vencimento.getDate(), 25);
 
+    await generateMensalidadesAteCompetencia("2026-11", [unknownStartStudentId]);
+    assert.equal(await prisma.mensalidade.count({ where: { alunoId: unknownStartStudentId } }), 0);
+
+    await generateMensalidadesCompetencia("2026-12");
+    assert.equal(Number((await prisma.mensalidade.findUniqueOrThrow({ where: { alunoId_competencia: { alunoId: individualStudentId, competencia: "2026-12" } } })).valor), 250);
+    assert.equal(Number((await prisma.mensalidade.findUniqueOrThrow({ where: { alunoId_competencia: { alunoId: defaultStudentId, competencia: "2026-12" } } })).valor), 300);
+    assert.equal(Number((await prisma.mensalidade.findUniqueOrThrow({ where: { alunoId_competencia: { alunoId: unknownStartStudentId, competencia: "2026-12" } } })).valor), 210);
+    assert.equal(await prisma.mensalidade.count({ where: { alunoId: unconfiguredStudentId } }), 0);
+
     await prisma.$executeRawUnsafe(`
       CREATE FUNCTION "${functionName}"() RETURNS trigger AS $$
       BEGIN
@@ -127,15 +187,16 @@ async function main() {
     }, { id: actorId, name: "Plan Test Admin" }), /controlled history failure/);
     assert.equal((await prisma.aluno.findUniqueOrThrow({ where: { id: rollbackStudentId } })).modalidadeId, oldModalityId);
 
-    console.log(JSON.stringify({ status: "ok", issuedFeesPreserved: before.length + 1, futureValue: Number(december.valor), rollbackVerified: true }));
+    console.log(JSON.stringify({ status: "ok", issuedFeesPreserved: before.length + 1, futureValue: Number(december.valor), nullableStartVerified: true, unconfiguredSkipped: true, rollbackVerified: true }));
   } finally {
     if (triggerCreated) {
       await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${triggerName}" ON "HistoricoPlano";`);
       await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${functionName}"();`);
     }
-    await prisma.logAuditoria.deleteMany({ where: { entidadeId: { in: [studentId, paidStudentId, noFeeStudentId, rollbackStudentId] } } });
-    await prisma.aluno.deleteMany({ where: { id: { in: [studentId, paidStudentId, noFeeStudentId, rollbackStudentId] } } });
-    await prisma.modalidade.deleteMany({ where: { id: { in: [oldModalityId, newModalityId] } } });
+    const studentIds = [studentId, paidStudentId, noFeeStudentId, rollbackStudentId, individualStudentId, defaultStudentId, unconfiguredStudentId, unknownStartStudentId];
+    await prisma.logAuditoria.deleteMany({ where: { entidadeId: { in: studentIds } } });
+    await prisma.aluno.deleteMany({ where: { id: { in: studentIds } } });
+    await prisma.modalidade.deleteMany({ where: { id: { in: [oldModalityId, newModalityId, noDefaultModalityId] } } });
     await prisma.user.deleteMany({ where: { id: actorId } });
   }
 }

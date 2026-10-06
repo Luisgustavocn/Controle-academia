@@ -4,6 +4,9 @@ export const { PUT, DELETE } = createByIdHandlers({
   model: "modalidade",
   module: "modalidades",
   writeCapability: "students.update",
-  numericFields: ["valorPadrao"],
-  booleanFields: ["ativa"]
+  nullableNumericFields: ["valorPadrao"],
+  booleanFields: ["ativa"],
+  validate: (data) => typeof data.valorPadrao === "number" && data.valorPadrao <= 0
+    ? "Valor padrão deve ser maior que zero ou ficar vazio"
+    : null
 });

@@ -2,7 +2,6 @@ import { AlunoStatus, MensalidadeStatus } from "@prisma/client";
 import { endOfMonth, format, startOfDay, startOfMonth } from "date-fns";
 import { currentCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
-import { isModalidadePersonalizada } from "@/lib/services/modalidades";
 
 export function buildVencimentoDate(competencia: string, vencimentoDia: number) {
   const [year, month] = competencia.split("-").map(Number);
@@ -34,10 +33,16 @@ export function competenciaFromUtcDate(date: Date) {
 
 export function resolveFutureMonthlyValue(input: {
   individualValue?: number | null;
-  modalityDefaultValue: number;
-  legacyPersonalizedValue?: number | null;
+  useModalityDefault: boolean;
+  modalityDefaultValue?: number | null;
 }) {
-  return input.individualValue ?? input.legacyPersonalizedValue ?? input.modalityDefaultValue;
+  if (input.individualValue !== null && input.individualValue !== undefined && input.individualValue > 0) {
+    return input.individualValue;
+  }
+  if (input.useModalityDefault && input.modalityDefaultValue !== null && input.modalityDefaultValue !== undefined && input.modalityDefaultValue > 0) {
+    return input.modalityDefaultValue;
+  }
+  return null;
 }
 
 export async function generateMensalidadesCompetencia(competencia: string) {
@@ -57,37 +62,17 @@ export async function generateMensalidadesCompetencia(competencia: string) {
   }
 
   const alunoIds = alunos.map((aluno) => aluno.id);
-  const [existingCurrent, existingHistory] = await Promise.all([
-    prisma.mensalidade.findMany({
-      where: {
-        alunoId: { in: alunoIds },
-        competencia
-      },
-      select: {
-        alunoId: true
-      }
-    }),
-    prisma.mensalidade.findMany({
-      where: {
-        alunoId: { in: alunoIds },
-        competencia: { lt: competencia }
-      },
-      select: {
-        alunoId: true,
-        competencia: true,
-        valor: true
-      },
-      orderBy: [{ alunoId: "asc" }, { competencia: "desc" }]
-    })
-  ]);
+  const existingCurrent = await prisma.mensalidade.findMany({
+    where: {
+      alunoId: { in: alunoIds },
+      competencia
+    },
+    select: {
+      alunoId: true
+    }
+  });
 
   const existingCurrentSet = new Set(existingCurrent.map((item) => item.alunoId));
-  const latestValueByAluno = new Map<string, number>();
-  for (const item of existingHistory) {
-    if (!latestValueByAluno.has(item.alunoId)) {
-      latestValueByAluno.set(item.alunoId, Number(item.valor));
-    }
-  }
 
   const created: string[] = [];
   const createData: Array<{
@@ -100,15 +85,17 @@ export async function generateMensalidadesCompetencia(competencia: string) {
 
   for (const aluno of alunos) {
     if (existingCurrentSet.has(aluno.id)) continue;
+    if (aluno.dataInicio && competenciaFromUtcDate(aluno.dataInicio) > competencia) continue;
 
     const vencimento = buildVencimentoDate(competencia, aluno.vencimentoDia);
-    const valorPadrao = Number(aluno.modalidade?.valorPadrao ?? 0);
-    const usarUltimoValor = isModalidadePersonalizada(aluno.modalidade?.nome);
     const valor = resolveFutureMonthlyValue({
-      individualValue: null,
-      modalityDefaultValue: valorPadrao,
-      legacyPersonalizedValue: usarUltimoValor ? latestValueByAluno.get(aluno.id) : null
+      individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
+      useModalityDefault: aluno.usarValorPadrao,
+      modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+        ? null
+        : Number(aluno.modalidade.valorPadrao)
     });
+    if (valor === null) continue;
 
     createData.push({
       alunoId: aluno.id,
@@ -183,34 +170,35 @@ export async function generateMensalidadesAteCompetencia(
   }> = [];
 
   for (const aluno of alunos) {
+    // Sem uma data histórica conhecida não existe marco autorizado para backfill.
+    // A cobrança futura continua sendo feita pelo job explícito de uma competência.
+    if (!aluno.dataInicio) continue;
     const competenciaInicio = competenciaFromUtcDate(aluno.dataInicio);
     if (competenciaInicio > competenciaLimite) {
       continue;
     }
 
     const existingForAluno = existentesByAluno.get(aluno.id) ?? new Map<string, number>();
-    const valorPadrao = Number(aluno.modalidade?.valorPadrao ?? 0);
-    const usarUltimoValor = isModalidadePersonalizada(aluno.modalidade?.nome);
-    let valorAtual = valorPadrao;
+    const valor = resolveFutureMonthlyValue({
+      individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
+      useModalityDefault: aluno.usarValorPadrao,
+      modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+        ? null
+        : Number(aluno.modalidade.valorPadrao)
+    });
+    if (valor === null) continue;
     const competencias = competenciasBetween(competenciaInicio, competenciaLimite);
 
     for (const competencia of competencias) {
       const valorExistente = existingForAluno.get(competencia);
       if (valorExistente !== undefined) {
-        if (usarUltimoValor) {
-          valorAtual = valorExistente;
-        }
         continue;
       }
 
       novosRegistros.push({
         alunoId: aluno.id,
         competencia,
-        valor: resolveFutureMonthlyValue({
-          individualValue: null,
-          modalityDefaultValue: valorPadrao,
-          legacyPersonalizedValue: usarUltimoValor ? valorAtual : null
-        }),
+        valor,
         vencimento: buildVencimentoDate(competencia, aluno.vencimentoDia),
         status: MensalidadeStatus.PENDENTE
       });
@@ -344,8 +332,10 @@ export async function buildMonthlyStudentControl(competencia: string) {
   const inicioMes = await prisma.aluno.count({
     where: {
       status: AlunoStatus.ATIVO,
-      dataInicio: { lt: ini },
-      OR: [{ dataSaidaCancelamento: null }, { dataSaidaCancelamento: { gte: ini } }]
+      AND: [
+        { OR: [{ dataInicio: null }, { dataInicio: { lt: ini } }] },
+        { OR: [{ dataSaidaCancelamento: null }, { dataSaidaCancelamento: { gte: ini } }] }
+      ]
     }
   });
 

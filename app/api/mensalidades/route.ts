@@ -6,7 +6,7 @@ import { currentCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
-import { buildVencimentoDate, garantirMensalidadesDoMesAtual } from "@/lib/services/mensalidades";
+import { buildVencimentoDate, garantirMensalidadesDoMesAtual, resolveFutureMonthlyValue } from "@/lib/services/mensalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 
@@ -174,10 +174,19 @@ export async function POST(request: NextRequest) {
   const vencimentoPadrao = buildVencimentoDate(competencia, aluno.vencimentoDia);
 
   const valorInformado = body.valor === undefined || body.valor === null || body.valor === ""
-    ? Number(aluno.modalidade?.valorPadrao ?? 0)
+    ? resolveFutureMonthlyValue({
+        individualValue: aluno.valorMensal === null ? null : Number(aluno.valorMensal),
+        useModalityDefault: aluno.usarValorPadrao,
+        modalityDefaultValue: aluno.modalidade?.valorPadrao === null || aluno.modalidade?.valorPadrao === undefined
+          ? null
+          : Number(aluno.modalidade.valorPadrao)
+      })
     : Number(body.valor);
 
-  if (Number.isNaN(valorInformado) || valorInformado < 0) {
+  if (valorInformado === null) {
+    return fail("Informe um valor: o aluno não possui cobrança automática configurada", 400);
+  }
+  if (!Number.isFinite(valorInformado) || valorInformado <= 0) {
     return fail("valor inválido", 400);
   }
 

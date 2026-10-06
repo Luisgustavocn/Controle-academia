@@ -4,7 +4,6 @@ import { logAudit } from "@/lib/audit";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { toCompetencia } from "@/lib/competencia";
 import { cancelarMensalidadesFuturasDoAluno } from "@/lib/services/mensalidades";
 import { createBackupFile } from "@/lib/services/backup";
 import {
@@ -27,12 +26,25 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   return parsed;
 }
 
+function parseOptionalNumber(value: unknown, fieldName: string) {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${fieldName} inválido`);
+  return parsed;
+}
+
+function parseBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("regra de valor padrão inválida");
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = requireCapability(request, "students.update");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
-  const competencia = toCompetencia(new Date());
   const aluno = await prisma.aluno.findUnique({
     where: { id },
     select: {
@@ -43,13 +55,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       vencimentoDia: true,
       status: true,
       dataInicio: true,
+      valorMensal: true,
+      usarValorPadrao: true,
       dataSaidaCancelamento: true,
-      observacoes: true,
-      mensalidades: {
-        where: { competencia },
-        take: 1,
-        select: { valor: true }
-      }
+      observacoes: true
     }
   });
 
@@ -65,7 +74,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       dataInicio: toDateInputValue(aluno.dataInicio),
       dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
       observacoes: aluno.observacoes ?? "",
-      mensalidadeValor: aluno.mensalidades[0] ? String(aluno.mensalidades[0].valor) : ""
+      valorMensal: aluno.valorMensal === null ? "" : String(aluno.valorMensal),
+      usarValorPadrao: aluno.usarValorPadrao
     }
   });
 }
@@ -77,12 +87,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   const { id } = await context.params;
   const body = (await request.json()) as Record<string, unknown>;
   let dataSaidaCancelamento: Date | null | undefined = undefined;
+  let dataInicio: Date | null | undefined = undefined;
+  let valorMensal: number | null | undefined = undefined;
+  let usarValorPadrao: boolean | undefined = undefined;
   const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : undefined;
 
   try {
     if ("dataSaidaCancelamento" in body) {
       dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
     }
+    if ("dataInicio" in body) dataInicio = parseOptionalDate(body.dataInicio, "data de início");
+    if ("valorMensal" in body) valorMensal = parseOptionalNumber(body.valorMensal, "valor mensal");
+    if ("usarValorPadrao" in body) usarValorPadrao = parseBoolean(body.usarValorPadrao);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados do aluno inválidos", 400);
   }
@@ -96,7 +112,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       modalidadeId: body.modalidadeId === "" ? null : (body.modalidadeId as string | undefined),
       vencimentoDia: body.vencimentoDia ? Math.min(31, Math.max(1, Number(body.vencimentoDia))) : undefined,
       status: statusInformado,
-      dataInicio: body.dataInicio ? new Date(String(body.dataInicio)) : undefined,
+      dataInicio,
+      valorMensal,
+      usarValorPadrao,
       dataSaidaCancelamento,
       hasDataSaidaPayload,
       observacoes: body.observacoes === "" ? null : (body.observacoes as string | undefined)

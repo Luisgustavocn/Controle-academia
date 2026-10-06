@@ -12,7 +12,9 @@ type Student = {
   modalidade: { id: string; nome: string; valorPadrao: number };
   vencimentoDia: number;
   status: AlunoStatus;
-  dataInicio: Date;
+  dataInicio: Date | null;
+  valorMensal: number | null;
+  usarValorPadrao: boolean;
   dataSaidaCancelamento: Date | null;
   observacoes: string | null;
 };
@@ -46,6 +48,8 @@ function controlledDatabase(historyFails = false) {
       vencimentoDia: 10,
       status: AlunoStatus.ATIVO,
       dataInicio: new Date("2026-09-01T00:00:00.000Z"),
+      valorMensal: null,
+      usarValorPadrao: true,
       dataSaidaCancelamento: null,
       observacoes: null
     },
@@ -138,6 +142,22 @@ test("due-day change preserves due dates for paid, pending, partial and future i
   assert.equal(db.state.histories.length, 0);
 });
 
+test("individual billing configuration is audited without rewriting issued fees", async () => {
+  const db = controlledDatabase();
+  const issuedBefore = structuredClone(db.state.fees);
+
+  await updateStudentRegistration("student-1", {
+    valorMensal: 250,
+    usarValorPadrao: false,
+    hasDataSaidaPayload: false
+  }, { id: "admin-1", name: "Admin Teste" }, { client: db.client as never });
+
+  assert.equal(db.state.student.valorMensal, 250);
+  assert.equal(db.state.student.usarValorPadrao, false);
+  assert.deepEqual(db.state.fees, issuedBefore);
+  assert.equal(db.state.audits.length, 1);
+});
+
 test("history failure rolls back the student update atomically", async () => {
   const db = controlledDatabase(true);
 
@@ -152,7 +172,9 @@ test("history failure rolls back the student update atomically", async () => {
 });
 
 test("future value resolver is ready for individual value with modality fallback", () => {
-  assert.equal(resolveFutureMonthlyValue({ individualValue: 250, modalityDefaultValue: 300 }), 250);
-  assert.equal(resolveFutureMonthlyValue({ individualValue: null, modalityDefaultValue: 300 }), 300);
-  assert.equal(resolveFutureMonthlyValue({ individualValue: null, modalityDefaultValue: 0, legacyPersonalizedValue: 180 }), 180);
+  assert.equal(resolveFutureMonthlyValue({ individualValue: 250, useModalityDefault: true, modalityDefaultValue: 300 }), 250);
+  assert.equal(resolveFutureMonthlyValue({ individualValue: null, useModalityDefault: true, modalityDefaultValue: 300 }), 300);
+  assert.equal(resolveFutureMonthlyValue({ individualValue: null, useModalityDefault: false, modalityDefaultValue: 300 }), null);
+  assert.equal(resolveFutureMonthlyValue({ individualValue: null, useModalityDefault: true, modalityDefaultValue: null }), null);
+  assert.equal(resolveFutureMonthlyValue({ individualValue: 0, useModalityDefault: true, modalityDefaultValue: 0 }), null);
 });

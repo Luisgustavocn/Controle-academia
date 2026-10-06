@@ -10,7 +10,9 @@ export type StudentRegistrationPatch = {
   modalidadeId?: string | null;
   vencimentoDia?: number;
   status?: AlunoStatus;
-  dataInicio?: Date;
+  dataInicio?: Date | null;
+  valorMensal?: number | null;
+  usarValorPadrao?: boolean;
   dataSaidaCancelamento?: Date | null;
   hasDataSaidaPayload: boolean;
   observacoes?: string | null;
@@ -74,6 +76,8 @@ export async function updateStudentRegistration(
         vencimentoDia: patch.vencimentoDia,
         status: statusFinal,
         dataInicio: patch.dataInicio,
+        valorMensal: patch.valorMensal,
+        usarValorPadrao: patch.usarValorPadrao,
         dataSaidaCancelamento: exitDate,
         observacoes: patch.observacoes
       },
@@ -82,6 +86,10 @@ export async function updateStudentRegistration(
 
     const modalityChanged = previous.modalidadeId !== updated.modalidadeId;
     const dueDayChanged = previous.vencimentoDia !== updated.vencimentoDia;
+    const previousMonthlyValue = previous.valorMensal === null ? null : Number(previous.valorMensal);
+    const updatedMonthlyValue = updated.valorMensal === null ? null : Number(updated.valorMensal);
+    const monthlyValueChanged = previousMonthlyValue !== updatedMonthlyValue;
+    const defaultValueRuleChanged = previous.usarValorPadrao !== updated.usarValorPadrao;
 
     if (modalityChanged) {
       const previousName = previous.modalidade?.nome ?? "Sem modalidade";
@@ -100,7 +108,7 @@ export async function updateStudentRegistration(
       });
     }
 
-    if (modalityChanged || dueDayChanged) {
+    if (modalityChanged || dueDayChanged || monthlyValueChanged || defaultValueRuleChanged) {
       await logAudit({
         userId: actor.id,
         modulo: "alunos",
@@ -110,12 +118,16 @@ export async function updateStudentRegistration(
         antes: {
           modalidadeId: previous.modalidadeId,
           modalidade: previous.modalidade?.nome ?? null,
-          vencimentoDia: previous.vencimentoDia
+          vencimentoDia: previous.vencimentoDia,
+          valorMensal: previousMonthlyValue,
+          usarValorPadrao: previous.usarValorPadrao
         },
         depois: {
           modalidadeId: updated.modalidadeId,
           modalidade: updated.modalidade?.nome ?? null,
           vencimentoDia: updated.vencimentoDia,
+          valorMensal: updatedMonthlyValue,
+          usarValorPadrao: updated.usarValorPadrao,
           alteradoEm: changedAt.toISOString()
         }
       }, tx);
@@ -126,7 +138,9 @@ export async function updateStudentRegistration(
       updated,
       changes: {
         modalityChanged,
-        dueDayChanged
+        dueDayChanged,
+        monthlyValueChanged,
+        defaultValueRuleChanged
       }
     };
   });

@@ -143,7 +143,7 @@ function firstPaymentDateFromRow(mapped: Record<string, unknown>, importYear: nu
   return null;
 }
 
-async function findOrCreateModalidade(nome: string, valorPadrao = 0) {
+async function findOrCreateModalidade(nome: string, valorPadrao: number | null = null) {
   if (!nome) return null;
   return prisma.modalidade.upsert({
     where: { nome },
@@ -161,6 +161,8 @@ async function upsertAluno(data: {
   modalidadeNome?: string;
   vencimentoDia?: number;
   dataInicio?: Date | null;
+  valorMensal?: number | null;
+  usarValorPadrao?: boolean;
   status?: AlunoStatus;
   observacoes?: string;
 }) {
@@ -185,7 +187,9 @@ async function upsertAluno(data: {
       data: {
         modalidadeId: modalidadeId ?? existing.modalidadeId,
         vencimentoDia: data.vencimentoDia ?? existing.vencimentoDia,
-        dataInicio: data.dataInicio ?? existing.dataInicio,
+        dataInicio: data.dataInicio === undefined ? existing.dataInicio : data.dataInicio,
+        valorMensal: data.valorMensal === undefined ? existing.valorMensal : data.valorMensal,
+        usarValorPadrao: data.usarValorPadrao ?? existing.usarValorPadrao,
         status: data.status ?? existing.status,
         telefone: normalizedTelefone,
         observacoes: data.observacoes || existing.observacoes
@@ -199,7 +203,9 @@ async function upsertAluno(data: {
       telefone: normalizedTelefone,
       modalidadeId,
       vencimentoDia: data.vencimentoDia ?? 10,
-      dataInicio: data.dataInicio ?? new Date(),
+      dataInicio: data.dataInicio ?? null,
+      valorMensal: data.valorMensal ?? null,
+      usarValorPadrao: data.usarValorPadrao ?? true,
       status: data.status ?? AlunoStatus.ATIVO,
       observacoes: data.observacoes || null
     }
@@ -262,8 +268,7 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
       vencimentoDia,
       dataInicio:
         dataInicioFromPrimeiroPagamento ??
-        parseDate(mapped.datainicio || mapped.inicio) ??
-        new Date(importYear, 0, Math.min(vencimentoDia, new Date(importYear, 1, 0).getDate())),
+        parseDate(mapped.datainicio || mapped.inicio),
       status: AlunoStatus.ATIVO,
       observacoes: text(mapped.observacoes || mapped.obs)
     });
@@ -278,6 +283,14 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
       const competencia = `${importYear}-${String(monthNum).padStart(2, "0")}`;
       const paid = isPaidValue(paidCell);
 
+      const configuredValue = aluno.valorMensal !== null
+        ? Number(aluno.valorMensal)
+        : aluno.usarValorPadrao && aluno.modalidadeId
+          ? Number((await prisma.modalidade.findUnique({ where: { id: aluno.modalidadeId } }))?.valorPadrao ?? Number.NaN)
+          : Number.NaN;
+      const monthlyValue = valor > 0 ? valor : configuredValue;
+      if (!Number.isFinite(monthlyValue)) continue;
+
       await prisma.mensalidade.upsert({
         where: {
           alunoId_competencia: {
@@ -288,7 +301,7 @@ async function importMusc(workbook: XLSX.WorkBook, importYear: number) {
         create: {
           alunoId: aluno.id,
           competencia,
-          valor: valor > 0 ? valor : Number(aluno.modalidadeId ? (await prisma.modalidade.findUnique({ where: { id: aluno.modalidadeId } }))?.valorPadrao ?? 0 : 0),
+          valor: monthlyValue,
           vencimento: new Date(importYear, monthNum - 1, Math.min(vencimentoDia, 28)),
           dataPagamento: paid ? new Date(importYear, monthNum - 1, Math.min(vencimentoDia, 28)) : null,
           status: paid ? MensalidadeStatus.PAGO : MensalidadeStatus.PENDENTE,
