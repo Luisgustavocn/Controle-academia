@@ -52,7 +52,11 @@ export async function inspectAttendanceMigration(prisma: PrismaClient): Promise<
       (SELECT COUNT(*) FROM "Presenca" WHERE "presente" = false) AS "falseRecords",
       (SELECT COUNT(*) FROM "Presenca" WHERE "horario" IS NOT NULL AND BTRIM("horario") = '') AS "emptyTimes",
       (SELECT COUNT(*) FROM "Presenca" WHERE "horario" IS NULL) AS "nullTimes",
-      (SELECT COUNT(*) FROM "Presenca" WHERE "data"::time <> TIME '00:00:00') AS "nonMidnightDates"
+      (
+        SELECT COUNT(*)
+        FROM "Presenca"
+        WHERE ("data"::text)::timestamp::time <> TIME '00:00:00'
+      ) AS "nonMidnightDates"
   `;
   const row = rows[0];
   if (!row) throw new Error("Não foi possível auditar Presenca");

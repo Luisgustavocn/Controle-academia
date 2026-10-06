@@ -16,6 +16,7 @@ import {
   confirmAttendanceById,
   removeAttendance
 } from "../lib/services/attendance";
+import { inspectAttendanceMigration } from "../lib/services/attendance-preflight";
 
 process.env.JWT_SECRET = "attendance-integration-test-secret-with-enough-entropy";
 const reference = new Date("2026-10-05T15:00:00.000Z");
@@ -125,6 +126,10 @@ async function main() {
     sort: "name.asc"
   }, UserRole.ADMIN);
   assert.equal(listing.items[0]?.lastAttendanceAt, "2026-10-05");
+
+  const migratedSchemaPreflight = await inspectAttendanceMigration(prisma);
+  assert.equal(migratedSchemaPreflight.safe, true);
+  assert.equal(migratedSchemaPreflight.nonMidnightDates, 0);
 
   const auditActions = await prisma.logAuditoria.groupBy({
     by: ["acao"],
