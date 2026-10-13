@@ -49,6 +49,13 @@ type LookupOption = {
   raw?: Record<string, unknown>;
 };
 
+export function filterLookupOptionsForSearch<T extends { label: string; subtitle?: string }>(options: T[], query?: string) {
+  const normalized = normalizeTextKey(query);
+  return normalized
+    ? options.filter((option) => normalizeTextKey(`${option.label} ${option.subtitle ?? ""}`).includes(normalized))
+    : options;
+}
+
 type RowActionsMenuState = {
   rowId: string;
   item: Record<string, unknown>;
@@ -366,6 +373,7 @@ export function CrudModule({
   const [lookupOptions, setLookupOptions] = useState<Record<string, LookupOption[]>>({});
   const [lookupLoading, setLookupLoading] = useState<Record<string, boolean>>({});
   const [lookupError, setLookupError] = useState<Record<string, string>>({});
+  const [lookupSearch, setLookupSearch] = useState<Record<string, string>>({});
   const [openActions, setOpenActions] = useState<RowActionsMenuState | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -625,7 +633,6 @@ export function CrudModule({
           }
           const options = (payload.items ?? [])
             .filter((item) => item.id !== undefined && item.id !== null)
-            .slice(0, 30)
             .map((item) => {
               const label = readFirst(item, config.labelKeys) || String(item.id);
               const subtitleParts = config.subLabelKeys ? readAll(item, config.subLabelKeys) : [];
@@ -1131,6 +1138,7 @@ export function CrudModule({
 
                   const lookupConfig = LOOKUP_CONFIGS[field.key];
                   const options = lookupOptions[field.key] ?? [];
+                  const visibleOptions = filterLookupOptionsForSearch(options, lookupSearch[field.key]);
                   const selectedId = form[field.key] ?? "";
                   const hasSelectedOption = options.some((option) => option.id === selectedId);
                   const displayLabel =
@@ -1158,22 +1166,25 @@ export function CrudModule({
                               />
                             </>
                           ) : (
-                            <Select
-                              value={selectedId}
-                              required={field.required}
-                              onChange={(event) => onChange(field.key, event.target.value)}
-                            >
-                              <option value="">Selecione</option>
-                              {selectedId && !hasSelectedOption ? (
-                                <option value={selectedId}>Selecionado ({selectedId})</option>
-                              ) : null}
-                              {options.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.label}
-                                  {option.subtitle ? ` • ${option.subtitle}` : ""}
-                                </option>
-                              ))}
-                            </Select>
+                            <>
+                              {field.key === "alunoId" ? <Input aria-label="Buscar aluno" placeholder="Buscar aluno por nome ou telefone" value={lookupSearch[field.key] ?? ""} onChange={(event) => setLookupSearch((current) => ({ ...current, [field.key]: event.target.value }))} /> : null}
+                              <Select
+                                value={selectedId}
+                                required={field.required}
+                                onChange={(event) => onChange(field.key, event.target.value)}
+                              >
+                                <option value="">Selecione</option>
+                                {selectedId && !hasSelectedOption ? (
+                                  <option value={selectedId}>Selecionado ({selectedId})</option>
+                                ) : null}
+                                {visibleOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>
+                                    {option.label}
+                                    {option.subtitle ? ` • ${option.subtitle}` : ""}
+                                  </option>
+                                ))}
+                              </Select>
+                            </>
                           )}
 
                           <p className="text-[11px] text-muted">

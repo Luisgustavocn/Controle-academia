@@ -44,6 +44,10 @@ const STATUS_OPTIONS: Array<{ value: StudentStatus; label: string }> = [
   { value: "TRANCADO", label: "Trancado" }
 ];
 
+export function shouldShowStudentExitDate(status: StudentStatus) {
+  return status !== "ATIVO";
+}
+
 export function StudentFormDialog({
   open,
   onOpenChange,
@@ -101,6 +105,10 @@ export function StudentFormDialog({
       setError("Preencha nome, telefone e vencimento.");
       return;
     }
+    if (shouldShowStudentExitDate(form.status) && !form.dataSaidaCancelamento) {
+      setError("Informe a data de saída para o status selecionado.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -135,9 +143,9 @@ export function StudentFormDialog({
           <FormField label="Telefone" htmlFor="student-phone" required><Input id="student-phone" type="tel" value={form.telefone} onChange={(event) => setForm({ ...form, telefone: event.target.value })} /></FormField>
           <FormField label="Modalidade" htmlFor="student-modality"><Select id="student-modality" value={form.modalidadeId} onChange={(event) => setForm({ ...form, modalidadeId: event.target.value })}><option value="">Sem modalidade</option>{modalities.filter((entry) => entry.active || entry.id === form.modalidadeId).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}{entry.active ? "" : " (inativa)"}</option>)}</Select></FormField>
           <FormField label="Dia do vencimento" htmlFor="student-due" required><Input id="student-due" type="number" min="1" max="31" value={form.vencimentoDia} onChange={(event) => setForm({ ...form, vencimentoDia: event.target.value })} /></FormField>
-          <FormField label="Status" htmlFor="student-status"><Select id="student-status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as StudentStatus })}>{STATUS_OPTIONS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</Select></FormField>
+          <FormField label="Status" htmlFor="student-status"><Select id="student-status" value={form.status} onChange={(event) => { const status = event.target.value as StudentStatus; setForm({ ...form, status, dataSaidaCancelamento: status === "ATIVO" ? "" : form.dataSaidaCancelamento }); }}>{STATUS_OPTIONS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</Select></FormField>
           <FormField label="Data de início" htmlFor="student-start" description="Deixe em branco quando a data histórica for desconhecida."><Input id="student-start" type="date" value={form.dataInicio} onChange={(event) => setForm({ ...form, dataInicio: event.target.value })} /></FormField>
-          <FormField label="Data de saída" htmlFor="student-end"><Input id="student-end" type="date" value={form.dataSaidaCancelamento} onChange={(event) => setForm({ ...form, dataSaidaCancelamento: event.target.value })} /></FormField>
+          {shouldShowStudentExitDate(form.status) ? <FormField label="Data de saída" htmlFor="student-end" required><Input id="student-end" type="date" required value={form.dataSaidaCancelamento} onChange={(event) => setForm({ ...form, dataSaidaCancelamento: event.target.value })} /></FormField> : null}
           <FormField label="Valor mensal individual" htmlFor="student-value" description="Quando informado, prevalece sobre o valor padrão da modalidade."><Input id="student-value" type="number" min="0.01" step="0.01" value={form.valorMensal} onChange={(event) => setForm({ ...form, valorMensal: event.target.value })} /></FormField>
           <Switch id="student-default-value" label="Usar valor padrão da modalidade" description="Só é usado quando não há valor individual." checked={form.usarValorPadrao} onChange={(event) => setForm({ ...form, usarValorPadrao: event.target.checked })} />
           <FormField label="Observações" htmlFor="student-notes" className="md:col-span-2"><textarea id="student-notes" rows={4} value={form.observacoes} onChange={(event) => setForm({ ...form, observacoes: event.target.value })} className="w-full rounded-ds-lg border border-line bg-card px-3 py-2 text-sm text-ink shadow-surface-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" /></FormField>

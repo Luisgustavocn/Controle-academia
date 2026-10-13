@@ -56,6 +56,7 @@ function overview(role: "ADMIN" | "FINANCEIRO" | "RECEPCAO" | "PERSONAL"): Stude
       edit: operational,
       changeStatus: operational,
       reactivate: false,
+      delete: role === "ADMIN",
       viewFinancial: financial,
       manageFinancial: role === "ADMIN" || role === "FINANCEIRO",
       viewAttendance: attendance,

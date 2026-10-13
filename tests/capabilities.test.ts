@@ -28,6 +28,8 @@ test("role capability matrix prevents numeric inheritance", () => {
   assert.equal(hasCapability("ADMIN", "settings.manage"), true);
   assert.equal(hasCapability("FINANCEIRO", "finance.cash.manage"), true);
   assert.equal(hasCapability("FINANCEIRO", "attendance.write"), false);
+  assert.equal(hasCapability("ADMIN", "students.delete"), true);
+  assert.equal(hasCapability("RECEPCAO", "students.delete"), false);
   assert.equal(hasCapability("RECEPCAO", "sales.create"), true);
   assert.equal(hasCapability("RECEPCAO", "finance.cash.read"), false);
   assert.equal(hasCapability("PERSONAL", "schedule.write"), true);
@@ -76,6 +78,8 @@ test("API capability guard returns 403 instead of relying on role rank", async (
     ["FINANCEIRO", "finance.cash.manage", true],
     ["FINANCEIRO", "schedule.read", false],
     ["RECEPCAO", "sales.create", true],
+    ["RECEPCAO", "students.delete", false],
+    ["ADMIN", "students.delete", true],
     ["RECEPCAO", "finance.expenses.read", false],
     ["PERSONAL", "attendance.write", true],
     ["PERSONAL", "finance.monthlies.read", false]

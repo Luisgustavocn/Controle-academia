@@ -10,6 +10,7 @@ export type StudentProfileCapabilities = {
   edit: boolean;
   changeStatus: boolean;
   reactivate: boolean;
+  delete: boolean;
   viewFinancial: boolean;
   manageFinancial: boolean;
   viewAttendance: boolean;
@@ -67,6 +68,7 @@ export function studentProfileCapabilities(role: UserRole, status: AlunoStatus, 
     edit: hasCapability(role, "students.update"),
     changeStatus,
     reactivate: changeStatus && !hasOpenEnrollment,
+    delete: hasCapability(role, "students.delete"),
     viewFinancial: hasCapability(role, "finance.monthlies.read"),
     manageFinancial: hasCapability(role, "finance.monthlies.manage"),
     viewAttendance: hasCapability(role, "attendance.read"),
@@ -114,7 +116,9 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
   }) ?? null;
   const displayPeriod = activePeriod ?? periods[0] ?? null;
   // Undefined is only possible in isolated legacy mocks; real Prisma always returns the selected relation.
-  const activeEnrollment = student.periodosMatricula === undefined ? student.status === AlunoStatus.ATIVO : Boolean(activePeriod);
+  const activeEnrollment = student.status === AlunoStatus.ATIVO && (
+    student.periodosMatricula === undefined ? true : Boolean(activePeriod)
+  );
   const hasOpenEnrollment = student.periodosMatricula === undefined ? student.status === AlunoStatus.ATIVO : periods.some((period) => period.dataSaida === null);
   const capabilities = studentProfileCapabilities(role, student.status, hasOpenEnrollment);
   const attendanceMonth = civilMonthRange(academy.competencia);

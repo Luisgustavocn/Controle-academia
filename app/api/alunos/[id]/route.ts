@@ -4,12 +4,14 @@ import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { createBackupFile } from "@/lib/services/backup";
-import { academyToday, CivilDateValidationError } from "@/lib/attendance-date";
-import { endEnrollment, EnrollmentNotFoundError, EnrollmentValidationError } from "@/lib/services/enrollment-periods";
+import { civilDateToPrisma, CivilDateValidationError, parseCivilDate } from "@/lib/attendance-date";
+import { StudentDeletionBlockedError, StudentDeletionNotFoundError, deleteStudentWithoutHistory, inspectStudentDeletion } from "@/lib/services/student-deletion";
 import {
   StudentRegistrationNotFoundError,
   updateStudentRegistration
 } from "@/lib/services/student-registration";
+
+const ALUNO_STATUS_VALUES = new Set<AlunoStatus>(Object.values(AlunoStatus));
 
 function toDateInputValue(date: Date | null | undefined) {
   return date ? date.toISOString().slice(0, 10) : "";
@@ -19,11 +21,8 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
     return null;
   }
-  const parsed = new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`${fieldName} inválida`);
-  }
-  return parsed;
+  try { return civilDateToPrisma(parseCivilDate(String(value))); }
+  catch { throw new CivilDateValidationError(`${fieldName} inválida`); }
 }
 
 function parseOptionalNumber(value: unknown, fieldName: string) {
@@ -91,6 +90,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   let valorMensal: number | null | undefined = undefined;
   let usarValorPadrao: boolean | undefined = undefined;
   const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : undefined;
+  if (statusInformado && !ALUNO_STATUS_VALUES.has(statusInformado)) return fail("status do aluno inválido", 400);
 
   try {
     if ("dataSaidaCancelamento" in body) {
@@ -132,26 +132,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireCapability(request, "students.status");
+  const auth = requireCapability(request, "students.delete");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
-  const previous = await prisma.aluno.findUnique({ where: { id } });
-  if (!previous) {
-    return fail("Aluno não encontrado", 404);
-  }
-
-  const backup = await createBackupFile();
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const exitDate = String(body.dataSaida ?? academyToday());
-  const targetStatus = String(body.status ?? "CANCELADO") === "TRANCADO" ? AlunoStatus.TRANCADO : AlunoStatus.CANCELADO;
   try {
-    await endEnrollment(id, { exitDate, status: targetStatus, reason: String(body.motivo ?? "").trim() || null }, { id: auth.id, name: auth.name });
+    const inspection = await inspectStudentDeletion(id);
+    if (!inspection.canDelete) throw new StudentDeletionBlockedError(inspection.dependencies);
+    const backup = await createBackupFile();
+    await deleteStudentWithoutHistory(id, { id: auth.id, name: auth.name });
+    return ok({ ok: true, deleted: true, message: "Aluno excluído com sucesso", backupFilePath: backup.filePath });
   } catch (error) {
-    if (error instanceof EnrollmentNotFoundError) return fail(error.message, 404);
-    if (error instanceof EnrollmentValidationError || error instanceof CivilDateValidationError) return fail(error.message, 409);
+    if (error instanceof StudentDeletionNotFoundError) return fail(error.message, 404);
+    if (error instanceof StudentDeletionBlockedError) return fail(error.message, 409, { dependencies: error.dependencies });
     throw error;
   }
-
-  return ok({ ok: true, archived: true, backupFilePath: backup.filePath });
 }

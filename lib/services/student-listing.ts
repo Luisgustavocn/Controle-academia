@@ -61,7 +61,7 @@ export function buildStudentWhere(params: StudentListParams, dateKey = academyTo
     });
   }
   if (params.status === AlunoStatus.ATIVO) {
-    filters.push(studentActiveOnDateWhere(dateKey));
+    filters.push({ AND: [{ status: AlunoStatus.ATIVO }, studentActiveOnDateWhere(dateKey)] });
   } else if (params.status === AlunoStatus.INATIVO) {
     filters.push({
       AND: [
@@ -159,21 +159,22 @@ export async function listStudents(params: StudentListParams, role: UserRole) {
       const activePeriod = student.periodosMatricula.find((period) =>
         (!period.dataInicio || period.dataInicio <= today) && (!period.dataSaida || period.dataSaida >= today)
       );
+      const isActive = student.status === AlunoStatus.ATIVO && Boolean(activePeriod);
       const displayPeriod = activePeriod ?? student.periodosMatricula[0];
       const hasDebt = (financialByStudent.get(student.id) ?? 0) > 0;
       return {
       id: student.id,
       name: student.nomeCompleto,
       phone: student.telefone,
-      status: activePeriod ? AlunoStatus.ATIVO : (student.status === AlunoStatus.ATIVO ? AlunoStatus.INATIVO : student.status),
-      activeEnrollment: Boolean(activePeriod),
+      status: isActive ? AlunoStatus.ATIVO : (student.status === AlunoStatus.ATIVO ? AlunoStatus.INATIVO : student.status),
+      activeEnrollment: isActive,
       dueDay: displayPeriod?.diaVencimento ?? student.vencimentoDia,
       modality: displayPeriod?.modalidade
         ? { id: displayPeriod.modalidade.id, name: displayPeriod.modalidade.nome }
         : student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null,
       lastAttendanceAt: attendanceByStudent.get(student.id) ? prismaDateToCivil(attendanceByStudent.get(student.id)!) : null,
       ...(showFinancial
-        ? { financialStatus: activePeriod ? (hasDebt ? "EM_ATRASO" as const : "EM_DIA" as const) : (hasDebt ? "COM_PENDENCIA" as const : "SEM_PENDENCIAS" as const) }
+        ? { financialStatus: isActive ? (hasDebt ? "EM_ATRASO" as const : "EM_DIA" as const) : (hasDebt ? "COM_PENDENCIA" as const : "SEM_PENDENCIAS" as const) }
         : {})
     };}),
     pagination: {

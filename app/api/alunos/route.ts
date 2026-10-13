@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/auth/guards";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { academyToday } from "@/lib/attendance-date";
+import { academyToday, civilDateToPrisma, CivilDateValidationError, parseCivilDate } from "@/lib/attendance-date";
 import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 import { currentCompetencia, toCompetencia } from "@/lib/competencia";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/mensalidades";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
+const ALUNO_STATUS_VALUES = new Set<AlunoStatus>(Object.values(AlunoStatus));
 
 function toDateInputValue(date: Date | null | undefined) {
   if (!date) return "";
@@ -24,11 +25,8 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
     return null;
   }
-  const parsed = new Date(String(value));
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`${fieldName} inválida`);
-  }
-  return parsed;
+  try { return civilDateToPrisma(parseCivilDate(String(value))); }
+  catch { throw new CivilDateValidationError(`${fieldName} inválida`); }
 }
 
 function parseOptionalNumber(value: unknown, fieldName: string) {
@@ -72,7 +70,7 @@ export async function GET(request: NextRequest) {
   const onlyActiveEnrollment = request.nextUrl.searchParams.get("matriculaAtiva") === "true";
 
   const where: Prisma.AlunoWhereInput = {
-    ...(onlyActiveEnrollment ? studentActiveOnDateWhere(academyToday()) : {}),
+    ...(onlyActiveEnrollment ? { AND: [{ status: AlunoStatus.ATIVO }, studentActiveOnDateWhere(academyToday())] } : {}),
     ...(status
       ? { status: status as never }
       : {
@@ -182,7 +180,8 @@ export async function POST(request: NextRequest) {
   }
 
   const vencimentoDia = Math.min(31, Math.max(1, Number(body.vencimentoDia)));
-  const statusInformado = body.status ? (String(body.status) as AlunoStatus) : AlunoStatus.ATIVO;
+  const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : AlunoStatus.ATIVO;
+  if (!ALUNO_STATUS_VALUES.has(statusInformado)) return fail("status do aluno inválido", 400);
   let mensalidadeValor: number | null = null;
   let mensalidadeDataPagamento: Date | null = null;
   let mensalidadeStatus: MensalidadeStatus | null = null;
@@ -200,13 +199,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
   }
-  const inicioMesAtual = new Date();
-  inicioMesAtual.setHours(0, 0, 0, 0);
-  inicioMesAtual.setDate(1);
-  const status = dataSaidaCancelamento ? AlunoStatus.CANCELADO : statusInformado;
+  const dataAtual = civilDateToPrisma(academyToday());
+  const status = statusInformado;
   const dataSaidaFinal =
-    dataSaidaCancelamento ??
-    (status === AlunoStatus.CANCELADO || status === AlunoStatus.TRANCADO ? inicioMesAtual : null);
+    status === AlunoStatus.ATIVO ? null : (dataSaidaCancelamento ?? dataAtual);
 
   const created = await prisma.$transaction(async (tx) => {
     const aluno = await tx.aluno.create({

@@ -6,6 +6,7 @@ export const CAPABILITIES = [
   "students.create",
   "students.update",
   "students.status",
+  "students.delete",
   "attendance.read",
   "attendance.write",
   "attendance.retroactive",

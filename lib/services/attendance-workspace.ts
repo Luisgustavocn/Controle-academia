@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { AlunoStatus, Prisma, type PrismaClient } from "@prisma/client";
 import {
   academyToday,
   addCivilDays,
@@ -50,7 +50,7 @@ export function parseAttendanceRosterParams(searchParams: URLSearchParams, refer
   };
 }
 
-export async function getAttendanceRoster(params: AttendanceRosterParams, client: PrismaClient = prisma) {
+export async function getAttendanceRoster(params: AttendanceRosterParams, client: PrismaClient = prisma, referenceDate = new Date()) {
   const date = civilDateToPrisma(params.date);
   const search: Prisma.AlunoWhereInput = params.q
     ? {
@@ -60,7 +60,10 @@ export async function getAttendanceRoster(params: AttendanceRosterParams, client
         ]
       }
     : {};
-  const activeWhere = studentActiveOnDateWhere(params.date);
+  const periodWhere = studentActiveOnDateWhere(params.date);
+  const activeWhere: Prisma.AlunoWhereInput = params.date === academyToday(referenceDate)
+    ? { AND: [{ status: AlunoStatus.ATIVO }, periodWhere] }
+    : periodWhere;
   const where: Prisma.AlunoWhereInput = { AND: [activeWhere, search] };
 
   const [activeStudents, presentToday, totalItems, students] = await Promise.all([

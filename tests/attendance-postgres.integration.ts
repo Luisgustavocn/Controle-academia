@@ -45,15 +45,19 @@ async function main() {
   await prisma.periodoMatricula.createMany({ data: [student.id, apiStudent.id].map((alunoId) => ({
     alunoId, dataInicio: new Date("2026-01-01T00:00:00.000Z"), diaVencimento: 10, usarValorPadrao: true
   })) });
+  const inconsistentInactive = await prisma.aluno.create({
+    data: { id: `attendance-inactive-${suffix}`, nomeCompleto: "Inactive Attendance Test", telefone: `inactive-${suffix}`, vencimentoDia: 10, status: "CANCELADO" }
+  });
+  await prisma.periodoMatricula.create({ data: { alunoId: inconsistentInactive.id, dataInicio: new Date("2026-01-01T00:00:00.000Z"), diaVencimento: 10 } });
 
-  const input = { alunoId: student.id, data: "2026-10-05", horario: null, tipoAula: "musculacao" };
+  const input = { alunoId: student.id, data: "2026-10-01", horario: null, tipoAula: "musculacao" };
   const concurrent = await Promise.all(
     Array.from({ length: 8 }, () => confirmAttendance(input, { id: admin.id, role: UserRole.ADMIN }, reference))
   );
   assert.equal(concurrent.filter((result) => result.created).length, 1);
   assert.equal(new Set(concurrent.map((result) => result.item.id)).size, 1);
-  assert.equal(await prisma.presenca.count({ where: { alunoId: student.id, data: new Date("2026-10-05T00:00:00.000Z") } }), 1);
-  assert.equal(concurrent[0]?.item.data, "2026-10-05");
+  assert.equal(await prisma.presenca.count({ where: { alunoId: student.id, data: new Date("2026-10-01T00:00:00.000Z") } }), 1);
+  assert.equal(concurrent[0]?.item.data, "2026-10-01");
 
   const duplicateWithTime = await confirmAttendance(
     { ...input, horario: "18:30" },
@@ -64,15 +68,28 @@ async function main() {
   assert.equal(duplicateWithTime.item.horario, null);
 
   const anotherDay = await confirmAttendance(
-    { ...input, data: "2026-10-04", horario: "07:00" },
+    { ...input, data: "2026-10-02", horario: "07:00" },
     { id: admin.id, role: UserRole.ADMIN },
     reference
   );
   assert.equal(anotherDay.created, true);
-  assert.equal(anotherDay.item.data, "2026-10-04");
+  assert.equal(anotherDay.item.data, "2026-10-02");
+  const duplicateSecondDay = await confirmAttendance(
+    { ...input, data: "2026-10-02", horario: "08:00" },
+    { id: admin.id, role: UserRole.ADMIN },
+    reference
+  );
+  assert.equal(duplicateSecondDay.created, false);
+  const thirdDay = await confirmAttendance(
+    { ...input, data: "2026-10-03", horario: "09:00" },
+    { id: admin.id, role: UserRole.ADMIN },
+    reference
+  );
+  assert.equal(thirdDay.created, true);
+  assert.equal(thirdDay.item.data, "2026-10-03");
 
   await assert.rejects(
-    () => confirmAttendance({ ...input, data: "2026-10-04" }, { id: admin.id, role: UserRole.RECEPCAO }, reference),
+    () => confirmAttendance({ ...input, data: "2026-10-02" }, { id: admin.id, role: UserRole.RECEPCAO }, reference),
     AttendancePermissionError
   );
   await assert.rejects(
@@ -81,7 +98,7 @@ async function main() {
   );
 
   const falseRecord = await prisma.presenca.create({
-    data: { alunoId: student.id, data: new Date("2026-10-03T00:00:00.000Z"), horario: null, tipoAula: "personal", presente: false }
+    data: { alunoId: student.id, data: new Date("2026-10-04T00:00:00.000Z"), horario: null, tipoAula: "personal", presente: false }
   });
   const confirmed = await confirmAttendanceById(falseRecord.id, { id: admin.id, role: UserRole.ADMIN }, reference);
   assert.equal(confirmed.presente, true);
@@ -117,9 +134,9 @@ async function main() {
   const dashboard = await getOperationalDashboard(UserRole.ADMIN, reference);
   assert.equal(dashboard.today?.attendances, expectedToday);
   const profile = await getStudentProfileOverview(student.id, UserRole.ADMIN, reference);
-  assert.equal(profile.summary.attendance?.lastAttendanceAt, "2026-10-05");
+  assert.equal(profile.summary.attendance?.lastAttendanceAt, "2026-10-03");
   const history = await getStudentProfileAttendance(student.id, reference);
-  assert.equal(history.items[0]?.date, "2026-10-05");
+  assert.equal(history.items[0]?.date, "2026-10-03");
   const listing = await listStudents({
     page: 1,
     pageSize: 20,
@@ -129,11 +146,15 @@ async function main() {
     financial: "",
     sort: "name.asc"
   }, UserRole.ADMIN);
-  assert.equal(listing.items[0]?.lastAttendanceAt, "2026-10-05");
+  assert.equal(listing.items[0]?.lastAttendanceAt, "2026-10-03");
 
-  const roster = await getAttendanceRoster({ date: "2026-10-05", q: `primary-${suffix}`, page: 1, pageSize: 12 });
+  const roster = await getAttendanceRoster({ date: "2026-10-01", q: `primary-${suffix}`, page: 1, pageSize: 12 }, prisma, reference);
   assert.equal(roster.items.length, 1);
   assert.equal(roster.items[0]?.attendance?.id, concurrent[0]?.item.id);
+  const currentInactiveRoster = await getAttendanceRoster({ date: "2026-10-05", q: `inactive-${suffix}`, page: 1, pageSize: 12 }, prisma, reference);
+  assert.equal(currentInactiveRoster.items.length, 0);
+  const historicalInactiveRoster = await getAttendanceRoster({ date: "2026-10-01", q: `inactive-${suffix}`, page: 1, pageSize: 12 }, prisma, reference);
+  assert.equal(historicalInactiveRoster.items.length, 1);
   const workspaceHistory = await getAttendanceHistory({
     from: "2026-10-01",
     to: "2026-10-31",
@@ -142,8 +163,8 @@ async function main() {
     page: 1,
     pageSize: 20
   });
-  assert.equal(workspaceHistory.items.some((item) => item.date === "2026-10-05"), true);
-  assert.equal(workspaceHistory.pagination.totalItems, 2);
+  assert.equal(workspaceHistory.items.some((item) => item.date === "2026-10-03"), true);
+  assert.equal(workspaceHistory.pagination.totalItems, 3);
 
   const migratedSchemaPreflight = await inspectAttendanceMigration(prisma);
   assert.equal(migratedSchemaPreflight.safe, true);
@@ -151,7 +172,7 @@ async function main() {
 
   const auditActions = await prisma.logAuditoria.groupBy({
     by: ["acao"],
-    where: { modulo: "presencas", entidadeId: { in: [falseRecord.id, concurrent[0]!.item.id, anotherDay.item.id] } },
+    where: { modulo: "presencas", entidadeId: { in: [falseRecord.id, concurrent[0]!.item.id, anotherDay.item.id, thirdDay.item.id] } },
     _count: { _all: true }
   });
   assert.equal(auditActions.some((item) => item.acao === "CREATE"), true);

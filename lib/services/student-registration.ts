@@ -1,7 +1,7 @@
 import { AlunoStatus, PrismaClient } from "@prisma/client";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { prismaDateToCivil } from "@/lib/attendance-date";
+import { academyToday, civilDateToPrisma, prismaDateToCivil } from "@/lib/attendance-date";
 
 type TransactionRunner = Pick<PrismaClient, "$transaction">;
 
@@ -34,9 +34,7 @@ export async function updateStudentRegistration(
 ) {
   const client = options.client ?? prisma;
   const changedAt = options.now ?? new Date();
-  const currentMonthStart = new Date(changedAt);
-  currentMonthStart.setHours(0, 0, 0, 0);
-  currentMonthStart.setDate(1);
+  const currentDate = civilDateToPrisma(academyToday(changedAt));
 
   return client.$transaction(async (tx) => {
     const previous = await tx.aluno.findUnique({
@@ -51,14 +49,10 @@ export async function updateStudentRegistration(
       throw new StudentRegistrationNotFoundError("Aluno não encontrado");
     }
 
-    let statusFinal = patch.status ?? previous.status;
+    const statusFinal = patch.status ?? previous.status;
     let exitDate = patch.dataSaidaCancelamento;
     const periodsLoaded = Array.isArray(previous.periodosMatricula);
     const currentPeriod = previous.periodosMatricula?.[0] ?? null;
-
-    if (exitDate) {
-      statusFinal = AlunoStatus.CANCELADO;
-    }
 
     if (statusFinal === AlunoStatus.ATIVO) {
       if (periodsLoaded && !currentPeriod) {
@@ -67,10 +61,10 @@ export async function updateStudentRegistration(
       exitDate = null;
     } else {
       if (exitDate === undefined) {
-        exitDate = previous.dataSaidaCancelamento ?? currentMonthStart;
+        exitDate = previous.dataSaidaCancelamento ?? currentDate;
       }
       if (patch.hasDataSaidaPayload && exitDate === null) {
-        exitDate = currentMonthStart;
+        exitDate = currentDate;
       }
     }
 
@@ -99,13 +93,13 @@ export async function updateStudentRegistration(
     const defaultValueRuleChanged = previous.usarValorPadrao !== updated.usarValorPadrao;
 
     if (currentPeriod && statusFinal !== AlunoStatus.ATIVO && !currentPeriod.dataSaida) {
-      const closingDate = exitDate ?? currentMonthStart;
+      const closingDate = exitDate ?? currentDate;
       if (currentPeriod.dataInicio && closingDate < currentPeriod.dataInicio) {
         throw new Error("A saída não pode ser anterior ao início da matrícula");
       }
       const closed = await tx.periodoMatricula.update({
         where: { id: currentPeriod.id },
-        data: { dataSaida: closingDate, encerradoPor: actor.id }
+        data: { dataSaida: closingDate, motivoSaida: `Status alterado para ${statusFinal}`, encerradoPor: actor.id }
       });
       await logAudit({
         userId: actor.id,

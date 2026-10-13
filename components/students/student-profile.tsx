@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, CalendarCheck2, CreditCard, Edit3, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, CalendarCheck2, CreditCard, Edit3, MoreHorizontal, Trash2 } from "lucide-react";
 import type { StudentProfileOverview } from "@/lib/services/student-profile";
 import { ACADEMY_TIME_ZONE } from "@/lib/timezone";
 import { civilDateLabel, relativeCivilDateLabel } from "@/lib/attendance-date";
@@ -85,6 +85,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
   const [editOpen, setEditOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
 
   const student = overview.student;
   const capabilities = overview.capabilities;
@@ -122,6 +123,20 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
     void loadSection(section);
   }
 
+  async function deleteStudent() {
+    if (!window.confirm(`Excluir definitivamente ${student.name}? Esta ação só será permitida se não houver histórico relevante.`)) return;
+    setActionMessage("");
+    const response = await fetch(`/api/alunos/${student.id}`, { method: "DELETE" });
+    const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
+    if (!response.ok) {
+      setActionMessage(payload.error ?? "Não foi possível excluir o aluno.");
+      return;
+    }
+    window.alert(payload.message ?? "Aluno excluído com sucesso");
+    router.push(safeReturnTo);
+    router.refresh();
+  }
+
   function Actions() {
     return (
       <DropdownMenu trigger={<><MoreHorizontal className="h-4 w-4" aria-hidden="true" /><span>Ações</span></>} label={`Ações de ${student.name}`}>
@@ -131,6 +146,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
         {capabilities.changeStatus ? <DropdownMenuSeparator /> : null}
         {capabilities.reactivate ? <DropdownMenuItem onSelect={() => setResumeOpen(true)}>Retomar matrícula</DropdownMenuItem> : null}
         {capabilities.changeStatus && student.activeEnrollment ? <DropdownMenuItem destructive onSelect={() => setEndOpen(true)}>Encerrar matrícula</DropdownMenuItem> : null}
+        {capabilities.delete ? <><DropdownMenuSeparator /><DropdownMenuItem destructive onSelect={() => void deleteStudent()}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Excluir aluno</DropdownMenuItem></> : null}
       </DropdownMenu>
     );
   }
@@ -159,6 +175,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
           </div>
         </div>
       </Card>
+      {actionMessage ? <p role="alert" className="rounded-ds-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-semibold text-danger">{actionMessage}</p> : null}
 
       <section aria-labelledby="student-summary-title">
         <h2 id="student-summary-title" className="sr-only">Resumo operacional</h2>

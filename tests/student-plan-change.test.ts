@@ -28,6 +28,7 @@ type Fee = {
 
 type ControlledState = {
   student: Student;
+  period: { id: string; dataInicio: Date | null; dataSaida: Date | null; motivoSaida: string | null };
   fees: Fee[];
   histories: Array<Record<string, unknown>>;
   audits: Array<Record<string, unknown>>;
@@ -53,6 +54,7 @@ function controlledDatabase(historyFails = false) {
       dataSaidaCancelamento: null,
       observacoes: null
     },
+    period: { id: "period-1", dataInicio: new Date("2026-09-01T00:00:00.000Z"), dataSaida: null, motivoSaida: null },
     fees: [
       { competencia: "2026-09", valor: 110, status: MensalidadeStatus.PAGO, vencimento: "2026-09-10" },
       { competencia: "2026-10", valor: 110, status: MensalidadeStatus.PENDENTE, vencimento: "2026-10-10" },
@@ -67,7 +69,7 @@ function controlledDatabase(historyFails = false) {
       const draft = structuredClone(state);
       const tx = {
         aluno: {
-          findUnique: async () => draft.student,
+          findUnique: async () => ({ ...draft.student, periodosMatricula: draft.period.dataSaida ? [] : [draft.period] }),
           update: async ({ data }: { data: Partial<Student> & { modalidadeId?: string | null } }) => {
             const defined = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
             const modalityId = defined.modalidadeId ?? draft.student.modalidadeId;
@@ -78,6 +80,12 @@ function controlledDatabase(historyFails = false) {
               modalidade: modalityId === "next" ? modalities.next : modalities.old
             } as Student;
             return draft.student;
+          }
+        },
+        periodoMatricula: {
+          update: async ({ data }: { data: Partial<ControlledState["period"]> }) => {
+            draft.period = { ...draft.period, ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)) };
+            return draft.period;
           }
         },
         historicoPlano: {
@@ -177,4 +185,19 @@ test("future value resolver is ready for individual value with modality fallback
   assert.equal(resolveFutureMonthlyValue({ individualValue: null, useModalityDefault: false, modalityDefaultValue: 300 }), null);
   assert.equal(resolveFutureMonthlyValue({ individualValue: null, useModalityDefault: true, modalityDefaultValue: null }), null);
   assert.equal(resolveFutureMonthlyValue({ individualValue: 0, useModalityDefault: true, modalityDefaultValue: 0 }), null);
+});
+
+test("selected inactive status is preserved even when an exit date is sent", async () => {
+  const db = controlledDatabase();
+  const exitDate = new Date("2026-10-05T00:00:00.000Z");
+  const result = await updateStudentRegistration("student-1", {
+    status: AlunoStatus.INATIVO,
+    dataSaidaCancelamento: exitDate,
+    hasDataSaidaPayload: true
+  }, { id: "admin-1", name: "Admin Teste" }, { client: db.client as never });
+
+  assert.equal(result.updated.status, AlunoStatus.INATIVO);
+  assert.deepEqual(db.state.student.dataSaidaCancelamento, exitDate);
+  assert.deepEqual(db.state.period.dataSaida, exitDate);
+  assert.equal(db.state.period.motivoSaida, "Status alterado para INATIVO");
 });
