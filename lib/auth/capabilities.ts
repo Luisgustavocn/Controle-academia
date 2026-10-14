@@ -100,6 +100,7 @@ export function getDefaultPathForRole(role: SessionRole): string {
 const pageCapabilityRules: Array<{ path: string; requirement: CapabilityRequirement }> = [
   { path: "/dashboard", requirement: "dashboard.view" },
   { path: "/alunos", requirement: "students.read" },
+  { path: "/modalidades", requirement: "students.update" },
   { path: "/mensalidades", requirement: "finance.monthlies.read" },
   { path: "/caixa", requirement: "finance.cash.read" },
   { path: "/despesas-academia", requirement: "finance.expenses.read" },

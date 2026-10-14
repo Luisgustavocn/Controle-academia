@@ -14,8 +14,13 @@ export function EndEnrollmentDialog({ open, onOpenChange, studentId, onEnded }: 
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [exitDateError, setExitDateError] = useState("");
 
   async function submit() {
+    if (!exitDate) {
+      setExitDateError("Último dia ativo é obrigatório.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -29,7 +34,9 @@ export function EndEnrollmentDialog({ open, onOpenChange, studentId, onEnded }: 
       onOpenChange(false);
       await onEnded();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível encerrar a matrícula");
+      const message = cause instanceof Error ? cause.message : "Não foi possível encerrar a matrícula";
+      if (message.toLocaleLowerCase("pt-BR").includes("data")) setExitDateError(message);
+      else setError(message);
     } finally {
       setLoading(false);
     }
@@ -37,7 +44,7 @@ export function EndEnrollmentDialog({ open, onOpenChange, studentId, onEnded }: 
 
   return <Dialog open={open} onOpenChange={onOpenChange} title="Encerrar matrícula" description="A data de saída é o último dia ativo. O histórico financeiro e operacional será preservado." footer={<><Button variant="ghost" onClick={() => onOpenChange(false)}>Voltar</Button><Button variant="danger" loading={loading} onClick={() => void submit()}>Encerrar matrícula</Button></>}>
     <div className="grid gap-4">
-      <FormField label="Último dia ativo" htmlFor="end-enrollment-date" required><Input id="end-enrollment-date" type="date" value={exitDate} onChange={(event) => setExitDate(event.target.value)} /></FormField>
+      <FormField label="Último dia ativo" htmlFor="end-enrollment-date" required><Input id="end-enrollment-date" type="date" value={exitDate} error={exitDateError} onChange={(event) => { setExitDate(event.target.value); if (event.target.value) { setExitDateError(""); setError(""); } }} /></FormField>
       <FormField label="Situação cadastral" htmlFor="end-enrollment-status"><Select id="end-enrollment-status" value={status} onChange={(event) => setStatus(event.target.value as "CANCELADO" | "TRANCADO")}><option value="CANCELADO">Cancelado</option><option value="TRANCADO">Trancado</option></Select></FormField>
       <FormField label="Motivo (opcional)" htmlFor="end-enrollment-reason"><Input id="end-enrollment-reason" value={reason} onChange={(event) => setReason(event.target.value)} /></FormField>
       {error ? <p role="alert" className="text-sm font-medium text-danger">{error}</p> : null}

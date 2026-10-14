@@ -3,6 +3,7 @@ import type { Capability } from "@/lib/auth/capabilities";
 export type NavigationIcon =
   | "dashboard"
   | "students"
+  | "modalities"
   | "attendance"
   | "schedule"
   | "monthlies"
@@ -34,6 +35,7 @@ export const navigationGroups: readonly NavigationGroup[] = [
     label: "Operação",
     items: [
       { label: "Alunos", href: "/alunos", icon: "students", capability: "students.read" },
+      { label: "Modalidades", href: "/modalidades", icon: "modalities", capability: "students.update" },
       { label: "Presença", href: "/frequencia", icon: "attendance", capability: "attendance.read" },
       { label: "Agenda", href: "/agenda-personal", icon: "schedule", capability: "schedule.read" }
     ]

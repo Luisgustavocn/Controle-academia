@@ -3,7 +3,6 @@ import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { ensureModalidadePersonalizada } from "@/lib/services/modalidades";
 
 function parseBoolean(value: unknown, fallback: boolean) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -17,8 +16,6 @@ function parseBoolean(value: unknown, fallback: boolean) {
 export async function GET(request: NextRequest) {
   const auth = requireCapability(request, "students.read");
   if (auth instanceof Response) return auth;
-
-  await ensureModalidadePersonalizada();
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const where = q

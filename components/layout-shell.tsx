@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ComponentType, PropsWithChildren, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, Building2, CalendarCheck2, CalendarClock, CreditCard, LayoutDashboard,
+  BarChart3, Building2, CalendarCheck2, CalendarClock, CreditCard, Dumbbell, LayoutDashboard,
   LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, Settings, ShoppingBag, Users2, Wallet
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -23,6 +23,7 @@ import { CapabilityProvider } from "@/components/capability-provider";
 const iconByName: Record<NavigationIcon, ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
   dashboard: LayoutDashboard,
   students: Users2,
+  modalities: Dumbbell,
   attendance: CalendarCheck2,
   schedule: CalendarClock,
   monthlies: CreditCard,

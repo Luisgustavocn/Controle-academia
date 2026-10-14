@@ -7,6 +7,7 @@ Object.defineProperty(globalThis, "document", { configurable: true, value: dom.w
 Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 Object.assign(globalThis, {
   HTMLElement: dom.window.HTMLElement,
+  Element: dom.window.Element,
   HTMLButtonElement: dom.window.HTMLButtonElement,
   Node: dom.window.Node,
   KeyboardEvent: dom.window.KeyboardEvent,

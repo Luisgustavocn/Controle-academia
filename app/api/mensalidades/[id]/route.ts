@@ -5,6 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
+import { MARK_MONTHLY_PAID_ACTION, validatePaymentTransition } from "@/lib/services/mensalidade-payment";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const MONTH_BY_PT_SHORT: Record<string, number> = {
@@ -108,16 +109,31 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   let dataPagamento: Date | null | undefined;
   let status: MensalidadeStatus | undefined;
+  const isMarkPaid = body.action === MARK_MONTHLY_PAID_ACTION;
+
+  if (isMarkPaid && previous.status === MensalidadeStatus.PAGO) {
+    await syncAutomaticEntriesInCaixa(true);
+    return ok({ item: previous, alreadyPaid: true });
+  }
 
   try {
     dataPagamento =
       body.dataPagamento === "" ? null : parseMonthDayOrDate(body.dataPagamento, previous.competencia, "dataPagamento") ?? undefined;
-    status = parseStatus(body.status);
+    status = isMarkPaid ? MensalidadeStatus.PAGO : parseStatus(body.status);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados inválidos", 400);
   }
 
   const statusFinal = status ?? previous.status;
+  const formaPagamento = body.formaPagamento === undefined
+    ? undefined
+    : body.formaPagamento === null || body.formaPagamento === ""
+      ? null
+      : String(body.formaPagamento).trim();
+  const paymentError = validatePaymentTransition(previous.status, statusFinal, formaPagamento);
+  if (paymentError) {
+    return fail(paymentError, 400);
+  }
   if (statusFinal === MensalidadeStatus.PAGO && dataPagamento === undefined && !previous.dataPagamento) {
     dataPagamento = new Date();
   }
@@ -126,7 +142,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     where: { id },
     data: {
       dataPagamento,
-      formaPagamento: body.formaPagamento === "" ? null : (body.formaPagamento as string | undefined),
+      formaPagamento,
       status,
       observacao: body.observacao === "" ? null : (body.observacao as string | undefined)
     }

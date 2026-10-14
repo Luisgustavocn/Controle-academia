@@ -3,16 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Plus, Settings2, Users2 } from "lucide-react";
+import { MoreHorizontal, Plus, Users2 } from "lucide-react";
 import { useHasCapability } from "@/components/capability-provider";
-import { CrudModule } from "@/components/forms/crud-module";
 import { StudentFormDialog } from "@/components/students/student-form-dialog";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DataTable, DataTableBody, DataTableCell, DataTableContainer, DataTableHead, DataTableHeader, DataTableRow } from "@/components/ui/data-table";
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { FilterBar, FilterBarActions, FilterBarPrimary } from "@/components/ui/filter-bar";
@@ -81,7 +80,6 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
   const [reloadKey, setReloadKey] = useState(0);
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [manageModalities, setManageModalities] = useState(false);
   const firstSearchEffect = useRef(true);
 
   useEffect(() => {
@@ -179,10 +177,6 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
         {canChangeStatus && !student.activeEnrollment
           ? <DropdownMenuItem onSelect={() => router.push(profileHref(student.id))}>Retomar matrícula</DropdownMenuItem>
           : null}
-        {canChangeStatus && student.activeEnrollment ? <DropdownMenuSeparator /> : null}
-        {canChangeStatus && student.activeEnrollment
-          ? <DropdownMenuItem destructive onSelect={() => router.push(profileHref(student.id))}>Encerrar matrícula</DropdownMenuItem>
-          : null}
       </DropdownMenu>
     );
   }
@@ -221,7 +215,6 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
         description="Central operacional de cadastros, situação financeira e frequência."
         breadcrumbs={[{ label: "Início", href: "/dashboard" }, { label: "Alunos" }]}
         primaryAction={canCreate ? <Button onClick={openCreate} leadingIcon={<Plus className="h-4 w-4" aria-hidden="true" />}>Novo aluno</Button> : null}
-        secondaryActions={canUpdate ? <Button variant="outline" onClick={() => setManageModalities((value) => !value)} leadingIcon={<Settings2 className="h-4 w-4" aria-hidden="true" />}>Modalidades</Button> : null}
       />
 
       <FilterBar>
@@ -240,8 +233,6 @@ export function StudentListing({ initialFilters = {} }: { initialFilters?: Stude
       {loading ? <StudentSkeleton /> : error ? <ErrorState message={error} onRetry={refresh} /> : items.length === 0 ? <EmptyState icon={Users2} kind={hasFilters ? "search" : "empty"} title={hasFilters ? "Nenhum aluno encontrado" : "Nenhum aluno cadastrado"} description={hasFilters ? "Revise ou limpe os filtros para ampliar a busca." : "Cadastre o primeiro aluno para iniciar a operação."} action={hasFilters ? <Button variant="outline" onClick={clearFilters}>Limpar filtros</Button> : canCreate ? <Button onClick={openCreate}>Novo aluno</Button> : null} /> : <ResponsiveList desktop={desktop} mobile={mobile} />}
 
       {!loading && !error && items.length > 0 ? <Pagination page={pagination.page} totalPages={pagination.totalPages} totalItems={pagination.totalItems} onPageChange={(page) => setPagination((current) => ({ ...current, page }))} /> : null}
-
-      {manageModalities ? <CrudModule endpoint="/api/modalidades" title="Modalidades disponíveis" createLabel="Nova modalidade" searchPlaceholder="Buscar modalidade" listFields={[{ key: "nome", label: "Modalidade" }, { key: "valorPadrao", label: "Valor mensal" }, { key: "ativa", label: "Ativa" }]} fields={[{ key: "nome", label: "Nome da modalidade", required: true }, { key: "valorPadrao", label: "Valor mensal padrão", type: "number" }, { key: "ativa", label: "Ativa", type: "select", options: [{ label: "Sim", value: "true" }, { label: "Não", value: "false" }] }]} defaultValues={{ ativa: "true" }} createCapability="students.update" updateCapability="students.update" deleteCapability="students.update" onDataChanged={refresh} /> : null}
 
       <StudentFormDialog open={formOpen} onOpenChange={setFormOpen} studentId={editingId} modalities={modalities} onSaved={refresh} />
     </div>

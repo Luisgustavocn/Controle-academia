@@ -9,6 +9,10 @@ import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Select } from "@/components/ui/select";
 import { useHasCapability } from "@/components/capability-provider";
+import { Dialog } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
+import { PaymentMethodField } from "@/components/monthlies/payment-method-field";
+import { MARK_MONTHLY_PAID_ACTION } from "@/lib/services/mensalidade-payment";
 
 type MensalidadeStatus = "PENDENTE" | "PAGO" | "ATRASADO" | "ISENTO";
 type MensalidadeSection = "PAGAS" | "PENDENTES" | "ATRASADAS";
@@ -98,6 +102,10 @@ export default function MensalidadesPage() {
   const [competencia, setCompetencia] = useState(new Date().toISOString().slice(0, 7));
   const [activeSection, setActiveSection] = useState<MensalidadeSection | null>("PAGAS");
   const [editing, setEditing] = useState<MensalidadeItem | null>(null);
+  const [paying, setPaying] = useState<MensalidadeItem | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentMethodError, setPaymentMethodError] = useState("");
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState({
     dataPagamento: "",
     formaPagamento: "",
@@ -157,6 +165,7 @@ export default function MensalidadesPage() {
       status: item.status,
       observacao: item.observacao
     });
+    setEditErrors({});
   }
 
   function closeEdit() {
@@ -169,6 +178,10 @@ export default function MensalidadesPage() {
 
   async function salvarEdicao() {
     if (!editing) return;
+    if (editForm.status === "PAGO" && !editForm.formaPagamento.trim()) {
+      setEditErrors({ formaPagamento: "Forma de pagamento é obrigatória" });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -195,22 +208,44 @@ export default function MensalidadesPage() {
       await fetchBoard();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao salvar";
-      alert(message);
+      const normalized = message.toLocaleLowerCase("pt-BR");
+      if (normalized.includes("forma") && normalized.includes("pagamento")) setEditErrors((current) => ({ ...current, formaPagamento: message }));
+      else if (normalized.includes("datapagamento") || normalized.includes("data de pagamento")) setEditErrors((current) => ({ ...current, dataPagamento: message }));
+      else alert(message);
     } finally {
       setSaving(false);
     }
   }
 
-  async function marcarComoPago(item: MensalidadeItem) {
+  function openPayment(item: MensalidadeItem) {
+    setPaying(item);
+    setPaymentMethod("");
+    setPaymentMethodError("");
+  }
+
+  function closePayment() {
+    if (saving) return;
+    setPaying(null);
+    setPaymentMethod("");
+    setPaymentMethodError("");
+  }
+
+  async function marcarComoPago() {
+    if (!paying) return;
+    if (!paymentMethod.trim()) {
+      setPaymentMethodError("Forma de pagamento é obrigatória");
+      return;
+    }
+    setSaving(true);
     try {
-      const res = await fetch(`/api/mensalidades/${item.id}`, {
+      const res = await fetch(`/api/mensalidades/${paying.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          status: "PAGO",
-          dataPagamento: todayDayMonth()
+          action: MARK_MONTHLY_PAID_ACTION,
+          formaPagamento: paymentMethod.trim()
         })
       });
 
@@ -220,10 +255,16 @@ export default function MensalidadesPage() {
         throw new Error(data?.error ?? fallback);
       }
 
+      setPaying(null);
+      setPaymentMethod("");
+      setPaymentMethodError("");
       await fetchBoard();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro ao atualizar pagamento";
-      alert(message);
+      if (message.toLocaleLowerCase("pt-BR").includes("forma de pagamento")) setPaymentMethodError(message);
+      else alert(message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -397,7 +438,7 @@ export default function MensalidadesPage() {
                           <td>{toCurrency(item.valor)}</td>
                           {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
-                              <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => void marcarComoPago(item)}>
+                              <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openPayment(item)}>
                                 Marcar pago
                               </Button>
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
@@ -466,7 +507,7 @@ export default function MensalidadesPage() {
                           <td>{toCurrency(item.valor)}</td>
                           {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
-                              <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => void marcarComoPago(item)}>
+                              <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openPayment(item)}>
                                 Marcar pago
                               </Button>
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
@@ -541,23 +582,26 @@ export default function MensalidadesPage() {
                   </Select>
                 </label>
 
-                <label className="text-sm font-medium text-ink">
-                  Data de pagamento (DD/mmm)
+                <FormField label="Data de pagamento (DD/mmm)" htmlFor="monthly-edit-payment-date">
                   <Input
+                    id="monthly-edit-payment-date"
                     value={editForm.dataPagamento}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, dataPagamento: event.target.value }))}
+                    error={editErrors.dataPagamento}
+                    onChange={(event) => { setEditForm((prev) => ({ ...prev, dataPagamento: event.target.value })); setEditErrors((current) => ({ ...current, dataPagamento: "" })); }}
                     placeholder="10/mar"
                   />
-                </label>
+                </FormField>
 
-                <label className="text-sm font-medium text-ink">
-                  Forma de pagamento
-                  <Input
-                    value={editForm.formaPagamento}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, formaPagamento: event.target.value }))}
-                    placeholder="Pix, dinheiro, cartão..."
-                  />
-                </label>
+                <PaymentMethodField
+                  id="monthly-edit-payment-method"
+                  value={editForm.formaPagamento}
+                  error={editErrors.formaPagamento}
+                  required={editForm.status === "PAGO"}
+                  onChange={(value) => {
+                    setEditForm((prev) => ({ ...prev, formaPagamento: value }));
+                    if (value.trim()) setEditErrors((current) => ({ ...current, formaPagamento: "" }));
+                  }}
+                />
 
                 <label className="text-sm font-medium text-ink md:col-span-2">
                   Observação
@@ -581,6 +625,24 @@ export default function MensalidadesPage() {
           </Card>
         </div>
       ) : null}
+
+      <Dialog
+        open={Boolean(paying)}
+        onOpenChange={(open) => { if (!open) closePayment(); }}
+        title="Marcar mensalidade como paga"
+        description={paying ? `${paying.alunoNome} • ${paying.mesPendente}` : undefined}
+        footer={<><Button variant="ghost" disabled={saving} onClick={closePayment}>Cancelar</Button><Button loading={saving} onClick={() => void marcarComoPago()}>Confirmar pagamento</Button></>}
+      >
+        <PaymentMethodField
+          id="monthly-payment-method"
+          value={paymentMethod}
+          error={paymentMethodError}
+          onChange={(value) => {
+            setPaymentMethod(value);
+            if (value.trim()) setPaymentMethodError("");
+          }}
+        />
+      </Dialog>
     </div>
   );
 }

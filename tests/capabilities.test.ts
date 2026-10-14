@@ -48,9 +48,9 @@ test("each role receives only its planned navigation modules", () => {
   const menuFor = (role: SessionRole) =>
     filterNavigationByCapabilities(getCapabilitiesForRole(role)).flatMap((group) => group.items.map((item) => item.label));
 
-  assert.deepEqual(menuFor("ADMIN"), ["Dashboard", "Alunos", "Presença", "Agenda", "Mensalidades", "Caixa", "Despesas", "Produtos", "Pedidos", "Relatórios", "Configurações"]);
+  assert.deepEqual(menuFor("ADMIN"), ["Dashboard", "Alunos", "Modalidades", "Presença", "Agenda", "Mensalidades", "Caixa", "Despesas", "Produtos", "Pedidos", "Relatórios", "Configurações"]);
   assert.deepEqual(menuFor("FINANCEIRO"), ["Dashboard", "Alunos", "Mensalidades", "Caixa", "Despesas", "Relatórios"]);
-  assert.deepEqual(menuFor("RECEPCAO"), ["Dashboard", "Alunos", "Presença", "Agenda", "Mensalidades", "Produtos", "Pedidos"]);
+  assert.deepEqual(menuFor("RECEPCAO"), ["Dashboard", "Alunos", "Modalidades", "Presença", "Agenda", "Mensalidades", "Produtos", "Pedidos"]);
   assert.deepEqual(menuFor("PERSONAL"), ["Alunos", "Presença", "Agenda"]);
 });
 
@@ -62,6 +62,8 @@ test("page access chooses a safe role-specific redirect", () => {
   assert.equal(getUnauthorizedPageRedirect("RECEPCAO", "/mensalidades"), null);
   assert.equal(getUnauthorizedPageRedirect("PERSONAL", "/alunos"), null);
   assert.equal(getUnauthorizedPageRedirect("PERSONAL", "/configuracoes"), "/frequencia");
+  assert.equal(getUnauthorizedPageRedirect("RECEPCAO", "/modalidades"), null);
+  assert.equal(getUnauthorizedPageRedirect("FINANCEIRO", "/modalidades"), "/dashboard");
 });
 
 test("API capability guard returns 403 instead of relying on role rank", async () => {

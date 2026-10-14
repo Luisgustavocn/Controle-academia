@@ -11,9 +11,10 @@ import {
   type AcademyDateContext
 } from "@/lib/timezone";
 import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
-import { enrollmentCoversCompetenceWhere, studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
+import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
 
 export const NO_ATTENDANCE_ALERT_DAYS = 10;
+export const ACTIVE_STUDENT_DASHBOARD_WHERE = { status: AlunoStatus.ATIVO } as const;
 
 export type DashboardKpis = {
   alunos_ativos: number;
@@ -110,7 +111,7 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
     pedidosPagosMes,
     controle
   ] = await Promise.all([
-    prisma.aluno.count({ where: { periodosMatricula: { some: enrollmentCoversCompetenceWhere(referenceCompetencia) } } }),
+    prisma.aluno.count({ where: ACTIVE_STUDENT_DASHBOARD_WHERE }),
     prisma.mensalidade.count({
       where: {
         competencia: referenceCompetencia,
@@ -465,7 +466,7 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
     expenses,
     orders
   ] = await Promise.all([
-    prisma.aluno.count({ where: activeStudentWhere }),
+    prisma.aluno.count({ where: ACTIVE_STUDENT_DASHBOARD_WHERE }),
     prisma.mensalidade.findMany({
       where: {
         OR: [

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { clsx } from "clsx";
 import { MoreHorizontal, Plus, RefreshCw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -366,6 +367,8 @@ export function CrudModule({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>(defaultValues ?? {});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [localStatusFilter, setLocalStatusFilter] = useState("");
   const [localCompetenciaFilter, setLocalCompetenciaFilter] = useState("");
@@ -675,6 +678,8 @@ export function CrudModule({
   }, [formOpen, relationFieldKeys, selectedTipo, fields]);
 
   function onChange(key: string, value: string) {
+    setFieldErrors((current) => current[key] ? { ...current, [key]: "" } : current);
+    setFormError("");
     setForm((prev) => {
       const next = { ...prev, [key]: value };
 
@@ -706,6 +711,7 @@ export function CrudModule({
   }
 
   async function submit() {
+    const validationErrors: Record<string, string> = {};
     for (const field of fields) {
       if (!field.required) {
         continue;
@@ -714,18 +720,34 @@ export function CrudModule({
       if (field.type === "multi-select") {
         const selected = splitMultiValue(form[field.key]);
         if (selected.length === 0) {
-          alert(`Selecione ao menos uma opção para "${field.label}".`);
-          return false;
+          validationErrors[field.key] = `Selecione ao menos uma opção para ${field.label}.`;
         }
         continue;
       }
 
       const value = (form[field.key] ?? "").trim();
       if (!value) {
-        alert(`Preencha o campo obrigatório "${field.label}".`);
-        return false;
+        validationErrors[field.key] = `${field.label} é obrigatório.`;
       }
     }
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      setFormError("Revise os campos destacados.");
+      return false;
+    }
+    setFieldErrors({});
+    setFormError("");
+
+    const handleApiError = async (res: Response) => {
+      const err = await res.json().catch(() => ({})) as { error?: string; field?: string };
+      const message = err.error ?? "Erro ao salvar";
+      const normalized = normalizeTextKey(message);
+      const matchingField = err.field && fields.some((field) => field.key === err.field)
+        ? err.field
+        : fields.find((field) => normalized.includes(normalizeTextKey(field.key)) || normalized.includes(normalizeTextKey(field.label)))?.key;
+      if (matchingField) setFieldErrors((current) => ({ ...current, [matchingField]: message }));
+      else setFormError(message);
+    };
 
     const buildPayload = (override?: Record<string, string>) => {
       const payload: Record<string, string> = { ...form, ...(override ?? {}) };
@@ -759,8 +781,7 @@ export function CrudModule({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        alert(err.error ?? "Erro ao salvar");
+        await handleApiError(res);
         return false;
       }
 
@@ -785,8 +806,7 @@ export function CrudModule({
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          alert(err.error ?? "Erro ao salvar");
+          await handleApiError(res);
           return false;
         }
       }
@@ -800,8 +820,7 @@ export function CrudModule({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        alert(err.error ?? "Erro ao salvar");
+        await handleApiError(res);
         return false;
       }
     }
@@ -817,6 +836,8 @@ export function CrudModule({
     const itemId = item.id === undefined || item.id === null ? null : String(item.id);
     setEditingId(itemId);
     setForm(toFormState(item, fields));
+    setFieldErrors({});
+    setFormError("");
     setFormOpen(true);
     setOpenActions(null);
   }
@@ -886,6 +907,8 @@ export function CrudModule({
   function openCreateModal() {
     setEditingId(null);
     setForm(defaultValues ?? {});
+    setFieldErrors({});
+    setFormError("");
     setFormOpen(true);
   }
 
@@ -1147,7 +1170,7 @@ export function CrudModule({
                       : field.label;
 
                   return (
-                    <label key={field.key} className="text-sm font-medium text-ink">
+                    <label key={field.key} className={clsx("text-sm font-medium", fieldErrors[field.key] ? "text-danger" : "text-ink")}>
                       <span className="mb-1 block">
                         {displayLabel}
                         {field.required ? <span className="ml-1 text-accent">*</span> : null}
@@ -1163,6 +1186,7 @@ export function CrudModule({
                                 required={field.required}
                                 onChange={(event) => onChange(field.key, event.target.value)}
                                 placeholder="ID"
+                                error={fieldErrors[field.key]}
                               />
                             </>
                           ) : (
@@ -1171,6 +1195,8 @@ export function CrudModule({
                               <Select
                                 value={selectedId}
                                 required={field.required}
+                                error={Boolean(fieldErrors[field.key])}
+                                aria-describedby={fieldErrors[field.key] ? `${field.key}-error` : undefined}
                                 onChange={(event) => onChange(field.key, event.target.value)}
                               >
                                 <option value="">Selecione</option>
@@ -1194,7 +1220,7 @@ export function CrudModule({
                           </p>
                         </div>
                       ) : field.type === "multi-select" ? (
-                        <div className="space-y-2 rounded-xl border border-line/90 bg-white/85 p-2.5">
+                        <div className={clsx("space-y-2 rounded-xl border bg-white/85 p-2.5", fieldErrors[field.key] ? "border-danger" : "border-line/90")} aria-invalid={fieldErrors[field.key] ? true : undefined} aria-describedby={fieldErrors[field.key] ? `${field.key}-error` : undefined}>
                           <div className="grid gap-1.5 sm:grid-cols-2">
                             {field.options?.map((option) => {
                               const selected = splitMultiValue(form[field.key]).includes(option.value);
@@ -1207,6 +1233,7 @@ export function CrudModule({
                                     type="checkbox"
                                     checked={selected}
                                     onChange={(event) => {
+                                      setFieldErrors((current) => ({ ...current, [field.key]: "" }));
                                       setForm((prev) => {
                                         const current = splitMultiValue(prev[field.key]);
                                         const next = event.target.checked
@@ -1239,6 +1266,8 @@ export function CrudModule({
                             <Select
                               value={selectedValue}
                               required={field.required}
+                              error={Boolean(fieldErrors[field.key])}
+                              aria-describedby={fieldErrors[field.key] ? `${field.key}-error` : undefined}
                               onChange={(event) => onChange(field.key, event.target.value)}
                             >
                               <option value="">Selecione</option>
@@ -1257,8 +1286,10 @@ export function CrudModule({
                         <textarea
                           value={form[field.key] ?? ""}
                           required={field.required}
+                          aria-invalid={fieldErrors[field.key] ? true : undefined}
+                          aria-describedby={fieldErrors[field.key] ? `${field.key}-error` : undefined}
                           onChange={(event) => onChange(field.key, event.target.value)}
-                          className="min-h-[96px] w-full rounded-xl border border-line/90 bg-white/95 px-3 py-2 text-sm text-ink outline-none ring-accent transition focus:border-accent/60 focus:ring-2"
+                          className={clsx("min-h-[96px] w-full rounded-xl border bg-white/95 px-3 py-2 text-sm text-ink outline-none ring-accent transition focus:ring-2", fieldErrors[field.key] ? "border-danger focus:border-danger focus:ring-danger/20" : "border-line/90 focus:border-accent/60")}
                         />
                       ) : field.type === "number" && isCurrencyFieldMeta(field.key, field.label) ? (
                         <div className="relative">
@@ -1270,6 +1301,7 @@ export function CrudModule({
                             step="0.01"
                             value={form[field.key] ?? ""}
                             required={field.required}
+                            error={fieldErrors[field.key]}
                             onChange={(event) => onChange(field.key, event.target.value)}
                             className="pl-10"
                           />
@@ -1279,13 +1311,17 @@ export function CrudModule({
                           type={field.type ?? "text"}
                           value={form[field.key] ?? ""}
                           required={field.required}
+                          error={fieldErrors[field.key]}
                           onChange={(event) => onChange(field.key, event.target.value)}
                         />
                       )}
+                      {fieldErrors[field.key] && (field.type === "multi-select" || field.type === "select" || field.type === "textarea" || (lookupConfig && !lookupError[field.key])) ? <p id={`${field.key}-error`} role="alert" className="mt-1 text-helper font-medium text-danger">{fieldErrors[field.key]}</p> : null}
                     </label>
                   );
                 })}
               </div>
+
+              {formError ? <p role="alert" className="mt-3 text-sm font-medium text-danger">{formError}</p> : null}
 
               <div className="mt-5 flex flex-wrap gap-2 border-t border-line/70 pt-4">
                 <Button
