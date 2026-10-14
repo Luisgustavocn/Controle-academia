@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { civilDateToPrisma, prismaDateToCivil } from "@/lib/attendance-date";
 import { CANONICAL_PRICE_RULE, parseCanonicalOctoberWorkbook, type CanonicalPackage } from "@/lib/import/october-2026-canonical";
 import { normalizePersonName } from "@/lib/import/october-2026";
+import { protectHistoricalMutation } from "@/lib/import/operational-data-protection";
 import { prisma } from "@/lib/prisma";
 import { runProductionCli } from "@/scripts/cli-runtime";
 
@@ -68,7 +69,8 @@ function buildPlan(pkg: CanonicalPackage, db: Awaited<ReturnType<typeof snapshot
     const sourceAlias=normalizePersonName(item.sourceName)!==normalizePersonName(item.name);
     const productionPrecedence=Boolean(existing&&PRODUCTION_PRECEDENCE_STUDENTS.has(normalizePersonName(item.name)));
     const match=productionPrecedence?"EXISTENTE":existing?(sourceAlias?"MATCH_MANUAL_APROVADO":"EXISTENTE_EXATO"):"NOVO";
-    return {...item,match,existing,modality,productionPrecedence,observation:productionPrecedence?"override humano: PRODUÇÃO_PREVALECE":null};
+    const protection=existing?protectHistoricalMutation({entity:"Aluno",operation:"UPSERT",existing:{id:existing.id,provenance:"DESCONHECIDO",value:{nomeCompleto:existing.nomeCompleto,telefone:existing.telefone,status:existing.status,modalidadeId:existing.modalidadeId,vencimentoDia:existing.vencimentoDia,valorMensal:existing.valorMensal===null?null:Number(existing.valorMensal),usarValorPadrao:existing.usarValorPadrao}},historicalValue:{nomeCompleto:item.name,telefone:item.phone,status:item.status,modalidade:item.modality,vencimentoDia:item.dueDay,valorMensal:item.monthlyValue,usarValorPadrao:item.useDefault},historicalProvenance:"PLANILHA"}):null;
+    return {...item,match,existing,modality,productionPrecedence,protection,observation:productionPrecedence?"override humano: PRODUÇÃO_PREVALECE":protection?.classification??null};
   });
   const byName=new Map(students.map((item)=>[normalizePersonName(item.name),item]));
   const periods=pkg.periods.map((item)=>{
@@ -79,19 +81,16 @@ function buildPlan(pkg: CanonicalPackage, db: Awaited<ReturnType<typeof snapshot
     if(open.length===1){
       const current=open[0]; const modality=student?.modality;
       const same=(current.dataInicio?prismaDateToCivil(current.dataInicio):null)===item.startDate&&current.modalidadeId===modality?.existingId&&equalNumber(current.valorMensal,item.monthlyValue)&&current.usarValorPadrao===item.useDefault&&current.diaVencimento===item.dueDay;
-      if(!same) blockers.push(`${item.student}: período aberto existente diverge do pacote`); else action="REUTILIZAR";
+      action=same?"REUTILIZAR":"CONFLITO_COM_DADO_OPERACIONAL";
     }
     if(open.length===0&&student?.existing){
-      const proposedStart=item.startDate?civilDateToPrisma(item.startDate):null;
-      const overlap=student.existing.periodosMatricula.some((period)=>period.dataSaida===null||proposedStart===null||period.dataSaida>=proposedStart);
-      if(overlap&&student.productionPrecedence) action="PERIODO_EXISTENTE_PRESERVADO";
-      else if(overlap) blockers.push(`${item.student}: período histórico existente conflita com o início canônico`);
+      action="PERIODO_EXISTENTE_PRESERVADO";
     }
     return {...item,studentPlan:student,action};
   });
   const existingAttendance=new Set(db.attendance.map((item)=>`${item.alunoId}:${prismaDateToCivil(item.data)}`));
   const attendance=pkg.attendance.map((item)=>{const student=byName.get(normalizePersonName(item.student));const exists=student?.existing?existingAttendance.has(`${student.existing.id}:${item.date}`):false;return {...item,studentPlan:student,action:exists?"REUTILIZAR":"CRIAR"};});
-  return {blockers:[...new Set(blockers)],modalities,students,periods,attendance,summary:{students:students.length,existing:students.filter(x=>x.existing).length,newStudents:students.filter(x=>!x.existing).length,ambiguous:blockers.filter(x=>x.includes("aluno canônico")||x.includes("telefone coincide")).length,productionPrecedence:students.filter(x=>x.productionPrecedence).length,effectiveActive:students.filter(x=>x.status==="ATIVO"&&!x.productionPrecedence).length,modalitiesToCreate:modalities.filter(x=>x.action==="CRIAR").length,periodsToCreate:periods.filter(x=>x.action==="CRIAR").length,periodsPreserved:periods.filter(x=>x.action==="PERIODO_EXISTENTE_PRESERVADO").length,attendanceToCreate:attendance.filter(x=>x.action==="CRIAR").length}};
+  return {blockers:[...new Set(blockers)],modalities,students,periods,attendance,summary:{students:students.length,existing:students.filter(x=>x.existing).length,newStudents:students.filter(x=>!x.existing).length,studentsProtected:students.filter(x=>x.protection&&!x.protection.allowed).length,conflicts:students.filter(x=>x.protection?.classification==="CONFLITO_COM_DADO_OPERACIONAL").length,ambiguous:blockers.filter(x=>x.includes("aluno canônico")||x.includes("telefone coincide")).length,productionPrecedence:students.filter(x=>x.productionPrecedence).length,effectiveActive:students.filter(x=>x.status==="ATIVO"&&!x.productionPrecedence).length,modalitiesToCreate:modalities.filter(x=>x.action==="CRIAR").length,periodsToCreate:periods.filter(x=>x.action==="CRIAR").length,periodsPreserved:periods.filter(x=>x.action==="PERIODO_EXISTENTE_PRESERVADO"||x.action==="CONFLITO_COM_DADO_OPERACIONAL").length,attendanceToCreate:attendance.filter(x=>x.action==="CRIAR").length}};
 }
 
 async function apply(pkg: CanonicalPackage, plan: ReturnType<typeof buildPlan>, sha: string) {
@@ -104,14 +103,14 @@ async function apply(pkg: CanonicalPackage, plan: ReturnType<typeof buildPlan>, 
     }
     const studentIds=new Map<string,string>();
     for(const item of plan.students){
-      if(item.existing&&item.productionPrecedence){studentIds.set(normalizePersonName(item.name),item.existing.id);continue;}
+      if(item.existing){studentIds.set(normalizePersonName(item.name),item.existing.id);continue;}
       const data={nomeCompleto:item.name,telefone:item.phone,modalidadeId:modalityIds.get(normalizePersonName(item.modality))!,vencimentoDia:item.dueDay,status:item.status==="ATIVO"?AlunoStatus.ATIVO:AlunoStatus.INATIVO,dataInicio:item.startDate?civilDateToPrisma(item.startDate):null,valorMensal:item.monthlyValue,usarValorPadrao:item.useDefault,dataSaidaCancelamento:null};
-      const row=item.existing?await tx.aluno.update({where:{id:item.existing.id},data}):await tx.aluno.create({data});
+      const row=await tx.aluno.create({data});
       studentIds.set(normalizePersonName(item.name),row.id);
     }
     for(const item of plan.periods.filter(x=>x.action==="CRIAR")) await tx.periodoMatricula.create({data:{alunoId:studentIds.get(normalizePersonName(item.student))!,dataInicio:item.startDate?civilDateToPrisma(item.startDate):null,dataSaida:null,modalidadeId:modalityIds.get(normalizePersonName(item.modality))!,valorMensal:item.monthlyValue,usarValorPadrao:item.useDefault,diaVencimento:item.dueDay}});
     if(plan.attendance.some(x=>x.action==="CRIAR")) await tx.presenca.createMany({data:plan.attendance.filter(x=>x.action==="CRIAR").map(item=>({alunoId:studentIds.get(normalizePersonName(item.student))!,data:civilDateToPrisma(item.date),horario:null,tipoAula:"Não informado",presente:true})),skipDuplicates:true});
-    await tx.logAuditoria.create({data:{modulo:"importacao",entidade:"PacoteOutubro2026",entidadeId:sha,acao:"IMPORT_CANONICAL_OCTOBER_2026",depois:{regra:CANONICAL_PRICE_RULE,alunosNovos:plan.summary.newStudents,modalidadesNovas:plan.summary.modalitiesToCreate,periodosNovos:plan.summary.periodsToCreate,presencasNovas:plan.summary.attendanceToCreate}}});
+      await tx.logAuditoria.create({data:{modulo:"importacao",entidade:"PacoteOutubro2026",entidadeId:sha,acao:"IMPORT_CANONICAL_OCTOBER_2026",depois:{regra:CANONICAL_PRICE_RULE,alunosNovos:plan.summary.newStudents,alunosProtegidos:plan.summary.studentsProtected,conflitos:plan.summary.conflicts,modalidadesNovas:plan.summary.modalitiesToCreate,periodosNovos:plan.summary.periodsToCreate,presencasNovas:plan.summary.attendanceToCreate}}});
     return {studentsCreated:plan.summary.newStudents,studentsReused:plan.summary.existing,modalitiesCreated:plan.summary.modalitiesToCreate,periodsCreated:plan.summary.periodsToCreate,attendanceCreated:plan.summary.attendanceToCreate};
   },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable,maxWait:10000,timeout:120000});
 }

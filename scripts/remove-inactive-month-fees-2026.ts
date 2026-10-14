@@ -57,34 +57,10 @@ async function main() {
     throw new Error(`Bloqueado: ${preview.length} candidatos excedem o máximo aprovado de ${EXPECTED_MAXIMUM}`);
   }
   if (!APPLY) {
-    console.log(JSON.stringify({ mode: "dry-run", candidates: preview.length, totalValue: previewValue }));
+    console.log(JSON.stringify({ mode: "dry-run", candidates: preview.length, protected: preview.length, plannedDeletes: 0, totalValue: previewValue, classification: "PROTEGIDO_DADO_EXISTENTE" }));
     return;
   }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const candidates = await eligible(tx);
-    if (candidates.length > EXPECTED_MAXIMUM) throw new Error("Conjunto elegível aumentou durante a revalidação");
-    const ids = candidates.map((item) => item.id);
-    const totalValue = candidates.reduce((sum, item) => sum + Number(item.valor), 0);
-    const competences = Array.from(new Set(candidates.map((item) => item.competencia))).sort();
-    const deleted = ids.length
-      ? await tx.mensalidade.deleteMany({ where: { id: { in: ids } } })
-      : { count: 0 };
-    if (deleted.count !== ids.length) throw new Error("A exclusão não correspondeu aos IDs revalidados");
-    await tx.logAuditoria.create({
-      data: {
-        modulo: "mensalidades",
-        entidade: "Mensalidade",
-        entidadeId: "batch:inactive-month-fees-2026",
-        acao: "REMOVE_INACTIVE_MONTH_FEES_2026",
-        antes: { quantidade: ids.length, valorTotal: totalValue, competencias: competences },
-        depois: { quantidadeRestante: 0 },
-      }
-    });
-    return { removed: deleted.count, totalValue, competences };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-
-  console.log(JSON.stringify({ mode: "apply", ...result }));
+  throw new Error("Apply desabilitado permanentemente: rotina histórica não pode excluir Mensalidade existente");
 }
 
 main().finally(() => prisma.$disconnect()).catch((error) => {

@@ -48,6 +48,13 @@ export class InvalidSpreadsheetError extends Error {
   }
 }
 
+export class HistoricalImportApplyDisabledError extends Error {
+  constructor() {
+    super("Importação histórica direta desabilitada: execute um dry-run auditável antes de qualquer apply");
+    this.name = "HistoricalImportApplyDisabledError";
+  }
+}
+
 export function parseSpreadsheetBuffer(fileBuffer: Buffer) {
   let workbook: XLSX.WorkBook;
 
@@ -595,22 +602,16 @@ async function importProdutosPedidos(workbook: XLSX.WorkBook, importYear: number
 }
 
 export async function importFromExcelBuffer(fileBuffer: Buffer, importYear: number, actorId: string) {
-  const workbook = parseSpreadsheetBuffer(fileBuffer);
-
-  const result = {
-    musc: await importMusc(workbook, importYear),
-    caixa: await importCaixa(workbook, importYear),
-    despesaAcademia: await importDespesas(workbook, "despesa academia", importYear),
-    agenda: await importAgenda(workbook),
-    presencas: await importPresencas(workbook, importYear, actorId),
-    produtosPedidos: await importProdutosPedidos(workbook, importYear)
-  };
-
-  return result;
+  void fileBuffer;
+  void importYear;
+  void actorId;
+  void [importMusc, importCaixa, importDespesas, importAgenda, importPresencas, importProdutosPedidos];
+  throw new HistoricalImportApplyDisabledError();
 }
 
 export async function importOnlyMuscFromExcelBuffer(fileBuffer: Buffer, importYear = new Date().getFullYear()) {
-  const workbook = parseSpreadsheetBuffer(fileBuffer);
-  const musc = await importMusc(workbook, importYear);
-  return { musc };
+  void fileBuffer;
+  void importYear;
+  void importMusc;
+  throw new HistoricalImportApplyDisabledError();
 }

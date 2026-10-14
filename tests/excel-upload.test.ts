@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { InvalidSpreadsheetError, parseSpreadsheetBuffer } from "../lib/excel/importer";
+import {
+  HistoricalImportApplyDisabledError,
+  importFromExcelBuffer,
+  InvalidSpreadsheetError,
+  parseSpreadsheetBuffer
+} from "../lib/excel/importer";
 import {
   MAX_SPREADSHEET_IMPORT_BYTES,
   validateSpreadsheetUpload
@@ -52,5 +57,12 @@ test("rejects invalid content disguised as XLSX", () => {
   assert.throws(
     () => parseSpreadsheetBuffer(Buffer.from("conteudo que nao e uma planilha")),
     InvalidSpreadsheetError
+  );
+});
+
+test("blocks the legacy direct apply until an auditable dry-run exists", async () => {
+  await assert.rejects(
+    importFromExcelBuffer(Buffer.alloc(0), 2026, "admin-1"),
+    HistoricalImportApplyDisabledError
   );
 });

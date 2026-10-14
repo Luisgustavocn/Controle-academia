@@ -2,7 +2,7 @@ import {} from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
-import { importFromExcelBuffer, InvalidSpreadsheetError } from "@/lib/excel/importer";
+import { HistoricalImportApplyDisabledError, importFromExcelBuffer, InvalidSpreadsheetError } from "@/lib/excel/importer";
 import { validateSpreadsheetUpload } from "@/lib/excel/upload-validation";
 
 export async function POST(request: NextRequest) {
@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof InvalidSpreadsheetError) {
       return fail(error.message, 400);
+    }
+    if (error instanceof HistoricalImportApplyDisabledError) {
+      return fail(error.message, 409);
     }
 
     console.error("Falha ao importar planilha", error);
