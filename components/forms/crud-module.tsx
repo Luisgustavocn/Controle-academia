@@ -14,10 +14,11 @@ import type { Capability } from "@/lib/auth/capabilities";
 type Field = {
   key: string;
   label: string;
-  type?: "text" | "number" | "date" | "datetime-local" | "textarea" | "select" | "multi-select";
+  type?: "text" | "number" | "date" | "time" | "datetime-local" | "textarea" | "select" | "multi-select";
   required?: boolean;
   options?: Array<{ label: string; value: string }>;
   lookupEndpoint?: string;
+  derivedTimeDuration?: { startKey: string; endKey: string };
 };
 
 type ListField = string | { key: string; label: string };
@@ -761,6 +762,11 @@ export function CrudModule({
 
     const buildPayload = (override?: Record<string, string>) => {
       const payload: Record<string, string> = { ...form, ...(override ?? {}) };
+      for (const field of fields) {
+        if (field.derivedTimeDuration) {
+          delete payload[field.key];
+        }
+      }
       for (const fieldKey of multiSelectFieldKeys) {
         const selected = splitMultiValue(payload[fieldKey]);
         payload[fieldKey] = selected[0] ?? "";
@@ -1179,6 +1185,28 @@ export function CrudModule({
                       ? field.label.slice(3)
                       : field.label;
 
+                  if (field.derivedTimeDuration) {
+                    const start = form[field.derivedTimeDuration.startKey] ?? "";
+                    const end = form[field.derivedTimeDuration.endKey] ?? "";
+                    const timePattern = /^(\d{2}):(\d{2})$/;
+                    const startMatch = timePattern.exec(start);
+                    const endMatch = timePattern.exec(end);
+                    const startMinutes = startMatch ? Number(startMatch[1]) * 60 + Number(startMatch[2]) : null;
+                    const endMinutes = endMatch ? Number(endMatch[1]) * 60 + Number(endMatch[2]) : null;
+                    const duration = startMinutes !== null && endMinutes !== null && endMinutes > startMinutes
+                      ? endMinutes - startMinutes
+                      : null;
+
+                    return (
+                      <div key={field.key} className="text-sm font-medium text-ink">
+                        <span className="mb-1 block">{displayLabel}</span>
+                        <div className="flex min-h-10 items-center rounded-xl border border-line/90 bg-surface px-3 text-sm font-semibold text-ink" aria-live="polite">
+                          {duration === null ? "Informe início e fim" : `${duration} min`}
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
                     <label key={field.key} className={clsx("text-sm font-medium", fieldErrors[field.key] ? "text-danger" : "text-ink")}>
                       <span className="mb-1 block">
@@ -1319,6 +1347,7 @@ export function CrudModule({
                       ) : (
                         <Input
                           type={field.type ?? "text"}
+                          step={field.type === "time" ? 300 : undefined}
                           value={form[field.key] ?? ""}
                           required={field.required}
                           error={fieldErrors[field.key]}

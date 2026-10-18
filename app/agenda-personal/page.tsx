@@ -34,6 +34,11 @@ type AgendaItem = {
   professor: string;
   diaSemana: number;
   horario: string;
+  horarioFim?: string | null;
+  data?: string | null;
+  duracaoMinutos?: number;
+  legado?: boolean;
+  compatibilidadeSegura?: boolean;
   alunoId?: string | null;
   alunoNome?: string | null;
   aluno?: {
@@ -74,21 +79,6 @@ function toMinutes(value: string) {
   const match = /^(\d{2}):(\d{2})$/.exec(normalized);
   if (!match) return Number.MAX_SAFE_INTEGER;
   return Number(match[1]) * 60 + Number(match[2]);
-}
-
-function defaultSlots() {
-  const slots: string[] = [];
-  const pushRange = (startHour: number, endHour: number) => {
-    for (let minutes = startHour * 60; minutes <= endHour * 60; minutes += 60) {
-      const hour = Math.floor(minutes / 60);
-      const minute = minutes % 60;
-      slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
-    }
-  };
-
-  pushRange(6, 10);
-  pushRange(15, 21);
-  return slots;
 }
 
 function isoWeekMonday(weekRef: string) {
@@ -132,21 +122,6 @@ function normalizeHorarioValue(raw: string) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function isHorarioAtendimento(value: string) {
-  const normalized = normalizeHorarioValue(value);
-  if (!normalized) return false;
-  const [hourRaw, minuteRaw] = normalized.split(":");
-  const hour = Number(hourRaw);
-  const minute = Number(minuteRaw);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false;
-  if (minute !== 0) return false;
-  const total = hour * 60 + minute;
-
-  const morning = total >= 6 * 60 && total <= 10 * 60;
-  const afternoon = total >= 15 * 60 && total <= 21 * 60;
-  return morning || afternoon;
-}
-
 function formatDayMonth(dateIso?: string) {
   if (!dateIso) return "";
   const [year, month, day] = dateIso.split("-");
@@ -174,7 +149,6 @@ export default function AgendaPersonalPage() {
   const [selectedProfessor, setSelectedProfessor] = useState("");
   const [loadingPainel, setLoadingPainel] = useState(false);
   const [savingPresencaKey, setSavingPresencaKey] = useState<string | null>(null);
-  const [updatingHorarioId, setUpdatingHorarioId] = useState<string | null>(null);
   const [presencasAgenda, setPresencasAgenda] = useState<Record<string, { id: string; presente: boolean }>>({});
   const [weekRef] = useState(currentWeekRef());
 
@@ -280,24 +254,20 @@ export default function AgendaPersonalPage() {
   const agendaProfessor = useMemo(
     () =>
       agendaItems.filter(
-        (item) => item.professor === selectedProfessor && (!item.semanaRef || item.semanaRef === weekRef)
+        (item) => item.professor === selectedProfessor && item.data && Object.values(weekDatesByDay).includes(item.data)
       ),
-    [agendaItems, selectedProfessor, weekRef]
+    [agendaItems, selectedProfessor, weekDatesByDay]
   );
 
-  const slots = useMemo(() => {
-    const fromAgenda = agendaProfessor.map((item) => normalizeHorario(item.horario)).filter(Boolean);
-    return Array.from(new Set([...defaultSlots(), ...fromAgenda])).sort((a, b) => toMinutes(a) - toMinutes(b));
-  }, [agendaProfessor]);
-
-  const occupancy = useMemo(() => {
+  const agendaByDay = useMemo(() => {
     const map = new Map<string, AgendaItem[]>();
     for (const item of agendaProfessor) {
-      const key = `${item.diaSemana}-${normalizeHorario(item.horario)}`;
+      const key = String(item.data ?? "");
       const current = map.get(key) ?? [];
       current.push(item);
       map.set(key, current);
     }
+    for (const items of map.values()) items.sort((left, right) => toMinutes(left.horario) - toMinutes(right.horario));
     return map;
   }, [agendaProfessor]);
 
@@ -361,43 +331,6 @@ export default function AgendaPersonalPage() {
     }
   }
 
-  async function ajustarHorarioSemana(item: AgendaItem) {
-    const atual = normalizeHorarioValue(item.horario);
-    const novoRaw = window.prompt("Novo horário desta semana (HH:mm):", atual || "");
-    if (novoRaw === null) return;
-
-    const novo = normalizeHorarioValue(novoRaw);
-    if (!novo) {
-      alert("Horário inválido. Use HH:mm.");
-      return;
-    }
-    if (!isHorarioAtendimento(novo)) {
-      alert("Use somente horas cheias entre 06:00-10:00 ou 15:00-21:00.");
-      return;
-    }
-    if (novo === atual) {
-      return;
-    }
-
-    setUpdatingHorarioId(item.id);
-    try {
-      const res = await fetch(`/api/agenda-personal/${item.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ horario: novo, semanaRef: weekRef })
-      });
-      const payload = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        alert(payload.error ?? "Não foi possível ajustar horário.");
-        return;
-      }
-
-      await refreshPainel();
-    } finally {
-      setUpdatingHorarioId(null);
-    }
-  }
-
   return (
     <div className="space-y-4">
       <ModuleHeader
@@ -437,93 +370,27 @@ export default function AgendaPersonalPage() {
         {!selectedProfessor ? (
           <p className="text-sm text-muted">Cadastre e selecione um professor para visualizar a agenda semanal.</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-line/80 bg-white/80">
-            <table className="min-w-[980px]">
-              <thead>
-                <tr>
-                  <th className="min-w-[110px]">Horário</th>
-                  {WEEK_DAYS.map((day) => (
-                    <th key={day.value}>
-                      <div>{day.label}</div>
-                      <div className="text-[11px] font-medium text-muted">{formatDayMonth(weekDatesByDay[day.value])}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loadingPainel ? (
-                  <tr>
-                    <td colSpan={WEEK_DAYS.length + 1}>Carregando painel semanal...</td>
-                  </tr>
-                ) : (
-                  slots.map((slot) => (
-                    <tr key={slot}>
-                      <td className="font-semibold text-ink">{slot}</td>
-                      {WEEK_DAYS.map((day) => {
-                        const key = `${day.value}-${slot}`;
-                        const itens = occupancy.get(key) ?? [];
-                        const ocupado = itens.length > 0;
-
-                        return (
-                          <td key={key} className={ocupado ? "bg-[#fff0f2]" : "bg-[#f7faf8]"}>
-                            {ocupado ? (
-                              <div className="space-y-1">
-                                {itens.map((item) => (
-                                  <div key={item.id} className="rounded-md border border-[rgba(207,22,33,0.2)] bg-white px-2 py-1 text-xs">
-                                    <strong>{item.alunoNome?.trim() || "Ocupado"}</strong>
-                                    {(() => {
-                                      const alunoId = String(item.alunoId ?? "").trim();
-                                      const dateIso = weekDatesByDay[item.diaSemana];
-                                      const key = alunoId && dateIso ? presenceKey(alunoId, dateIso) : "";
-                                      const status = key ? presencasAgenda[key] : undefined;
-                                      const saving = key ? savingPresencaKey === key : false;
-                                      const isFoi = Boolean(status?.presente);
-
-                                      return (
-                                        <div className="mt-1 space-y-1">
-                                          <div className="text-[11px] text-muted">
-                                            {isFoi ? "Presença diária confirmada" : "Presença: sem marcação"}
-                                          </div>
-                                          <div className="flex flex-wrap gap-1">
-                                            <button
-                                              type="button"
-                                              disabled={!alunoId || saving}
-                                              onClick={() => void marcarPresencaAgenda(item)}
-                                              className={
-                                                isFoi
-                                                  ? "rounded-md border border-[rgba(34,136,83,0.28)] bg-[#1f6d44] px-2 py-0.5 text-[10px] font-semibold text-white disabled:opacity-50"
-                                                  : "rounded-md border border-line bg-white px-2 py-0.5 text-[10px] font-semibold text-ink disabled:opacity-50"
-                                              }
-                                            >
-                                              {saving && isFoi ? "..." : "Foi"}
-                                            </button>
-                                            <button
-                                              type="button"
-                                              disabled={updatingHorarioId === item.id}
-                                              onClick={() => void ajustarHorarioSemana(item)}
-                                              className="rounded-md border border-line bg-white px-2 py-0.5 text-[10px] font-semibold text-ink transition hover:bg-accentSoft disabled:opacity-50"
-                                            >
-                                              {updatingHorarioId === item.id ? "..." : "Horário semana"}
-                                            </button>
-                                          </div>
-                                        </div>
-                                      );
-                                    })()}
-                                    {item.observacao ? <div className="text-muted">{item.observacao}</div> : null}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-xs font-medium text-[#5e6b61]">Vago</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {WEEK_DAYS.map((day) => {
+              const dateIso = weekDatesByDay[day.value];
+              const items = agendaByDay.get(dateIso) ?? [];
+              return <section key={day.value} className="rounded-xl border border-line/80 bg-white/80 p-3">
+                <h3 className="font-bold text-ink">{day.label} <span className="text-xs font-medium text-muted">{formatDayMonth(dateIso)}</span></h3>
+                {loadingPainel ? <p className="mt-3 text-sm text-muted">Carregando...</p> : items.length === 0 ? <p className="mt-3 text-sm text-muted">Sem agendamentos.</p> : <div className="mt-3 space-y-2">{items.map((item) => {
+                  const alunoId = String(item.alunoId ?? "").trim();
+                  const key = alunoId && dateIso ? presenceKey(alunoId, dateIso) : "";
+                  const present = key ? presencasAgenda[key]?.presente : false;
+                  const saving = key ? savingPresencaKey === key : false;
+                  return <article key={item.id} className="rounded-ds-lg border border-line bg-card p-3 text-sm shadow-surface-sm">
+                    <div className="flex items-start justify-between gap-2"><div><p className="font-black text-ink">{item.horario}–{item.horarioFim}</p><p className="font-semibold text-ink">{item.alunoNome?.trim() || item.aluno?.nomeCompleto || "Cliente"}</p></div><span className="text-xs font-semibold text-muted">{item.duracaoMinutos} min</span></div>
+                    <p className="mt-1 text-xs text-muted">Personal: {item.professor}{item.legado ? " · registro legado" : ""}</p>
+                    {item.compatibilidadeSegura === false ? <p className="mt-1 text-xs font-semibold text-danger">Horário legado preservado; revise antes de editar.</p> : null}
+                    {item.observacao ? <p className="mt-1 text-xs text-muted">{item.observacao}</p> : null}
+                    <button type="button" disabled={!alunoId || saving || present} onClick={() => void marcarPresencaAgenda(item)} className="mt-2 rounded-md border border-line bg-white px-2 py-1 text-xs font-semibold text-ink disabled:opacity-50">{present ? "Presença confirmada" : saving ? "Salvando..." : "Confirmar presença"}</button>
+                  </article>;
+                })}</div>}
+              </section>;
+            })}
           </div>
         )}
       </Card>
@@ -535,39 +402,24 @@ export default function AgendaPersonalPage() {
         onDataChanged={() => refreshPainel()}
         listFields={[
           { key: "professor", label: "Professor" },
-          { key: "diaSemana", label: "Dia" },
-          { key: "horario", label: "Horário" },
+          { key: "data", label: "Data" },
+          { key: "horario", label: "Início" },
+          { key: "horarioFim", label: "Fim" },
+          { key: "duracaoMinutos", label: "Duração (min)" },
           { key: "alunoNome", label: "Aluno" },
           { key: "observacao", label: "Observação" }
         ]}
         fields={[
-          { key: "professor", label: "Professor", required: true },
-          {
-            key: "diaSemana",
-            label: "Dia da semana",
-            type: "multi-select",
-            required: true,
-            options: [
-              { label: "Segunda-feira", value: "1" },
-              { label: "Terça-feira", value: "2" },
-              { label: "Quarta-feira", value: "3" },
-              { label: "Quinta-feira", value: "4" },
-              { label: "Sexta-feira", value: "5" },
-              { label: "Sábado", value: "6" }
-            ]
-          },
-          {
-            key: "horario",
-            label: "Horário",
-            type: "select",
-            required: true,
-            options: defaultSlots().map((slot) => ({ label: slot, value: slot }))
-          },
+          { key: "professor", label: "Personal", required: true },
+          { key: "data", label: "Data", type: "date", required: true },
+          { key: "horario", label: "Início", type: "time", required: true },
+          { key: "horarioFim", label: "Fim", type: "time", required: true },
+          { key: "duracaoCalculada", label: "Duração calculada", derivedTimeDuration: { startKey: "horario", endKey: "horarioFim" } },
           { key: "alunoId", label: "Aluno", lookupEndpoint: "/api/alunos?matriculaAtiva=true" },
           { key: "alunoNome", label: "Aluno (texto livre)" },
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
-        defaultValues={{ semanaRef: weekRef, tipoAula: "personal", ativo: "true" }}
+        defaultValues={{ data: todayDate, tipoAula: "personal", ativo: "true" }}
         createCapability="schedule.write"
         updateCapability="schedule.write"
         deleteCapability="schedule.write"

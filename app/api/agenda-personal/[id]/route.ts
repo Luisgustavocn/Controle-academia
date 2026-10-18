@@ -1,88 +1,34 @@
-import { createByIdHandlers } from "@/lib/api/crud";
-import { academyToday } from "@/lib/attendance-date";
+import { NextRequest } from "next/server";
+import { requireCapability } from "@/lib/auth/guards";
+import { logAudit } from "@/lib/audit";
+import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { isStudentActiveOnDate } from "@/lib/services/enrollment-periods";
+import { PersonalScheduleError, serializeScheduleRecord, updatePersonalSchedule } from "@/lib/services/personal-schedule";
 
-function normalizeHorario(raw: unknown) {
-  const value = String(raw ?? "").trim();
-  if (!value) return "";
-
-  const compact = value.replace(/\s+/g, "");
-  const match = /^(\d{1,2})(?:[:hH]?(\d{2}))?$/.exec(compact);
-  if (!match) return "";
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2] ?? "00");
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return "";
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return "";
-
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function isHorarioAtendimento(value: string) {
-  const [hourRaw, minuteRaw] = value.split(":");
-  const hour = Number(hourRaw);
-  const minute = Number(minuteRaw);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false;
-  if (minute !== 0) return false;
-  const total = hour * 60 + minute;
-
-  const morning = total >= 6 * 60 && total <= 10 * 60;
-  const afternoon = total >= 15 * 60 && total <= 21 * 60;
-  return morning || afternoon;
-}
-
-export const { PUT, DELETE } = createByIdHandlers({
-  model: "agendaPersonal",
-  module: "agenda-personal",
-  writeCapability: "schedule.write",
-  intFields: ["diaSemana"],
-  booleanFields: ["ativo"],
-  validate: (data) => {
-    const horario = data.horario;
-    if (horario !== undefined) {
-      const normalizedHorario = normalizeHorario(horario);
-      if (!normalizedHorario) {
-        return "Horário inválido. Use formato HH:mm";
-      }
-      if (!isHorarioAtendimento(normalizedHorario)) {
-        return "Horário inválido. Use somente horas cheias entre 06:00-10:00 ou 15:00-21:00";
-      }
-      data.horario = normalizedHorario;
-    }
-
-    const dia = data.diaSemana;
-    if (dia === undefined) {
-      // segue validação dos demais campos opcionais
-    } else {
-      const diaValue = Number(dia);
-      if (!Number.isInteger(diaValue) || diaValue < 1 || diaValue > 6) {
-        return "diaSemana deve ser um número entre 1 e 6";
-      }
-    }
-
-    const alunoId = data.alunoId === undefined || data.alunoId === null ? "" : String(data.alunoId).trim();
-    const alunoNome = data.alunoNome === undefined || data.alunoNome === null ? "" : String(data.alunoNome).trim();
-
-    if (data.alunoId !== undefined) {
-      data.alunoId = alunoId || null;
-    }
-    if (data.alunoNome !== undefined) {
-      data.alunoNome = alunoNome || null;
-    }
-
-    if (data.alunoId === null && (data.alunoNome === null || data.alunoNome === undefined)) {
-      return "Selecione um aluno ou preencha o campo Aluno (texto livre)";
-    }
-
-    return null;
-  },
-  validateAsync: async (data, _mode, previous) => {
-    if (data.alunoId === undefined) return null;
-    const alunoId = String(data.alunoId ?? previous?.alunoId ?? "").trim();
-    if (alunoId && !await isStudentActiveOnDate(prisma, alunoId, academyToday())) {
-      return "Aluno sem matrícula ativa não pode receber novo agendamento";
-    }
-    return null;
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = requireCapability(request, "schedule.write");
+  if (auth instanceof Response) return auth;
+  const { id } = await context.params;
+  const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!body) return fail("Payload inválido", 400);
+  try {
+    const updated = await updatePersonalSchedule(id, body, auth.id);
+    return ok({ item: serializeScheduleRecord(updated) });
+  } catch (error) {
+    if (error instanceof PersonalScheduleError) return fail(error.message, error.status);
+    throw error;
   }
-});
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = requireCapability(request, "schedule.write");
+  if (auth instanceof Response) return auth;
+  const { id } = await context.params;
+  const previous = await prisma.agendaPersonal.findUnique({ where: { id } });
+  if (!previous) return fail("Agendamento não encontrado", 404);
+  await prisma.$transaction(async (tx) => {
+    await tx.agendaPersonal.delete({ where: { id } });
+    await logAudit({ userId: auth.id, modulo: "agenda-personal", entidade: "AgendaPersonal", entidadeId: id, acao: "DELETE", antes: previous }, tx);
+  });
+  return ok({ ok: true });
+}
