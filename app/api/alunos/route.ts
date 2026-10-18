@@ -30,6 +30,14 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   catch { throw new CivilDateValidationError(`${fieldName} inválida`); }
 }
 
+function parseOptionalBirthDate(value: unknown) {
+  const parsed = parseOptionalDate(value, "data de nascimento");
+  if (parsed && parsed > civilDateToPrisma(academyToday())) {
+    throw new CivilDateValidationError("Data de nascimento não pode ser futura");
+  }
+  return parsed;
+}
+
 function parseOptionalNumber(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -189,6 +197,7 @@ export async function POST(request: NextRequest) {
   let dataSaidaCancelamento: Date | null = null;
   let dataInicio: Date | null = null;
   let usarValorPadrao = true;
+  let dataNascimento: Date | null = null;
 
   try {
     mensalidadeValor = parseOptionalNumber(body.valorMensal ?? body.mensalidadeValor, "valor mensal");
@@ -197,6 +206,7 @@ export async function POST(request: NextRequest) {
     dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
     dataInicio = parseOptionalDate(body.dataInicio, "data de início");
     usarValorPadrao = parseBoolean(body.usarValorPadrao, true);
+    dataNascimento = parseOptionalBirthDate(body.dataNascimento);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados de mensalidade inválidos", 400);
   }
@@ -227,7 +237,8 @@ export async function POST(request: NextRequest) {
         valorMensal: mensalidadeValor,
         usarValorPadrao,
         dataSaidaCancelamento: dataSaidaFinal,
-        observacoes: body.observacoes ? String(body.observacoes) : null
+        observacoes: body.observacoes ? String(body.observacoes) : null,
+        dataNascimento
       }
     });
 

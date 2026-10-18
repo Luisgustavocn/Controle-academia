@@ -28,6 +28,9 @@ export type StudentProfileOverview = {
     exitDate: string | null;
     createdAt: string;
     notes: string | null;
+    birthDate: string | null;
+    age: number | null;
+    photoUrl: string | null;
     modality: { id: string; name: string } | null;
     activeEnrollment: boolean;
     hasOpenEnrollment: boolean;
@@ -60,6 +63,16 @@ export type StudentProfileOverview = {
 
 function iso(value: Date | null | undefined) {
   return value?.toISOString() ?? null;
+}
+
+export function ageOnDate(birthDate: string | null, referenceDate: string) {
+  if (!birthDate) return null;
+  const [birthYear, birthMonth, birthDay] = birthDate.split("-").map(Number);
+  const [year, month, day] = referenceDate.split("-").map(Number);
+  if (![birthYear, birthMonth, birthDay, year, month, day].every(Number.isInteger)) return null;
+  let age = year - birthYear;
+  if (month < birthMonth || (month === birthMonth && day < birthDay)) age -= 1;
+  return age >= 0 ? age : null;
 }
 
 export function studentProfileCapabilities(role: UserRole, status: AlunoStatus, hasOpenEnrollment = status === AlunoStatus.ATIVO): StudentProfileCapabilities {
@@ -95,6 +108,8 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
       dataSaidaCancelamento: true,
       createdAt: true,
       observacoes: true,
+      dataNascimento: true,
+      fotoPath: true,
       modalidade: { select: { id: true, nome: true } },
       periodosMatricula: {
         select: {
@@ -173,6 +188,9 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
       exitDate: iso(student.dataSaidaCancelamento),
       createdAt: student.createdAt.toISOString(),
       notes: student.observacoes,
+      birthDate: student.dataNascimento ? prismaDateToCivil(student.dataNascimento) : null,
+      age: ageOnDate(student.dataNascimento ? prismaDateToCivil(student.dataNascimento) : null, academy.dateKey),
+      photoUrl: student.fotoPath,
       modality: student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null
       ,activeEnrollment,
       hasOpenEnrollment,

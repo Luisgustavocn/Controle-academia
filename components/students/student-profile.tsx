@@ -164,7 +164,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
 
       <Card className="p-5 md:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <Avatar name={student.name} size="xl" />
+          <Avatar src={student.photoUrl} name={student.name} size="xl" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div><p className="text-xs font-semibold uppercase tracking-wide text-muted">Perfil do aluno</p><h1 className="mt-1 text-page-title text-ink">{student.name}</h1></div>
@@ -197,7 +197,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
 
         <TabsContent value="overview">
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card><CardHeader><CardTitle>Contato</CardTitle><CardDescription>Dados disponíveis no cadastro.</CardDescription></CardHeader><dl className="grid gap-3 text-sm"><div><dt className="text-muted">Telefone</dt><dd className="mt-1 font-semibold"><a href={`tel:${student.phone}`} className="hover:text-accentDark hover:underline">{student.phone}</a></dd></div></dl></Card>
+            <Card><CardHeader><CardTitle>Contato e dados pessoais</CardTitle><CardDescription>Dados disponíveis no cadastro.</CardDescription></CardHeader><dl className="grid gap-3 text-sm"><div><dt className="text-muted">Telefone</dt><dd className="mt-1 font-semibold"><a href={`tel:${student.phone}`} className="hover:text-accentDark hover:underline">{student.phone}</a></dd></div><div><dt className="text-muted">Data de nascimento</dt><dd className="mt-1 font-semibold">{student.birthDate ? civilDateLabel(student.birthDate) : "Não informada"}</dd></div><div><dt className="text-muted">Idade</dt><dd className="mt-1 font-semibold">{student.age === null ? "—" : `${student.age} anos`}</dd></div></dl></Card>
             <Card><CardHeader><CardTitle>Matrícula</CardTitle><CardDescription>{student.activeEnrollment ? "Vínculo atual." : "Último vínculo registrado."}</CardDescription></CardHeader><dl className="grid grid-cols-2 gap-3 text-sm"><div><dt className="text-muted">Modalidade</dt><dd className="mt-1 font-semibold">{displayModality}</dd></div><div><dt className="text-muted">Vencimento</dt><dd className="mt-1 font-semibold">Dia {enrollment?.dueDay ?? student.dueDay}</dd></div><div><dt className="text-muted">Início</dt><dd className="mt-1 font-semibold">{enrollment?.startDate ? date(enrollment.startDate) : "Desconhecido"}</dd></div><div><dt className="text-muted">Saída registrada</dt><dd className="mt-1 font-semibold">{date(enrollment?.exitDate)}</dd></div></dl>{capabilities.reactivate ? <Button className="mt-4" onClick={() => setResumeOpen(true)}>Retomar matrícula</Button> : null}</Card>
             <Card className="lg:col-span-2"><CardHeader><CardTitle>Observações</CardTitle></CardHeader>{student.notes ? <p className="whitespace-pre-wrap text-sm text-ink">{student.notes}</p> : <p className="text-sm text-muted">Nenhuma observação cadastrada.</p>}</Card>
           </div>

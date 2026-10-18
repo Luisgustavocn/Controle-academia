@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { StudentPhotoEditor } from "@/components/students/student-photo-editor";
 
 type StudentStatus = "ATIVO" | "INATIVO" | "CANCELADO" | "TRANCADO";
 export type StudentFormModality = { id: string; name: string; active: boolean };
@@ -22,6 +23,8 @@ type StudentForm = {
   observacoes: string;
   valorMensal: string;
   usarValorPadrao: boolean;
+  dataNascimento: string;
+  fotoPath: string;
 };
 
 const EMPTY_FORM: StudentForm = {
@@ -34,7 +37,9 @@ const EMPTY_FORM: StudentForm = {
   dataSaidaCancelamento: "",
   observacoes: "",
   valorMensal: "",
-  usarValorPadrao: true
+  usarValorPadrao: true,
+  dataNascimento: "",
+  fotoPath: ""
 };
 
 const STATUS_OPTIONS: Array<{ value: StudentStatus; label: string }> = [
@@ -66,6 +71,8 @@ export function StudentFormDialog({
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState("");
 
   useEffect(() => {
     if (suppliedModalities) setModalities(suppliedModalities);
@@ -76,6 +83,9 @@ export function StudentFormDialog({
     let active = true;
     setError("");
     setFieldErrors({});
+    setPendingPhoto(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview("");
     if (!studentId) setForm(EMPTY_FORM);
 
     const load = async () => {
@@ -100,6 +110,8 @@ export function StudentFormDialog({
     };
     void load();
     return () => { active = false; };
+  // photoPreview is intentionally reset only when a new dialog session starts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, studentId, suppliedModalities]);
 
   async function submit() {
@@ -111,6 +123,9 @@ export function StudentFormDialog({
     if (form.vencimentoDia && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) nextErrors.vencimentoDia = "Informe um dia entre 1 e 31.";
     if (shouldShowStudentExitDate(form.status) && !form.dataSaidaCancelamento) {
       nextErrors.dataSaidaCancelamento = "Data de saída é obrigatória para o status selecionado.";
+    }
+    if (form.dataNascimento && form.dataNascimento > new Date().toLocaleDateString("en-CA")) {
+      nextErrors.dataNascimento = "Data de nascimento não pode ser futura.";
     }
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
@@ -125,13 +140,21 @@ export function StudentFormDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form)
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string; field?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; field?: string; item?: { id?: string } };
       if (!response.ok) {
         const message = payload.error ?? "Não foi possível salvar o aluno";
         const normalized = message.toLocaleLowerCase("pt-BR");
         const field = payload.field ?? (normalized.includes("telefone") ? "telefone" : normalized.includes("nome") ? "nomeCompleto" : normalized.includes("vencimento") ? "vencimentoDia" : normalized.includes("saída") ? "dataSaidaCancelamento" : "");
         if (field) setFieldErrors((current) => ({ ...current, [field]: message }));
         throw new Error(message);
+      }
+      const savedId = studentId ?? payload.item?.id;
+      if (pendingPhoto && savedId) {
+        const upload = new FormData();
+        upload.set("file", pendingPhoto);
+        const uploadResponse = await fetch(`/api/alunos/${savedId}/foto`, { method: "POST", body: upload });
+        const uploadPayload = await uploadResponse.json().catch(() => ({})) as { error?: string };
+        if (!uploadResponse.ok) throw new Error(uploadPayload.error ?? "Aluno salvo, mas não foi possível salvar a foto");
       }
       onOpenChange(false);
       await onSaved();
@@ -153,8 +176,10 @@ export function StudentFormDialog({
     >
       {loading && studentId && !form.nomeCompleto ? <div className="space-y-3" aria-label="Carregando cadastro"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-24" /></div> : (
         <div className="grid gap-4 md:grid-cols-2">
+          <StudentPhotoEditor name={form.nomeCompleto} currentSrc={photoPreview || form.fotoPath} onConfirm={(file, previewUrl) => { if (photoPreview) URL.revokeObjectURL(photoPreview); setPendingPhoto(file); setPhotoPreview(previewUrl); setError(""); }} />
           <FormField label="Nome completo" htmlFor="student-name" required><Input id="student-name" value={form.nomeCompleto} error={fieldErrors.nomeCompleto} onChange={(event) => { setForm({ ...form, nomeCompleto: event.target.value }); if (event.target.value.trim()) { setFieldErrors((current) => ({ ...current, nomeCompleto: "" })); setError(""); } }} /></FormField>
           <FormField label="Telefone" htmlFor="student-phone" required><Input id="student-phone" type="tel" value={form.telefone} error={fieldErrors.telefone} onChange={(event) => { setForm({ ...form, telefone: event.target.value }); if (event.target.value.trim()) { setFieldErrors((current) => ({ ...current, telefone: "" })); setError(""); } }} /></FormField>
+          <FormField label="Data de nascimento" htmlFor="student-birth-date"><Input id="student-birth-date" type="date" max={new Date().toLocaleDateString("en-CA")} value={form.dataNascimento} error={fieldErrors.dataNascimento} onChange={(event) => { setForm({ ...form, dataNascimento: event.target.value }); setFieldErrors((current) => ({ ...current, dataNascimento: "" })); }} /></FormField>
           <FormField label="Modalidade" htmlFor="student-modality"><Select id="student-modality" value={form.modalidadeId} onChange={(event) => setForm({ ...form, modalidadeId: event.target.value })}><option value="">Sem modalidade</option>{modalities.filter((entry) => entry.active || entry.id === form.modalidadeId).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}{entry.active ? "" : " (inativa)"}</option>)}</Select></FormField>
           <FormField label="Dia do vencimento" htmlFor="student-due" required><Input id="student-due" type="number" min="1" max="31" value={form.vencimentoDia} error={fieldErrors.vencimentoDia} onChange={(event) => { setForm({ ...form, vencimentoDia: event.target.value }); const value = Number(event.target.value); if (Number.isInteger(value) && value >= 1 && value <= 31) { setFieldErrors((current) => ({ ...current, vencimentoDia: "" })); setError(""); } }} /></FormField>
           <FormField label="Status" htmlFor="student-status"><Select id="student-status" value={form.status} onChange={(event) => { const status = event.target.value as StudentStatus; setForm({ ...form, status, dataSaidaCancelamento: status === "ATIVO" ? "" : form.dataSaidaCancelamento }); if (status === "ATIVO") setFieldErrors((current) => ({ ...current, dataSaidaCancelamento: "" })); }}>{STATUS_OPTIONS.map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}</Select></FormField>

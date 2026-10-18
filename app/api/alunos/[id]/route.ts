@@ -4,7 +4,7 @@ import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { createBackupFile } from "@/lib/services/backup";
-import { civilDateToPrisma, CivilDateValidationError, parseCivilDate } from "@/lib/attendance-date";
+import { academyToday, civilDateToPrisma, CivilDateValidationError, parseCivilDate } from "@/lib/attendance-date";
 import { StudentDeletionBlockedError, StudentDeletionNotFoundError, deleteStudentWithoutHistory, inspectStudentDeletion } from "@/lib/services/student-deletion";
 import {
   StudentRegistrationNotFoundError,
@@ -23,6 +23,14 @@ function parseOptionalDate(value: unknown, fieldName: string) {
   }
   try { return civilDateToPrisma(parseCivilDate(String(value))); }
   catch { throw new CivilDateValidationError(`${fieldName} inválida`); }
+}
+
+function parseOptionalBirthDate(value: unknown) {
+  const parsed = parseOptionalDate(value, "data de nascimento");
+  if (parsed && parsed > civilDateToPrisma(academyToday())) {
+    throw new CivilDateValidationError("Data de nascimento não pode ser futura");
+  }
+  return parsed;
 }
 
 function parseOptionalNumber(value: unknown, fieldName: string) {
@@ -57,6 +65,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       valorMensal: true,
       usarValorPadrao: true,
       dataSaidaCancelamento: true,
+      dataNascimento: true,
+      fotoPath: true,
       observacoes: true
     }
   });
@@ -72,6 +82,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       status: aluno.status,
       dataInicio: toDateInputValue(aluno.dataInicio),
       dataSaidaCancelamento: toDateInputValue(aluno.dataSaidaCancelamento),
+      dataNascimento: toDateInputValue(aluno.dataNascimento),
+      fotoPath: aluno.fotoPath ?? "",
       observacoes: aluno.observacoes ?? "",
       valorMensal: aluno.valorMensal === null ? "" : String(aluno.valorMensal),
       usarValorPadrao: aluno.usarValorPadrao
@@ -89,6 +101,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   let dataInicio: Date | null | undefined = undefined;
   let valorMensal: number | null | undefined = undefined;
   let usarValorPadrao: boolean | undefined = undefined;
+  let dataNascimento: Date | null | undefined = undefined;
   const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : undefined;
   if (statusInformado && !ALUNO_STATUS_VALUES.has(statusInformado)) return fail("status do aluno inválido", 400);
 
@@ -99,6 +112,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if ("dataInicio" in body) dataInicio = parseOptionalDate(body.dataInicio, "data de início");
     if ("valorMensal" in body) valorMensal = parseOptionalNumber(body.valorMensal, "valor mensal");
     if ("usarValorPadrao" in body) usarValorPadrao = parseBoolean(body.usarValorPadrao);
+    if ("dataNascimento" in body) dataNascimento = parseOptionalBirthDate(body.dataNascimento);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados do aluno inválidos", 400);
   }
@@ -117,7 +131,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       usarValorPadrao,
       dataSaidaCancelamento,
       hasDataSaidaPayload,
-      observacoes: body.observacoes === "" ? null : (body.observacoes as string | undefined)
+      observacoes: body.observacoes === "" ? null : (body.observacoes as string | undefined),
+      dataNascimento
     }, { id: auth.id, name: auth.name });
   } catch (error) {
     if (error instanceof StudentRegistrationNotFoundError) {

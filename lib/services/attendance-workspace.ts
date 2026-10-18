@@ -76,6 +76,7 @@ export async function getAttendanceRoster(params: AttendanceRosterParams, client
         id: true,
         nomeCompleto: true,
         telefone: true,
+        fotoPath: true,
         modalidade: { select: { nome: true } }
       },
       orderBy: { nomeCompleto: "asc" },
@@ -106,6 +107,7 @@ export async function getAttendanceRoster(params: AttendanceRosterParams, client
         id: student.id,
         name: student.nomeCompleto,
         phone: student.telefone,
+        photoUrl: student.fotoPath,
         modality: student.modalidade?.nome ?? "Sem modalidade",
         attendance: presence
           ? { id: presence.id, time: presence.horario, classType: presence.tipoAula }
@@ -175,7 +177,7 @@ export async function getAttendanceHistory(params: AttendanceHistoryParams, clie
         data: true,
         horario: true,
         tipoAula: true,
-        aluno: { select: { id: true, nomeCompleto: true, telefone: true, modalidade: { select: { nome: true } } } }
+        aluno: { select: { id: true, nomeCompleto: true, telefone: true, fotoPath: true, modalidade: { select: { nome: true } } } }
       },
       orderBy: [{ data: "desc" }, { createdAt: "desc" }],
       skip: (params.page - 1) * params.pageSize,
@@ -195,6 +197,7 @@ export async function getAttendanceHistory(params: AttendanceHistoryParams, clie
         id: row.aluno.id,
         name: row.aluno.nomeCompleto,
         phone: row.aluno.telefone,
+        photoUrl: row.aluno.fotoPath,
         modality: row.aluno.modalidade?.nome ?? "Sem modalidade"
       }
     })),

@@ -17,6 +17,7 @@ export type StudentRegistrationPatch = {
   dataSaidaCancelamento?: Date | null;
   hasDataSaidaPayload: boolean;
   observacoes?: string | null;
+  dataNascimento?: Date | null;
 };
 
 export type StudentRegistrationActor = {
@@ -80,7 +81,8 @@ export async function updateStudentRegistration(
         valorMensal: patch.valorMensal,
         usarValorPadrao: patch.usarValorPadrao,
         dataSaidaCancelamento: exitDate,
-        observacoes: patch.observacoes
+        observacoes: patch.observacoes,
+        dataNascimento: patch.dataNascimento
       },
       include: { modalidade: true }
     });

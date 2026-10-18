@@ -14,11 +14,12 @@ import { Pagination } from "@/components/ui/pagination";
 import { SearchField } from "@/components/ui/search-field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar } from "@/components/ui/avatar";
 import { useHasCapability } from "@/components/capability-provider";
 import { academyToday, addCivilDays, civilDateLabel, civilDateToPrisma, compareCivilDates, parseCivilDate } from "@/lib/attendance-date";
 
 type AttendanceMode = "today" | "history" | "monthly";
-type AttendanceStudent = { id: string; name: string; phone: string; modality: string; attendance: { id: string; time: string | null; classType: string } | null };
+type AttendanceStudent = { id: string; name: string; phone: string; photoUrl: string | null; modality: string; attendance: { id: string; time: string | null; classType: string } | null };
 type RosterPayload = {
   date: string;
   summary: { activeStudents: number; presentStudents: number; attendanceRate: number };
@@ -27,7 +28,7 @@ type RosterPayload = {
 };
 type HistoryPayload = {
   period: { from: string; to: string };
-  items: Array<{ id: string; date: string; time: string | null; classType: string; student: { id: string; name: string; phone: string; modality: string } }>;
+  items: Array<{ id: string; date: string; time: string | null; classType: string; student: { id: string; name: string; phone: string; photoUrl: string | null; modality: string } }>;
   pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
 };
 type MatrixStudent = { id: string; nomeCompleto: string; status: string; modalidade: { nome: string } | null };
@@ -277,7 +278,7 @@ export default function FrequenciaPage() {
                   const saving = savingStudent === `${student.id}|${operationalDate}`;
                   return (
                     <article key={student.id} className="flex flex-col gap-3 rounded-ds-lg border border-line bg-card p-3 transition-colors hover:border-accent/30 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0"><h3 className="truncate text-base font-bold text-ink">{student.name}</h3><div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted"><span>{student.modality}</span><span aria-hidden="true">•</span><span>{student.phone}</span></div></div>
+                      <div className="flex min-w-0 items-center gap-3"><Avatar src={student.photoUrl} name={student.name} /><div className="min-w-0"><h3 className="truncate text-base font-bold text-ink">{student.name}</h3><div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted"><span>{student.modality}</span><span aria-hidden="true">•</span><span>{student.phone}</span></div></div></div>
                       <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
                         {student.attendance ? <Badge tone="success" className="py-1"><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />{retroactiveOpen ? "Presente" : "Presente hoje"}</Badge> : <span className="text-xs font-medium text-muted">Ainda não marcado</span>}
                         {canWrite ? <Button size="sm" variant={student.attendance ? "ghost" : "primary"} loading={saving} leadingIcon={student.attendance ? <RotateCcw className="h-4 w-4" /> : <Check className="h-4 w-4" />} onClick={() => void toggleRosterAttendance(student)}>{student.attendance ? "Desfazer" : "Marcar presença"}</Button> : null}
@@ -301,7 +302,7 @@ export default function FrequenciaPage() {
                 {history.items.map((item) => (
                   <article key={item.id} className="grid gap-2 border-b border-line/70 p-3 last:border-b-0 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:items-center">
                     <div><p className="font-bold text-ink">{civilDateLabel(item.date)}</p>{item.time ? <p className="text-helper text-muted">{item.time}</p> : null}</div>
-                    <div className="min-w-0"><p className="truncate font-semibold text-ink">{item.student.name}</p><p className="truncate text-sm text-muted">{item.student.modality}</p></div>
+                    <div className="flex min-w-0 items-center gap-3"><Avatar src={item.student.photoUrl} name={item.student.name} size="sm" /><div className="min-w-0"><p className="truncate font-semibold text-ink">{item.student.name}</p><p className="truncate text-sm text-muted">{item.student.modality}</p></div></div>
                     <Badge tone="success" className="w-fit"><Check className="mr-1 h-3.5 w-3.5" />Presente</Badge>
                   </article>
                 ))}

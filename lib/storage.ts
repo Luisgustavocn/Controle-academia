@@ -23,6 +23,10 @@ export function getBrandingUploadsDirectory() {
   return path.join(getUploadsDirectory(), "branding");
 }
 
+export function getStudentUploadsDirectory(studentId: string) {
+  return path.join(getUploadsDirectory(), "students", studentId);
+}
+
 export function getDefaultBackupDirectory() {
   const configured = getOptionalEnvironmentValue("BACKUP_EXPORT_DIR");
   return configured ? path.resolve(configured) : path.join(getAppDataDirectory(), "backups");
