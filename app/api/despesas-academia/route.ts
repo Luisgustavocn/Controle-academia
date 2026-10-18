@@ -1,4 +1,5 @@
 import { createListCreateHandlers } from "@/lib/api/crud";
+import { expenseRequiresPaymentMethod, resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 function toCompetencia(dateLike: unknown) {
   if (dateLike instanceof Date && !Number.isNaN(dateLike.getTime())) {
@@ -47,6 +48,18 @@ export const { GET, POST } = createListCreateHandlers({
     }
 
     return null;
+  },
+  validateAsync: async (data) => {
+    try {
+      data.formaPagamento = await resolvePaymentMethodForWrite({
+        value: data.formaPagamento,
+        application: "DESPESA",
+        required: expenseRequiresPaymentMethod(data.status, data.valorPago)
+      });
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Forma de pagamento inválida";
+    }
   },
   queryFilters: (request) => {
     const competencia = request.nextUrl.searchParams.get("competencia");

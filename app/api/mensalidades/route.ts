@@ -6,6 +6,7 @@ import { currentCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
+import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 import { buildVencimentoDate, resolveFutureMonthlyValue } from "@/lib/services/mensalidades";
 import { findEnrollmentForCompetence } from "@/lib/services/enrollment-periods";
 
@@ -201,6 +202,22 @@ export async function POST(request: NextRequest) {
     dataPagamento = new Date();
   }
 
+  const existing = await prisma.mensalidade.findUnique({
+    where: { alunoId_competencia: { alunoId, competencia } },
+    select: { formaPagamento: true }
+  });
+  let formaPagamento: string | null | undefined;
+  try {
+    formaPagamento = await resolvePaymentMethodForWrite({
+      value: body.formaPagamento,
+      previousValue: existing?.formaPagamento,
+      application: "RECEBIMENTO",
+      required: status === MensalidadeStatus.PAGO
+    });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Forma de pagamento inválida", 400);
+  }
+
   const mensalidade = await prisma.mensalidade.upsert({
     where: {
       alunoId_competencia: {
@@ -214,13 +231,13 @@ export async function POST(request: NextRequest) {
       valor: valorInformado,
       vencimento: vencimentoPadrao,
       dataPagamento,
-      formaPagamento: body.formaPagamento ? String(body.formaPagamento) : null,
+      formaPagamento: formaPagamento ?? null,
       status,
       observacao: body.observacao ? String(body.observacao) : null
     },
     update: {
       dataPagamento,
-      formaPagamento: body.formaPagamento === "" ? null : (body.formaPagamento as string | undefined),
+      formaPagamento,
       status,
       observacao: body.observacao === "" ? null : (body.observacao as string | undefined)
     }

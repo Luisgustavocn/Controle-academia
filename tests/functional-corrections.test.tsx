@@ -42,6 +42,10 @@ test("payment transition requires a method only when becoming paid", () => {
 });
 
 test("shared payment method field exposes inline accessible invalid state", () => {
+  globalThis.fetch = (async () => new Response(JSON.stringify({ items: [] }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  })) as typeof fetch;
   render(<PaymentMethodField id="method" value="" error="Forma de pagamento é obrigatória" onChange={() => undefined} />);
   const input = screen.getByLabelText(/Forma de pagamento/);
   assert.equal(input.getAttribute("aria-invalid"), "true");

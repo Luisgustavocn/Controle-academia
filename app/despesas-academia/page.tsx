@@ -25,6 +25,7 @@ export default function DespesasAcademiaPage() {
           { key: "descricao", label: "Descrição" },
           { key: "valorPago", label: "Pago" },
           { key: "status", label: "Status" },
+          { key: "formaPagamento", label: "Forma de pagamento" },
           { key: "dataVencimento", label: "Vencimento" }
         ]}
         fields={[
@@ -43,6 +44,11 @@ export default function DespesasAcademiaPage() {
             ]
           },
           { key: "dataPagamento", label: "Data pagamento", type: "date" },
+          {
+            key: "formaPagamento",
+            label: "Forma de pagamento",
+            lookupEndpoint: "/api/formas-pagamento?ativo=true&aplicacao=DESPESA"
+          },
           { key: "observacao", label: "Observação", type: "textarea" }
         ]}
         createCapability="finance.expenses.manage"

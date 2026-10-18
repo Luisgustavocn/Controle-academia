@@ -955,6 +955,46 @@ export default function ConfiguracoesPage() {
       </Card>
 
       <CrudModule
+        endpoint="/api/formas-pagamento"
+        title="Formas de pagamento"
+        createLabel="Nova forma de pagamento"
+        listFields={[
+          { key: "nome", label: "Nome" },
+          { key: "aplicacao", label: "Aplicação" },
+          { key: "ativo", label: "Ativa" },
+          { key: "ordem", label: "Ordem" }
+        ]}
+        fields={[
+          { key: "nome", label: "Nome", required: true },
+          {
+            key: "aplicacao",
+            label: "Aplicação",
+            type: "select",
+            required: true,
+            options: [
+              { label: "Recebimentos", value: "RECEBIMENTO" },
+              { label: "Despesas", value: "DESPESA" },
+              { label: "Ambos", value: "AMBOS" }
+            ]
+          },
+          {
+            key: "ativo",
+            label: "Ativa",
+            type: "select",
+            required: true,
+            options: [
+              { label: "Sim", value: "true" },
+              { label: "Não", value: "false" }
+            ]
+          },
+          { key: "ordem", label: "Ordem", type: "number", required: true }
+        ]}
+        defaultValues={{ aplicacao: "AMBOS", ativo: "true", ordem: "0" }}
+        createCapability="settings.manage"
+        updateCapability="settings.manage"
+      />
+
+      <CrudModule
         endpoint="/api/users"
         title="Usuarios e perfis"
         createLabel="Novo usuario"

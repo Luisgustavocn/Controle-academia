@@ -6,6 +6,7 @@ import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 import { MARK_MONTHLY_PAID_ACTION, validatePaymentTransition } from "@/lib/services/mensalidade-payment";
+import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const MONTH_BY_PT_SHORT: Record<string, number> = {
@@ -125,7 +126,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 
   const statusFinal = status ?? previous.status;
-  const formaPagamento = body.formaPagamento === undefined
+  let formaPagamento: string | null | undefined = body.formaPagamento === undefined
     ? undefined
     : body.formaPagamento === null || body.formaPagamento === ""
       ? null
@@ -133,6 +134,18 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   const paymentError = validatePaymentTransition(previous.status, statusFinal, formaPagamento);
   if (paymentError) {
     return fail(paymentError, 400);
+  }
+  try {
+    if (formaPagamento !== undefined || (statusFinal === MensalidadeStatus.PAGO && previous.status !== MensalidadeStatus.PAGO)) {
+      formaPagamento = await resolvePaymentMethodForWrite({
+        value: formaPagamento,
+        previousValue: previous.formaPagamento,
+        application: "RECEBIMENTO",
+        required: statusFinal === MensalidadeStatus.PAGO && previous.status !== MensalidadeStatus.PAGO
+      });
+    }
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Forma de pagamento inválida", 400);
   }
   if (statusFinal === MensalidadeStatus.PAGO && dataPagamento === undefined && !previous.dataPagamento) {
     dataPagamento = new Date();

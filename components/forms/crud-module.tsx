@@ -40,6 +40,7 @@ type CrudModuleProps = {
 type LookupConfig = {
   endpoint: string | ((context: { tipo?: string }) => string);
   labelKeys: string[];
+  valueKeys?: string[];
   subLabelKeys?: string[];
 };
 
@@ -111,6 +112,14 @@ const LOOKUP_CONFIGS: Record<string, LookupConfig> = {
   professor: {
     endpoint: "/api/professores-options",
     labelKeys: ["nome"]
+  },
+  formaPagamento: {
+    endpoint: ({ tipo }) => {
+      const application = tipo?.toUpperCase() === "SAIDA" ? "DESPESA" : "RECEBIMENTO";
+      return `/api/formas-pagamento?ativo=true&aplicacao=${application}`;
+    },
+    labelKeys: ["nome"],
+    valueKeys: ["nome"]
   }
 };
 
@@ -639,8 +648,9 @@ export function CrudModule({
             .map((item) => {
               const label = readFirst(item, config.labelKeys) || String(item.id);
               const subtitleParts = config.subLabelKeys ? readAll(item, config.subLabelKeys) : [];
+              const value = readFirst(item, config.valueKeys ?? ["id"]);
               return {
-                id: String(item.id),
+                id: value || String(item.id),
                 label,
                 subtitle: subtitleParts.length > 0 ? subtitleParts.join(" • ") : undefined,
                 raw: item

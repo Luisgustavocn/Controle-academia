@@ -6,6 +6,7 @@ import { toCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { isAutoCaixaEntryId } from "@/lib/services/caixa";
+import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 function parseDate(value: unknown, fieldName: string) {
   if (value === undefined || value === null || value === "") {
@@ -115,6 +116,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     }
 
     await validateCategoria(categoriaId === undefined ? previous.categoriaId : categoriaId, tipo);
+    const formaPagamento = await resolvePaymentMethodForWrite({
+      value: body.formaPagamento,
+      previousValue: previous.formaPagamento,
+      application: tipo === TipoMovimentacao.SAIDA ? "DESPESA" : "RECEBIMENTO",
+      required: false
+    });
 
     const updated = await prisma.movimentacaoCaixa.update({
       where: { id },
@@ -126,7 +133,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         valor,
         origemDestino: optionalString(body.origemDestino),
         alunoId: optionalString(body.alunoId),
-        formaPagamento: optionalString(body.formaPagamento),
+        formaPagamento,
         competencia: toCompetencia(data),
         observacao: optionalString(body.observacao)
       }

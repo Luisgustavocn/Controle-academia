@@ -6,16 +6,17 @@ type FormFieldProps = HTMLAttributes<HTMLDivElement> & {
   htmlFor?: string;
   description?: ReactNode;
   error?: ReactNode;
+  errorId?: string;
   required?: boolean;
 };
 
-export function FormField({ label, htmlFor, description, error, required, className, children, ...props }: FormFieldProps) {
+export function FormField({ label, htmlFor, description, error, errorId, required, className, children, ...props }: FormFieldProps) {
   return (
     <div className={clsx("space-y-1.5", className)} {...props}>
       {label ? <Label htmlFor={htmlFor} required={required}>{label}</Label> : null}
       {children}
       {description ? <FieldDescription>{description}</FieldDescription> : null}
-      {error ? <FieldError>{error}</FieldError> : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
   );
 }

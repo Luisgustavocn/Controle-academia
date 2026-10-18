@@ -12,6 +12,7 @@ import {
   generateMensalidadesAteCompetencia,
   resolveFutureMonthlyValue
 } from "@/lib/services/mensalidades";
+import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const ALUNO_STATUS_VALUES = new Set<AlunoStatus>(Object.values(AlunoStatus));
@@ -203,6 +204,16 @@ export async function POST(request: NextRequest) {
   const status = statusInformado;
   const dataSaidaFinal =
     status === AlunoStatus.ATIVO ? null : (dataSaidaCancelamento ?? dataAtual);
+  let mensalidadeFormaPagamento: string | null | undefined;
+  try {
+    mensalidadeFormaPagamento = await resolvePaymentMethodForWrite({
+      value: body.mensalidadeFormaPagamento,
+      application: "RECEBIMENTO",
+      required: mensalidadeStatus === MensalidadeStatus.PAGO
+    });
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Forma de pagamento inválida", 400);
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const aluno = await tx.aluno.create({
@@ -274,7 +285,7 @@ export async function POST(request: NextRequest) {
           vencimento: vencimentoMensalidade,
           status: statusMensalidade,
           dataPagamento,
-          formaPagamento: body.mensalidadeFormaPagamento ? String(body.mensalidadeFormaPagamento) : null,
+          formaPagamento: mensalidadeFormaPagamento ?? null,
           observacao: body.mensalidadeObservacao ? String(body.mensalidadeObservacao) : null
         },
         update: {
@@ -282,7 +293,7 @@ export async function POST(request: NextRequest) {
           vencimento: vencimentoMensalidade,
           status: statusMensalidade,
           dataPagamento,
-          formaPagamento: body.mensalidadeFormaPagamento === "" ? null : (body.mensalidadeFormaPagamento as string | undefined),
+          formaPagamento: mensalidadeFormaPagamento,
           observacao: body.mensalidadeObservacao === "" ? null : (body.mensalidadeObservacao as string | undefined)
         }
       });

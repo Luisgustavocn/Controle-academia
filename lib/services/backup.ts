@@ -21,6 +21,7 @@ export async function buildBackupPayload() {
   const [
     users,
     configuracoes,
+    formasPagamento,
     categoriasFinanceiras,
     modalidades,
     alunos,
@@ -38,6 +39,7 @@ export async function buildBackupPayload() {
   ] = await Promise.all([
     prisma.user.findMany(),
     prisma.configuracao.findMany(),
+    prisma.formaPagamento.findMany(),
     prisma.categoriaFinanceira.findMany(),
     prisma.modalidade.findMany(),
     prisma.aluno.findMany(),
@@ -69,6 +71,7 @@ export async function buildBackupPayload() {
     generatedAt: new Date().toISOString(),
     users: sanitizedUsers,
     configuracoes: sanitizedConfiguracoes,
+    formasPagamento,
     categoriasFinanceiras,
     modalidades,
     alunos,

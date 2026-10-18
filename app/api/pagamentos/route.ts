@@ -1,4 +1,5 @@
 import { createListCreateHandlers } from "@/lib/api/crud";
+import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 export const { GET, POST } = createListCreateHandlers({
   model: "pagamento",
@@ -11,5 +12,17 @@ export const { GET, POST } = createListCreateHandlers({
     mensalidade: { select: { competencia: true } }
   },
   numericFields: ["valor"],
-  dateFields: ["dataPagamento"]
+  dateFields: ["dataPagamento"],
+  validateAsync: async (data) => {
+    try {
+      data.formaPagamento = await resolvePaymentMethodForWrite({
+        value: data.formaPagamento,
+        application: "RECEBIMENTO",
+        required: true
+      });
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : "Forma de pagamento inválida";
+    }
+  }
 });
