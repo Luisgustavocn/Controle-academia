@@ -9,12 +9,11 @@ import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { ModuleHeader } from "@/components/ui/module-header";
 import { Select } from "@/components/ui/select";
 import { useHasCapability } from "@/components/capability-provider";
-import { Dialog } from "@/components/ui/dialog";
 import { FormField } from "@/components/ui/form-field";
+import { MonthlyPaymentDialog, type PayableMonthly } from "@/components/monthlies/monthly-payment-dialog";
 import { PaymentMethodField } from "@/components/monthlies/payment-method-field";
-import { MARK_MONTHLY_PAID_ACTION } from "@/lib/services/mensalidade-payment";
 
-type MensalidadeStatus = "PENDENTE" | "PAGO" | "ATRASADO" | "ISENTO";
+type MensalidadeStatus = "PENDENTE" | "PAGO" | "ATRASADO" | "ISENTO" | "PARCIAL";
 type MensalidadeSection = "PAGAS" | "PENDENTES" | "ATRASADAS";
 
 type MensalidadeItem = {
@@ -26,6 +25,11 @@ type MensalidadeItem = {
   competencia: string;
   mesPendente: string;
   valor: number;
+  valorOriginal: number;
+  valorFinal: number | null;
+  motivoAjuste: string | null;
+  totalPago: number;
+  saldo: number;
   vencimento: string;
   vencimentoDia: number;
   dataPagamento: string;
@@ -72,7 +76,6 @@ const EMPTY_PAYLOAD: BoardPayload = {
 
 const statusOptions: Array<{ label: string; value: MensalidadeStatus }> = [
   { label: "Pendente", value: "PENDENTE" },
-  { label: "Pago", value: "PAGO" },
   { label: "Atrasado", value: "ATRASADO" },
   { label: "Isento", value: "ISENTO" }
 ];
@@ -103,8 +106,6 @@ export default function MensalidadesPage() {
   const [activeSection, setActiveSection] = useState<MensalidadeSection | null>("PAGAS");
   const [editing, setEditing] = useState<MensalidadeItem | null>(null);
   const [paying, setPaying] = useState<MensalidadeItem | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [paymentMethodError, setPaymentMethodError] = useState("");
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [editForm, setEditForm] = useState({
     dataPagamento: "",
@@ -219,53 +220,11 @@ export default function MensalidadesPage() {
 
   function openPayment(item: MensalidadeItem) {
     setPaying(item);
-    setPaymentMethod("");
-    setPaymentMethodError("");
   }
 
   function closePayment() {
     if (saving) return;
     setPaying(null);
-    setPaymentMethod("");
-    setPaymentMethodError("");
-  }
-
-  async function marcarComoPago() {
-    if (!paying) return;
-    if (!paymentMethod.trim()) {
-      setPaymentMethodError("Forma de pagamento é obrigatória");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/mensalidades/${paying.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          action: MARK_MONTHLY_PAID_ACTION,
-          formaPagamento: paymentMethod.trim()
-        })
-      });
-
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) {
-        const fallback = `Não foi possível marcar como pago (${res.status})`;
-        throw new Error(data?.error ?? fallback);
-      }
-
-      setPaying(null);
-      setPaymentMethod("");
-      setPaymentMethodError("");
-      await fetchBoard();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Erro ao atualizar pagamento";
-      if (message.toLocaleLowerCase("pt-BR").includes("forma de pagamento")) setPaymentMethodError(message);
-      else alert(message);
-    } finally {
-      setSaving(false);
-    }
   }
 
   const stats = useMemo(
@@ -372,7 +331,7 @@ export default function MensalidadesPage() {
                             <div className="font-semibold text-ink">{item.alunoNome}</div>
                             <div className="text-xs text-muted">{item.modalidade || "Sem modalidade"}</div>
                           </td>
-                          <td>{toCurrency(item.valor)}</td>
+                          <td>{toCurrency(item.valorFinal ?? item.valor)}</td>
                           <td>{item.dataPagamento || "-"}</td>
                           {canManage ? <td>
                             <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
@@ -435,11 +394,11 @@ export default function MensalidadesPage() {
                             <div className="text-xs text-muted">{item.modalidade || "Sem modalidade"}</div>
                           </td>
                           <td>{item.vencimento}</td>
-                          <td>{toCurrency(item.valor)}</td>
+                          <td>{toCurrency(item.saldo)}</td>
                           {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
                               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openPayment(item)}>
-                                Marcar pago
+                                Dar baixa
                               </Button>
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                                 Editar
@@ -504,11 +463,11 @@ export default function MensalidadesPage() {
                           </td>
                           <td>{item.mesPendente}</td>
                           <td>{item.vencimento}</td>
-                          <td>{toCurrency(item.valor)}</td>
+                          <td>{toCurrency(item.saldo)}</td>
                           {canManage ? <td>
                             <div className="flex flex-wrap gap-1.5">
                               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openPayment(item)}>
-                                Marcar pago
+                                Dar baixa
                               </Button>
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                                 Editar
@@ -626,23 +585,12 @@ export default function MensalidadesPage() {
         </div>
       ) : null}
 
-      <Dialog
+      <MonthlyPaymentDialog
         open={Boolean(paying)}
         onOpenChange={(open) => { if (!open) closePayment(); }}
-        title="Marcar mensalidade como paga"
-        description={paying ? `${paying.alunoNome} • ${paying.mesPendente}` : undefined}
-        footer={<><Button variant="ghost" disabled={saving} onClick={closePayment}>Cancelar</Button><Button loading={saving} onClick={() => void marcarComoPago()}>Confirmar pagamento</Button></>}
-      >
-        <PaymentMethodField
-          id="monthly-payment-method"
-          value={paymentMethod}
-          error={paymentMethodError}
-          onChange={(value) => {
-            setPaymentMethod(value);
-            if (value.trim()) setPaymentMethodError("");
-          }}
-        />
-      </Dialog>
+        monthly={paying ? ({ id: paying.id, competence: paying.competencia, dueAt: paying.vencimento, originalValue: paying.valorOriginal, finalValue: paying.valorFinal, adjustmentReason: paying.motivoAjuste, totalPaid: paying.totalPago, balance: paying.saldo, status: paying.status, studentName: paying.alunoNome } satisfies PayableMonthly) : null}
+        onSaved={async () => { setPaying(null); await fetchBoard(); }}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { toCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
 
 const AUTO_MENSALIDADE_PREFIX = "auto_mensalidade_";
+export const AUTO_PAGAMENTO_PREFIX = "auto_pagamento_";
 const AUTO_PEDIDO_PREFIX = "auto_pedido_";
 const AUTO_SYNC_MIN_INTERVAL_MS = 15_000;
 
@@ -17,7 +18,7 @@ function autoPedidoId(id: string) {
 }
 
 function isAutoId(id: string) {
-  return id.startsWith(AUTO_MENSALIDADE_PREFIX) || id.startsWith(AUTO_PEDIDO_PREFIX);
+  return id.startsWith(AUTO_MENSALIDADE_PREFIX) || id.startsWith(AUTO_PAGAMENTO_PREFIX) || id.startsWith(AUTO_PEDIDO_PREFIX);
 }
 
 async function ensureEntradaCategoria(nome: string) {
@@ -87,6 +88,7 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
         }
       },
       include: {
+        pagamentos: { where: { status: "CONFIRMADO" }, select: { id: true }, take: 1 },
         aluno: {
           select: {
             id: true,
@@ -117,12 +119,12 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
     ensureEntradaCategoria("Vendas de produtos")
   ]);
 
-  const validAutoIds = new Set<string>();
-
   for (const mensalidade of mensalidades) {
     if (!mensalidade.dataPagamento) continue;
+    // Novas baixas possuem Pagamento explicito e Caixa proprio por pagamento.
+    // A sincronizacao nominal permanece apenas para o legado sem Pagamento.
+    if (mensalidade.pagamentos.length > 0) continue;
     const id = autoMensalidadeId(mensalidade.id);
-    validAutoIds.add(id);
     const nomeAluno = mensalidade.aluno?.nomeCompleto ?? "Aluno";
     const data = mensalidade.dataPagamento;
 
@@ -158,7 +160,6 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
 
   for (const pedido of pedidos) {
     const id = autoPedidoId(pedido.id);
-    validAutoIds.add(id);
     const nomeAluno = pedido.aluno?.nomeCompleto ?? pedido.clienteNome ?? "Cliente";
     const data = pedido.dataPedido;
 
@@ -192,26 +193,7 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
     });
   }
 
-  const autoItems = await prisma.movimentacaoCaixa.findMany({
-    where: {
-      OR: [
-        { id: { startsWith: AUTO_MENSALIDADE_PREFIX } },
-        { id: { startsWith: AUTO_PEDIDO_PREFIX } }
-      ]
-    },
-    select: { id: true }
-  });
-
-  const staleIds = autoItems.map((item) => item.id).filter((id) => !validAutoIds.has(id));
-  if (staleIds.length > 0) {
-    await prisma.movimentacaoCaixa.deleteMany({
-      where: {
-        id: {
-          in: staleIds
-        }
-      }
-    });
-  }
+  // Entradas automáticas históricas nunca são apagadas durante uma leitura/sincronização.
 }
 
 export function isAutoCaixaEntryId(id: string) {

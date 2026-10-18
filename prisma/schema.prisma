@@ -152,6 +152,8 @@ model Mensalidade {
   alunoId        String
   competencia    String
   valor          Decimal           @db.Decimal(10, 2)
+  valorFinal     Decimal?          @db.Decimal(10, 2)
+  motivoAjuste   String?
   vencimento     DateTime
   dataPagamento  DateTime?
   formaPagamento String?

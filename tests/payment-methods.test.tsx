@@ -84,11 +84,12 @@ test("configuration and financial flows share the centralized endpoint", () => {
   const expenses = fs.readFileSync("app/despesas-academia/page.tsx", "utf8");
   const crud = fs.readFileSync("components/forms/crud-module.tsx", "utf8");
   const monthly = fs.readFileSync("app/mensalidades/page.tsx", "utf8");
+  const paymentDialog = fs.readFileSync("components/monthlies/monthly-payment-dialog.tsx", "utf8");
   const backup = fs.readFileSync("lib/services/backup.ts", "utf8");
   assert.match(settings, /endpoint="\/api\/formas-pagamento"/);
   assert.match(expenses, /aplicacao=DESPESA/);
   assert.match(crud, /\/api\/formas-pagamento\?ativo=true&aplicacao=/);
-  assert.equal(monthly.match(/<PaymentMethodField/g)?.length, 2);
+  assert.equal((monthly.match(/<PaymentMethodField/g)?.length ?? 0) + (paymentDialog.match(/<PaymentMethodField/g)?.length ?? 0), 2);
   assert.match(backup, /formasPagamento/);
   assert.match(backup, /prisma\.formaPagamento\.findMany/);
 });

@@ -8,6 +8,9 @@ export const { PUT, DELETE } = createByIdHandlers({
   numericFields: ["valor"],
   dateFields: ["dataPagamento"],
   validateAsync: async (data, _mode, previous) => {
+    if (String(previous?.id ?? "").startsWith("pay_")) {
+      return "Pagamentos de mensalidade são imutáveis; utilize o fluxo de estorno quando disponível";
+    }
     try {
       data.formaPagamento = await resolvePaymentMethodForWrite({
         value: data.formaPagamento,

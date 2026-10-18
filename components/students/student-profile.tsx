@@ -19,9 +19,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MonthlyPaymentDialog, type PayableMonthly } from "@/components/monthlies/monthly-payment-dialog";
 
 type FinancialData = {
-  monthly: Array<{ id: string; competence: string; value: number; dueAt: string; paidAt: string | null; paymentMethod: string | null; status: string }>;
+  monthly: Array<{ id: string; competence: string; value: number; originalValue: number; finalValue: number | null; adjustmentReason: string | null; totalPaid: number; balance: number; dueAt: string; paidAt: string | null; paymentMethod: string | null; status: string }>;
   payments: Array<{ id: string; value: number; paidAt: string; paymentMethod: string; status: string; competence: string | null }>;
   limits: { monthly: number; payments: number };
 };
@@ -86,6 +87,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
   const [resumeOpen, setResumeOpen] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
+  const [payingMonthly, setPayingMonthly] = useState<FinancialData["monthly"][number] | null>(null);
 
   const student = overview.student;
   const capabilities = overview.capabilities;
@@ -206,7 +208,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
         {capabilities.viewFinancial ? <TabsContent value="financial">
           {loadingSection === "financial" ? <SectionLoading /> : sectionErrors.financial ? <ErrorState message={sectionErrors.financial} onRetry={() => void loadSection("financial", true)} /> : financial ? <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3"><SummaryCard label="Situação" value={financialLabel ?? "—"} /><SummaryCard label="Mensalidade atual" value={financialSummary?.currentMonthly ? currency(financialSummary.currentMonthly.value) : "Não gerada"} detail={financialSummary?.currentMonthly?.status} /><SummaryCard label="Último pagamento" value={date(financialSummary?.lastPaymentAt)} /></div>
-            <Card><CardHeader><CardTitle>Mensalidades recentes</CardTitle><CardDescription>Até {financial.limits.monthly} competências, da mais recente para a mais antiga.</CardDescription></CardHeader>{financial.monthly.length === 0 ? <EmptyState title="Sem mensalidades" description="Nenhuma mensalidade foi encontrada para este aluno." /> : <ul className="divide-y divide-line">{financial.monthly.map((item) => <li key={item.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="font-semibold text-ink">{item.competence}</p><p className="text-helper text-muted">Vencimento {date(item.dueAt)}</p></div><p className="font-semibold">{currency(item.value)}</p><StatusBadge status={item.status} /></li>)}</ul>}</Card>
+            <Card><CardHeader><CardTitle>Mensalidades recentes</CardTitle><CardDescription>Até {financial.limits.monthly} competências, da mais recente para a mais antiga.</CardDescription></CardHeader>{financial.monthly.length === 0 ? <EmptyState title="Sem mensalidades" description="Nenhuma mensalidade foi encontrada para este aluno." /> : <ul className="divide-y divide-line">{financial.monthly.map((item) => <li key={item.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center"><div><p className="font-semibold text-ink">{item.competence}</p><p className="text-helper text-muted">Vencimento {date(item.dueAt)} · pago {currency(item.totalPaid)} · saldo {currency(item.balance)}</p>{item.finalValue !== null ? <p className="text-helper text-muted">Original {currency(item.originalValue)} · final {currency(item.finalValue)}</p> : null}</div><p className="font-semibold">{currency(item.finalValue ?? item.originalValue)}</p><StatusBadge status={item.status} />{capabilities.manageFinancial && item.status !== "PAGO" && item.status !== "ISENTO" ? <Button size="sm" onClick={() => setPayingMonthly(item)}>Dar baixa</Button> : null}</li>)}</ul>}</Card>
             <Card><CardHeader><CardTitle>Pagamentos persistidos</CardTitle><CardDescription>Registros explícitos do modelo Pagamento; mensalidades pagas também aparecem acima.</CardDescription></CardHeader>{financial.payments.length === 0 ? <EmptyState title="Sem pagamentos separados" description="Não existem registros no histórico específico de pagamentos." /> : <ul className="divide-y divide-line">{financial.payments.map((item) => <li key={item.id} className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><p className="font-semibold">{date(item.paidAt)} · {item.paymentMethod}</p><p className="text-helper text-muted">{item.competence ? `Competência ${item.competence}` : "Sem mensalidade vinculada"}</p></div><p className="font-semibold">{currency(item.value)}</p><StatusBadge status={item.status} /></li>)}</ul>}</Card>
           </div> : null}
         </TabsContent> : null}
@@ -228,6 +230,12 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
       </Tabs>
 
       <StudentFormDialog open={editOpen} onOpenChange={setEditOpen} studentId={student.id} onSaved={fetchOverview} />
+      <MonthlyPaymentDialog
+        open={Boolean(payingMonthly)}
+        onOpenChange={(open) => { if (!open) setPayingMonthly(null); }}
+        monthly={payingMonthly ? ({ ...payingMonthly, studentName: student.name } satisfies PayableMonthly) : null}
+        onSaved={async () => { setPayingMonthly(null); await Promise.all([fetchOverview(), loadSection("financial", true)]); }}
+      />
       <ResumeEnrollmentDialog open={resumeOpen} onOpenChange={setResumeOpen} student={student} onResumed={async () => { await fetchOverview(); setHistory(null); }} />
       <EndEnrollmentDialog open={endOpen} onOpenChange={setEndOpen} studentId={student.id} onEnded={async () => { await fetchOverview(); setHistory(null); }} />
     </div>

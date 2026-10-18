@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { AlunoStatus, MensalidadeStatus, Prisma } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
@@ -13,8 +14,8 @@ import {
   resolveFutureMonthlyValue
 } from "@/lib/services/mensalidades";
 import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
+import { initialMonthlyStatus, registerMonthlyPayment } from "@/lib/services/monthly-payments";
 
-const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const ALUNO_STATUS_VALUES = new Set<AlunoStatus>(Object.values(AlunoStatus));
 
 function toDateInputValue(date: Date | null | undefined) {
@@ -45,17 +46,6 @@ function parseOptionalNumber(value: unknown, fieldName: string) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${fieldName} inválido`);
-  }
-  return parsed;
-}
-
-function parseOptionalMensalidadeStatus(value: unknown) {
-  if (value === undefined || value === null || value === "") {
-    return null;
-  }
-  const parsed = String(value).toUpperCase() as MensalidadeStatus;
-  if (!MENSALIDADE_STATUS_VALUES.has(parsed)) {
-    throw new Error("status da mensalidade inválido");
   }
   return parsed;
 }
@@ -189,11 +179,17 @@ export async function POST(request: NextRequest) {
   }
 
   const vencimentoDia = Math.min(31, Math.max(1, Number(body.vencimentoDia)));
+  const registrationKey = String(body.registrationIdempotencyKey ?? "").trim();
+  if (!/^[a-zA-Z0-9_-]{8,120}$/.test(registrationKey)) return fail("Chave de idempotência da matrícula é obrigatória", 400);
+  const deterministicStudentId = `student_${createHash("sha256").update(registrationKey).digest("hex").slice(0, 32)}`;
+  const payNow = body.pagarAgora === true || body.pagarAgora === "true";
+  if (payNow && !hasCapability(auth.role, "finance.monthlies.manage")) {
+    return fail("Sem permissão para registrar o pagamento inicial", 403);
+  }
   const statusInformado = body.status ? (String(body.status).toUpperCase() as AlunoStatus) : AlunoStatus.ATIVO;
   if (!ALUNO_STATUS_VALUES.has(statusInformado)) return fail("status do aluno inválido", 400);
   let mensalidadeValor: number | null = null;
   let mensalidadeDataPagamento: Date | null = null;
-  let mensalidadeStatus: MensalidadeStatus | null = null;
   let dataSaidaCancelamento: Date | null = null;
   let dataInicio: Date | null = null;
   let usarValorPadrao = true;
@@ -202,7 +198,6 @@ export async function POST(request: NextRequest) {
   try {
     mensalidadeValor = parseOptionalNumber(body.valorMensal ?? body.mensalidadeValor, "valor mensal");
     mensalidadeDataPagamento = parseOptionalDate(body.mensalidadeDataPagamento, "data de pagamento da mensalidade");
-    mensalidadeStatus = parseOptionalMensalidadeStatus(body.mensalidadeStatus);
     dataSaidaCancelamento = parseOptionalDate(body.dataSaidaCancelamento, "data de saída/cancelamento");
     dataInicio = parseOptionalDate(body.dataInicio, "data de início");
     usarValorPadrao = parseBoolean(body.usarValorPadrao, true);
@@ -217,17 +212,22 @@ export async function POST(request: NextRequest) {
   let mensalidadeFormaPagamento: string | null | undefined;
   try {
     mensalidadeFormaPagamento = await resolvePaymentMethodForWrite({
-      value: body.mensalidadeFormaPagamento,
+      value: payNow ? body.pagamentoForma : body.mensalidadeFormaPagamento,
       application: "RECEBIMENTO",
-      required: mensalidadeStatus === MensalidadeStatus.PAGO
+      required: payNow
     });
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Forma de pagamento inválida", 400);
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    if (deterministicStudentId) {
+      const existing = await tx.aluno.findUnique({ where: { id: deterministicStudentId } });
+      if (existing) return existing;
+    }
     const aluno = await tx.aluno.create({
       data: {
+        id: deterministicStudentId,
         nomeCompleto: String(body.nomeCompleto),
         telefone: String(body.telefone),
         modalidadeId: body.modalidadeId ? String(body.modalidadeId) : null,
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (aluno.status === AlunoStatus.ATIVO && aluno.dataInicio) {
+    if (aluno.status === AlunoStatus.ATIVO) {
       const competencia = toCompetencia(new Date());
 
       const modalidade = aluno.modalidadeId
@@ -271,18 +271,16 @@ export async function POST(request: NextRequest) {
 
       const competenciaMensalidade = competencia;
       const vencimentoPadrao = buildVencimentoDate(competenciaMensalidade, aluno.vencimentoDia);
-      const statusMensalidade = mensalidadeStatus ?? MensalidadeStatus.PENDENTE;
-      const dataPagamento =
-        mensalidadeDataPagamento ??
-        ((statusMensalidade === MensalidadeStatus.PAGO || statusMensalidade === MensalidadeStatus.PARCIAL) ? new Date() : null);
       const valorMensalidade = resolveFutureMonthlyValue({
         individualValue: mensalidadeValor,
         useModalityDefault: usarValorPadrao,
         modalityDefaultValue: valorPadrao
       });
       const vencimentoMensalidade = vencimentoPadrao;
+      const statusMensalidade = initialMonthlyStatus(vencimentoMensalidade);
 
-      if (valorMensalidade !== null) await tx.mensalidade.upsert({
+      if (valorMensalidade !== null) {
+        const mensalidade = await tx.mensalidade.upsert({
         where: {
           alunoId_competencia: {
             alunoId: aluno.id,
@@ -295,19 +293,25 @@ export async function POST(request: NextRequest) {
           valor: valorMensalidade,
           vencimento: vencimentoMensalidade,
           status: statusMensalidade,
-          dataPagamento,
-          formaPagamento: mensalidadeFormaPagamento ?? null,
+          dataPagamento: null,
+          formaPagamento: null,
           observacao: body.mensalidadeObservacao ? String(body.mensalidadeObservacao) : null
         },
-        update: {
-          valor: valorMensalidade,
-          vencimento: vencimentoMensalidade,
-          status: statusMensalidade,
-          dataPagamento,
-          formaPagamento: mensalidadeFormaPagamento,
-          observacao: body.mensalidadeObservacao === "" ? null : (body.mensalidadeObservacao as string | undefined)
+        update: {}
+        });
+        if (payNow) {
+          await registerMonthlyPayment({
+            mensalidadeId: mensalidade.id,
+            valor: body.pagamentoValor,
+            formaPagamento: mensalidadeFormaPagamento,
+            dataPagamento: mensalidadeDataPagamento ? academyToday(mensalidadeDataPagamento) : academyToday(),
+            valorFinal: body.valorFinal,
+            motivoAjuste: body.motivoAjuste,
+            idempotencyKey: `${registrationKey}-initial`,
+            actor: { id: auth.id, name: auth.name }
+          }, { tx });
         }
-      });
+      }
     }
 
     return aluno;

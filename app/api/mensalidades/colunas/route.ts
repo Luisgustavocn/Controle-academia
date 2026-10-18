@@ -4,6 +4,7 @@ import { requireCapability } from "@/lib/auth/guards";
 import { currentCompetencia } from "@/lib/competencia";
 import { ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { monthlyAmounts } from "@/lib/services/monthly-payments";
 
 const MONTH_SHORT_PT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
 
@@ -50,17 +51,21 @@ function serializeItem(item: {
   alunoId: string;
   competencia: string;
   valor: Prisma.Decimal;
+  valorFinal: Prisma.Decimal | null;
+  motivoAjuste: string | null;
   vencimento: Date;
   dataPagamento: Date | null;
   formaPagamento: string | null;
   status: MensalidadeStatus;
   observacao: string | null;
+  pagamentos: Array<{ valor: Prisma.Decimal; status: "CONFIRMADO" | "ESTORNADO" | "PENDENTE" }>;
   aluno: {
     nomeCompleto: string;
     telefone: string;
     modalidade: { nome: string } | null;
   };
 }) {
+  const amounts = monthlyAmounts(item);
   return {
     id: item.id,
     alunoId: item.alunoId,
@@ -70,6 +75,11 @@ function serializeItem(item: {
     competencia: item.competencia,
     mesPendente: formatCompetenciaLabel(item.competencia),
     valor: Number(item.valor),
+    valorOriginal: Number(amounts.original),
+    valorFinal: item.valorFinal === null ? null : Number(item.valorFinal),
+    motivoAjuste: item.motivoAjuste,
+    totalPago: Number(amounts.paid),
+    saldo: Number(amounts.balance),
     vencimento: formatMonthDay(item.vencimento),
     vencimentoDia: item.vencimento.getDate(),
     dataPagamento: formatMonthDay(item.dataPagamento),
@@ -92,12 +102,13 @@ export async function GET(request: NextRequest) {
       include: {
         modalidade: true
       }
-    }
+    },
+    pagamentos: { select: { valor: true, status: true } }
   } satisfies Prisma.MensalidadeInclude;
 
   const alunoSearch = buildAlunoSearch(q);
 
-  const [pagas, pendentes, atrasadas, recebidasNoMes] = await Promise.all([
+  const [pagas, pendentes, atrasadas, pagamentosNoMes, mensalidadesLegadasNoMes] = await Promise.all([
     prisma.mensalidade.findMany({
       where: {
         competencia: referencia,
@@ -110,7 +121,7 @@ export async function GET(request: NextRequest) {
     prisma.mensalidade.findMany({
       where: {
         competencia: referencia,
-        status: MensalidadeStatus.PENDENTE,
+        status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.PARCIAL] },
         ...alunoSearch
       },
       include: includeAluno,
@@ -124,20 +135,22 @@ export async function GET(request: NextRequest) {
       include: includeAluno,
       orderBy: [{ vencimento: "asc" }, { competencia: "asc" }, { aluno: { nomeCompleto: "asc" } }]
     }),
+    prisma.pagamento.findMany({
+      where: {
+        status: "CONFIRMADO",
+        dataPagamento: { gte: start, lt: end },
+        ...(q ? { aluno: buildAlunoSearch(q).aluno } : {})
+      },
+      select: { valor: true }
+    }),
     prisma.mensalidade.findMany({
       where: {
-        status: {
-          in: [MensalidadeStatus.PAGO, MensalidadeStatus.PARCIAL]
-        },
-        dataPagamento: {
-          gte: start,
-          lt: end
-        },
+        status: { in: [MensalidadeStatus.PAGO, MensalidadeStatus.PARCIAL] },
+        dataPagamento: { gte: start, lt: end },
+        pagamentos: { none: { status: "CONFIRMADO" } },
         ...alunoSearch
       },
-      select: {
-        valor: true
-      }
+      select: { valor: true }
     })
   ]);
 
@@ -146,9 +159,9 @@ export async function GET(request: NextRequest) {
   const atrasadasSerialized = atrasadas.map(serializeItem);
 
   // Regime de caixa: recebido no mês é baseado na data de pagamento, não na competência.
-  const totalPagoMes = recebidasNoMes.reduce((acc, item) => acc + Number(item.valor), 0);
-  const totalPendenteMes = pendentesSerialized.reduce((acc, item) => acc + item.valor, 0);
-  const totalAtrasado = atrasadasSerialized.reduce((acc, item) => acc + item.valor, 0);
+  const totalPagoMes = [...pagamentosNoMes, ...mensalidadesLegadasNoMes].reduce((acc, item) => acc + Number(item.valor), 0);
+  const totalPendenteMes = pendentesSerialized.reduce((acc, item) => acc + item.saldo, 0);
+  const totalAtrasado = atrasadasSerialized.reduce((acc, item) => acc + item.saldo, 0);
 
   return ok({
     referencia,

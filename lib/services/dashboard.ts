@@ -39,6 +39,7 @@ export type FinanceSeriesItem = {
 
 type FinanceSeriesRows = {
   mensalidades: Array<{ dataPagamento: Date | null; valor: unknown }>;
+  pagamentos?: Array<{ dataPagamento: Date; valor: unknown }>;
   despesas: Array<{ competencia: string; valorPrevisto: unknown; valorPago: unknown }>;
   pedidos: Array<{ dataPedido: Date; pago: unknown }>;
 };
@@ -104,7 +105,8 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
   const [
     alunosAtivos,
     alunosInadimplentes,
-    mensalidadesRecebidasNoMes,
+    pagamentosRecebidosNoMes,
+    mensalidadesLegadasRecebidasNoMes,
     despesasAcademia,
     caixa,
     presencas,
@@ -118,13 +120,18 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
         status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] }
       }
     }),
+    prisma.pagamento.findMany({
+      where: {
+        status: "CONFIRMADO",
+        dataPagamento: { gte: mesStart, lt: mesEnd }
+      },
+      select: { alunoId: true, valor: true }
+    }),
     prisma.mensalidade.findMany({
       where: {
         status: { in: [MensalidadeStatus.PAGO, MensalidadeStatus.PARCIAL] },
-        dataPagamento: {
-          gte: mesStart,
-          lt: mesEnd
-        }
+        dataPagamento: { gte: mesStart, lt: mesEnd },
+        pagamentos: { none: { status: "CONFIRMADO" } }
       },
       select: {
         alunoId: true,
@@ -154,7 +161,8 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
     prisma.controleMensalAlunos.findUnique({ where: { competencia: referenceCompetencia } })
   ]);
 
-  const receitaMensalidades = mensalidadesRecebidasNoMes.reduce((acc, item) => acc + Number(item.valor), 0);
+  const recebimentosMensalidades = [...pagamentosRecebidosNoMes, ...mensalidadesLegadasRecebidasNoMes];
+  const receitaMensalidades = recebimentosMensalidades.reduce((acc, item) => acc + Number(item.valor), 0);
   const receitaProdutos = Number(pedidosPagosMes._sum.pago ?? 0);
   const receitaMes = receitaMensalidades + receitaProdutos;
   const despesaMes = despesasAcademia.reduce((acc, item) => acc + Number(item.valorPago || item.valorPrevisto), 0);
@@ -164,7 +172,7 @@ export async function getDashboardKpis(referenceCompetencia: string): Promise<Da
       return item.tipo === TipoMovimentacao.ENTRADA ? acc + Number(item.valor) : acc - Number(item.valor);
     }, 0);
   const saldoMes = receitaMes - despesaMes + ajustesManuaisCaixa;
-  const alunosPagantes = new Set(mensalidadesRecebidasNoMes.map((item) => item.alunoId)).size || 1;
+  const alunosPagantes = new Set(recebimentosMensalidades.map((item) => item.alunoId)).size || 1;
   const taxaInadimplencia = alunosAtivos === 0 ? 0 : alunosInadimplentes / alunosAtivos;
   const taxaRetencao = controle && controle.inicioMes > 0 ? controle.totalFinal / controle.inicioMes : 1;
 
@@ -201,6 +209,11 @@ export function buildFinanceSeriesFromRows(
     if (totals) totals.receita += Number(mensalidade.valor);
   }
 
+  for (const pagamento of rows.pagamentos ?? []) {
+    const totals = byCompetencia.get(dateCompetencia(pagamento.dataPagamento));
+    if (totals) totals.receita += Number(pagamento.valor);
+  }
+
   for (const pedido of rows.pedidos) {
     const totals = byCompetencia.get(dateCompetencia(pedido.dataPedido));
     if (totals) totals.receita += Number(pedido.pago);
@@ -229,12 +242,17 @@ async function buildFinanceSeries(competencias: string[]) {
 
   const start = competenciaRange(first).start;
   const end = competenciaRange(last).end;
-  const [mensalidades, despesas, pedidos] = await Promise.all([
+  const [mensalidades, pagamentos, despesas, pedidos] = await Promise.all([
     prisma.mensalidade.findMany({
       where: {
         status: { in: [MensalidadeStatus.PAGO, MensalidadeStatus.PARCIAL] },
-        dataPagamento: { gte: start, lt: end }
+        dataPagamento: { gte: start, lt: end },
+        pagamentos: { none: { status: "CONFIRMADO" } }
       },
+      select: { dataPagamento: true, valor: true }
+    }),
+    prisma.pagamento.findMany({
+      where: { status: "CONFIRMADO", dataPagamento: { gte: start, lt: end } },
       select: { dataPagamento: true, valor: true }
     }),
     prisma.despesaAcademia.findMany({
@@ -247,7 +265,7 @@ async function buildFinanceSeries(competencias: string[]) {
     })
   ]);
 
-  return buildFinanceSeriesFromRows(competencias, { mensalidades, despesas, pedidos });
+  return buildFinanceSeriesFromRows(competencias, { mensalidades, pagamentos, despesas, pedidos });
 }
 
 type OperationalMensalidade = {

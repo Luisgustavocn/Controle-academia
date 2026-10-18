@@ -3,6 +3,7 @@ import { hasCapability } from "@/lib/auth/capabilities";
 import { prisma } from "@/lib/prisma";
 import { getAcademyDateContext } from "@/lib/timezone";
 import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
+import { monthlyAmounts } from "@/lib/services/monthly-payments";
 
 export class StudentProfileNotFoundError extends Error {}
 
@@ -157,7 +158,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
     capabilities.viewFinancial
       ? prisma.mensalidade.findUnique({
           where: { alunoId_competencia: { alunoId: id, competencia: academy.competencia } },
-          select: { competencia: true, valor: true, vencimento: true, dataPagamento: true, status: true }
+          select: { competencia: true, valor: true, valorFinal: true, vencimento: true, dataPagamento: true, status: true }
         })
       : null,
     capabilities.viewFinancial
@@ -217,7 +218,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
           status: financialStatusFromOpenCount(openMonthlyCount ?? 0, activeEnrollment, partialMonthlyCount ?? 0),
           currentMonthly: currentMonthly ? {
             competence: currentMonthly.competencia,
-            value: Number(currentMonthly.valor),
+            value: Number(currentMonthly.valorFinal ?? currentMonthly.valor),
             status: currentMonthly.status,
             dueAt: currentMonthly.vencimento.toISOString(),
             paidAt: iso(currentMonthly.dataPagamento)
@@ -242,7 +243,7 @@ export async function getStudentProfileFinancial(id: string) {
   const [monthlyRows, paymentRows] = await Promise.all([
     prisma.mensalidade.findMany({
       where: { alunoId: id },
-      select: { id: true, competencia: true, valor: true, vencimento: true, dataPagamento: true, formaPagamento: true, status: true },
+      select: { id: true, competencia: true, valor: true, valorFinal: true, motivoAjuste: true, vencimento: true, dataPagamento: true, formaPagamento: true, status: true, pagamentos: { select: { valor: true, status: true } } },
       orderBy: [{ competencia: "desc" }, { vencimento: "desc" }],
       take: 12
     }),
@@ -261,15 +262,23 @@ export async function getStudentProfileFinancial(id: string) {
     })
   ]);
   return {
-    monthly: monthlyRows.map((item) => ({
-      id: item.id,
-      competence: item.competencia,
-      value: Number(item.valor),
-      dueAt: item.vencimento.toISOString(),
-      paidAt: iso(item.dataPagamento),
-      paymentMethod: item.formaPagamento,
-      status: item.status
-    })),
+    monthly: monthlyRows.map((item) => {
+      const amounts = monthlyAmounts(item);
+      return {
+        id: item.id,
+        competence: item.competencia,
+        value: Number(item.valor),
+        originalValue: Number(amounts.original),
+        finalValue: item.valorFinal === null ? null : Number(item.valorFinal),
+        adjustmentReason: item.motivoAjuste,
+        totalPaid: Number(amounts.paid),
+        balance: Number(amounts.balance),
+        dueAt: item.vencimento.toISOString(),
+        paidAt: iso(item.dataPagamento),
+        paymentMethod: item.formaPagamento,
+        status: item.status
+      };
+    }),
     payments: paymentRows.map((item) => ({
       id: item.id,
       value: Number(item.valor),

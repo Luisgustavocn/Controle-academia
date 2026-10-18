@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { StudentPhotoEditor } from "@/components/students/student-photo-editor";
+import { PaymentMethodField } from "@/components/monthlies/payment-method-field";
 
 type StudentStatus = "ATIVO" | "INATIVO" | "CANCELADO" | "TRANCADO";
 export type StudentFormModality = { id: string; name: string; active: boolean };
@@ -25,6 +26,12 @@ type StudentForm = {
   usarValorPadrao: boolean;
   dataNascimento: string;
   fotoPath: string;
+  pagarAgora: boolean;
+  pagamentoValor: string;
+  pagamentoForma: string;
+  valorFinal: string;
+  motivoAjuste: string;
+  registrationIdempotencyKey: string;
 };
 
 const EMPTY_FORM: StudentForm = {
@@ -39,7 +46,13 @@ const EMPTY_FORM: StudentForm = {
   valorMensal: "",
   usarValorPadrao: true,
   dataNascimento: "",
-  fotoPath: ""
+  fotoPath: "",
+  pagarAgora: false,
+  pagamentoValor: "",
+  pagamentoForma: "",
+  valorFinal: "",
+  motivoAjuste: "",
+  registrationIdempotencyKey: ""
 };
 
 const STATUS_OPTIONS: Array<{ value: StudentStatus; label: string }> = [
@@ -86,7 +99,7 @@ export function StudentFormDialog({
     setPendingPhoto(null);
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview("");
-    if (!studentId) setForm(EMPTY_FORM);
+    if (!studentId) setForm({ ...EMPTY_FORM, registrationIdempotencyKey: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}` });
 
     const load = async () => {
       setLoading(true);
@@ -126,6 +139,11 @@ export function StudentFormDialog({
     }
     if (form.dataNascimento && form.dataNascimento > new Date().toLocaleDateString("en-CA")) {
       nextErrors.dataNascimento = "Data de nascimento não pode ser futura.";
+    }
+    if (!studentId && form.pagarAgora) {
+      if (!form.pagamentoForma) nextErrors.pagamentoForma = "Forma de pagamento é obrigatória.";
+      if (!Number.isFinite(Number(form.pagamentoValor)) || Number(form.pagamentoValor) <= 0) nextErrors.pagamentoValor = "Informe o valor recebido.";
+      if (form.valorFinal && Number(form.valorFinal) !== Number(form.valorMensal) && !form.motivoAjuste.trim()) nextErrors.motivoAjuste = "Informe o motivo do ajuste.";
     }
     if (Object.keys(nextErrors).length > 0) {
       setFieldErrors(nextErrors);
@@ -187,6 +205,15 @@ export function StudentFormDialog({
           {shouldShowStudentExitDate(form.status) ? <FormField label="Data de saída" htmlFor="student-end" required><Input id="student-end" type="date" required value={form.dataSaidaCancelamento} error={fieldErrors.dataSaidaCancelamento} onChange={(event) => { setForm({ ...form, dataSaidaCancelamento: event.target.value }); if (event.target.value) { setFieldErrors((current) => ({ ...current, dataSaidaCancelamento: "" })); setError(""); } }} /></FormField> : null}
           <FormField label="Valor mensal individual" htmlFor="student-value" description="Quando informado, prevalece sobre o valor padrão da modalidade."><Input id="student-value" type="number" min="0.01" step="0.01" value={form.valorMensal} onChange={(event) => setForm({ ...form, valorMensal: event.target.value })} /></FormField>
           <Switch id="student-default-value" label="Usar valor padrão da modalidade" description="Só é usado quando não há valor individual." checked={form.usarValorPadrao} onChange={(event) => setForm({ ...form, usarValorPadrao: event.target.checked })} />
+          {!studentId && form.status === "ATIVO" ? <div className="space-y-4 rounded-ds-xl border border-line bg-surface/50 p-4 md:col-span-2">
+            <Switch id="student-pay-now" label="Pagar mensalidade agora" description="Se desativado, a cobrança inicial será criada pendente ou atrasada conforme o vencimento." checked={form.pagarAgora} onChange={(event) => setForm({ ...form, pagarAgora: event.target.checked })} />
+            {form.pagarAgora ? <div className="grid gap-4 md:grid-cols-2">
+              <FormField label="Valor final" htmlFor="student-final-value" description="Deixe igual ao valor original quando não houver ajuste." error={fieldErrors.valorFinal}><Input id="student-final-value" type="number" min="0.01" step="0.01" value={form.valorFinal} error={fieldErrors.valorFinal} onChange={(event) => setForm({ ...form, valorFinal: event.target.value })} /></FormField>
+              <FormField label="Valor recebido" htmlFor="student-payment-value" required error={fieldErrors.pagamentoValor}><Input id="student-payment-value" type="number" min="0.01" step="0.01" value={form.pagamentoValor} error={fieldErrors.pagamentoValor} onChange={(event) => { setForm({ ...form, pagamentoValor: event.target.value }); setFieldErrors((current) => ({ ...current, pagamentoValor: "" })); }} /></FormField>
+              <PaymentMethodField id="student-payment-method" value={form.pagamentoForma} error={fieldErrors.pagamentoForma} onChange={(value) => { setForm({ ...form, pagamentoForma: value }); setFieldErrors((current) => ({ ...current, pagamentoForma: "" })); }} />
+              <FormField label="Motivo do ajuste" htmlFor="student-adjustment-reason" error={fieldErrors.motivoAjuste}><Input id="student-adjustment-reason" value={form.motivoAjuste} error={fieldErrors.motivoAjuste} onChange={(event) => { setForm({ ...form, motivoAjuste: event.target.value }); setFieldErrors((current) => ({ ...current, motivoAjuste: "" })); }} /></FormField>
+            </div> : null}
+          </div> : null}
           <FormField label="Observações" htmlFor="student-notes" className="md:col-span-2"><textarea id="student-notes" rows={4} value={form.observacoes} onChange={(event) => setForm({ ...form, observacoes: event.target.value })} className="w-full rounded-ds-lg border border-line bg-card px-3 py-2 text-sm text-ink shadow-surface-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" /></FormField>
           {error ? <p role="alert" className="md:col-span-2 text-sm font-medium text-danger">{error}</p> : null}
         </div>

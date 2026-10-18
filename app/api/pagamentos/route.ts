@@ -14,6 +14,7 @@ export const { GET, POST } = createListCreateHandlers({
   numericFields: ["valor"],
   dateFields: ["dataPagamento"],
   validateAsync: async (data) => {
+    if (data.mensalidadeId) return "Use a baixa da mensalidade para registrar pagamentos vinculados";
     try {
       data.formaPagamento = await resolvePaymentMethodForWrite({
         value: data.formaPagamento,

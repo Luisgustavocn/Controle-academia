@@ -5,7 +5,7 @@ import { logAudit } from "@/lib/audit";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
-import { MARK_MONTHLY_PAID_ACTION, validatePaymentTransition } from "@/lib/services/mensalidade-payment";
+import { validatePaymentTransition } from "@/lib/services/mensalidade-payment";
 import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
@@ -110,22 +110,20 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
   let dataPagamento: Date | null | undefined;
   let status: MensalidadeStatus | undefined;
-  const isMarkPaid = body.action === MARK_MONTHLY_PAID_ACTION;
-
-  if (isMarkPaid && previous.status === MensalidadeStatus.PAGO) {
-    await syncAutomaticEntriesInCaixa(true);
-    return ok({ item: previous, alreadyPaid: true });
-  }
+  if (body.action === "mark-paid") return fail("Use o fluxo de pagamento para registrar a baixa", 409);
 
   try {
     dataPagamento =
       body.dataPagamento === "" ? null : parseMonthDayOrDate(body.dataPagamento, previous.competencia, "dataPagamento") ?? undefined;
-    status = isMarkPaid ? MensalidadeStatus.PAGO : parseStatus(body.status);
+    status = parseStatus(body.status);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "Dados inválidos", 400);
   }
 
   const statusFinal = status ?? previous.status;
+  if (previous.status !== MensalidadeStatus.PAGO && statusFinal === MensalidadeStatus.PAGO) {
+    return fail("Use o fluxo de pagamento para marcar a mensalidade como paga", 409);
+  }
   let formaPagamento: string | null | undefined = body.formaPagamento === undefined
     ? undefined
     : body.formaPagamento === null || body.formaPagamento === ""
