@@ -97,12 +97,16 @@ test("operational dashboard calculates real overview and today metrics without d
   });
   assert.deepEqual(result.today, {
     attendances: 4,
+    attendancesYesterday: 0,
     appointments: 2,
     due: { count: 1, amount: 100 },
     received: 150
   });
-  assert.deepEqual(result.attention.overdue, { students: 1, amount: 130 });
-  assert.deepEqual(result.attention.noRecentAttendance, { students: 1, thresholdDays: NO_ATTENDANCE_ALERT_DAYS });
+  assert.equal(result.attention.overdue.students, 1);
+  assert.equal(result.attention.overdue.amount, 50);
+  assert.equal(result.attention.overdue.items.length, 1);
+  assert.equal(result.attention.noRecentAttendance.students, 1);
+  assert.equal(result.attention.noRecentAttendance.thresholdDays, NO_ATTENDANCE_ALERT_DAYS);
   assert.equal(result.recent.payments.length, 3);
   assert.equal(result.recent.students[0]?.title, "Caio");
 });
@@ -111,7 +115,7 @@ test("operational dashboard remains numeric with zero data", () => {
   const now = new Date("2026-10-05T15:00:00.000Z");
   const result = buildOperationalDashboardFromRows(getAcademyDateContext(now), recentCompetencias(now), emptySource());
   assert.deepEqual(result.overview, { activeStudents: 0, receivedMonth: 0, receivableCurrent: 0, delinquentStudents: 0 });
-  assert.deepEqual(result.today, { attendances: 0, appointments: 0, due: { count: 0, amount: 0 }, received: 0 });
+  assert.deepEqual(result.today, { attendances: 0, attendancesYesterday: 0, appointments: 0, due: { count: 0, amount: 0 }, received: 0 });
   assert.equal(result.financialSeries.length, 12);
   assert.equal(result.financialSeries.every((item) => item.receita === 0 && item.despesa === 0 && item.saldo === 0), true);
 });

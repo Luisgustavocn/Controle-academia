@@ -10,10 +10,21 @@ import {
   recentCompetencias,
   type AcademyDateContext
 } from "@/lib/timezone";
-import { addCivilDays, civilDateToPrisma, civilMonthRange, prismaDateToCivil } from "@/lib/attendance-date";
+import { addCivilDays, civilDateToPrisma, civilMonthRange } from "@/lib/attendance-date";
 import { studentActiveOnDateWhere } from "@/lib/services/enrollment-periods";
+import { monthlyAmounts } from "@/lib/services/monthly-payments";
+import {
+  buildAbsenceAlerts,
+  buildOverdueFeeAlerts,
+  NO_ATTENDANCE_ALERT_DAYS,
+  OVERDUE_FEE_ALERT_DAYS,
+  type AbsenceAlert,
+  type AlertMonthlyRow,
+  type AttendanceAlertStudent,
+  type OverdueFeeAlert
+} from "@/lib/services/dashboard-alerts";
+export { NO_ATTENDANCE_ALERT_DAYS } from "@/lib/services/dashboard-alerts";
 
-export const NO_ATTENDANCE_ALERT_DAYS = 10;
 export const ACTIVE_STUDENT_DASHBOARD_WHERE = { status: AlunoStatus.ATIVO } as const;
 
 export type DashboardKpis = {
@@ -268,15 +279,11 @@ async function buildFinanceSeries(competencias: string[]) {
   return buildFinanceSeriesFromRows(competencias, { mensalidades, pagamentos, despesas, pedidos });
 }
 
-type OperationalMensalidade = {
+type OperationalMensalidade = AlertMonthlyRow & {
   id: string;
   alunoId: string;
   competencia: string;
-  valor: unknown;
-  vencimento: Date;
   dataPagamento: Date | null;
-  status: MensalidadeStatus;
-  aluno: { nomeCompleto: string };
 };
 
 type OperationalOrder = {
@@ -294,8 +301,11 @@ export type OperationalDashboardSource = {
   orders: OperationalOrder[];
   expenses: Array<{ competencia: string; valorPrevisto: unknown; valorPago: unknown }>;
   attendancesToday: number;
+  attendancesYesterday?: number;
   appointmentsToday: number;
-  lastAttendances: Array<{ alunoId: string; _max: { data: Date | null } }>;
+  attendanceStudents?: AttendanceAlertStudent[];
+  /** Compatibilidade para consumidores anteriores; novas consultas usam attendanceStudents. */
+  lastAttendances?: Array<{ alunoId: string; _max: { data: Date | null } }>;
   newStudents: Array<{ id: string; nomeCompleto: string; createdAt: Date; status: AlunoStatus }>;
 };
 
@@ -319,13 +329,15 @@ export type OperationalDashboard = {
   };
   today: {
     attendances: number;
+    attendancesYesterday: number;
     appointments: number;
     due: { count: number; amount: number };
     received: number;
   };
   attention: {
-    overdue: { students: number; amount: number };
-    noRecentAttendance: { students: number; thresholdDays: number };
+    overdue: { students: number; amount: number; thresholdDays: number; items: OverdueFeeAlert[] };
+    noRecentAttendance: { students: number; thresholdDays: number; items: AbsenceAlert[] };
+    inconsistencies: { activeWithoutOpenPeriod: number; activeWithMultipleOpenPeriods: number };
   };
   recent: {
     payments: DashboardRecentItem[];
@@ -354,9 +366,18 @@ export function buildOperationalDashboardFromRows(
 ): OperationalDashboard {
   const currentOpen = source.openMensalidades.filter(
     (item) => item.competencia === context.competencia &&
-      (item.status === MensalidadeStatus.PENDENTE || item.status === MensalidadeStatus.ATRASADO)
+      (item.status === MensalidadeStatus.PENDENTE || item.status === MensalidadeStatus.ATRASADO || item.status === MensalidadeStatus.PARCIAL)
   );
-  const overdue = source.openMensalidades.filter((item) => item.status === MensalidadeStatus.ATRASADO);
+  const overdue = buildOverdueFeeAlerts(source.openMensalidades, context.dateKey);
+  const attendanceStudents = source.attendanceStudents ?? (source.lastAttendances ?? []).map((item) => ({
+    id: item.alunoId,
+    nomeCompleto: item.alunoId,
+    fotoPath: null,
+    status: AlunoStatus.ATIVO,
+    presencas: item._max.data ? [{ data: item._max.data }] : [],
+    periodosMatricula: []
+  }));
+  const absence = buildAbsenceAlerts(attendanceStudents, context.dateKey);
   const delinquentIds = new Set(overdue.map((item) => item.alunoId));
   const dueToday = currentOpen.filter((item) => isWithin(item.vencimento, context.dayStart, context.dayEnd));
   const paidThisMonth = source.paidMensalidades.filter((item) =>
@@ -366,8 +387,8 @@ export function buildOperationalDashboardFromRows(
   const ordersThisMonth = source.orders.filter((item) => isWithin(item.dataPedido, context.monthStart, context.monthEnd));
   const ordersToday = ordersThisMonth.filter((item) => isWithin(item.dataPedido, context.dayStart, context.dayEnd));
   const amount = (items: Array<{ valor: unknown }>) => items.reduce((total, item) => total + Number(item.valor), 0);
+  const openAmount = (items: OperationalMensalidade[]) => items.reduce((total, item) => total + Number(monthlyAmounts(item).balance), 0);
   const orderAmount = (items: Array<{ pago: unknown }>) => items.reduce((total, item) => total + Number(item.pago), 0);
-  const staleCutoff = addCivilDays(context.dateKey, -NO_ATTENDANCE_ALERT_DAYS);
 
   const paymentItems: DashboardRecentItem[] = [
     ...source.paidMensalidades
@@ -399,22 +420,31 @@ export function buildOperationalDashboardFromRows(
     overview: {
       activeStudents: source.activeStudents,
       receivedMonth: amount(paidThisMonth) + orderAmount(ordersThisMonth),
-      receivableCurrent: amount(currentOpen),
+      receivableCurrent: openAmount(currentOpen),
       delinquentStudents: delinquentIds.size
     },
     today: {
       attendances: source.attendancesToday,
+      attendancesYesterday: source.attendancesYesterday ?? 0,
       appointments: source.appointmentsToday,
-      due: { count: dueToday.length, amount: amount(dueToday) },
+      due: { count: dueToday.length, amount: openAmount(dueToday) },
       received: amount(paidToday) + orderAmount(ordersToday)
     },
     attention: {
-      overdue: { students: delinquentIds.size, amount: amount(overdue) },
+      overdue: {
+        students: delinquentIds.size,
+        amount: overdue.reduce((total, item) => total + item.saldo, 0),
+        thresholdDays: OVERDUE_FEE_ALERT_DAYS,
+        items: overdue
+      },
       noRecentAttendance: {
-        students: source.lastAttendances.filter(
-          (item) => item._max.data && prismaDateToCivil(item._max.data) <= staleCutoff
-        ).length,
-        thresholdDays: NO_ATTENDANCE_ALERT_DAYS
+        students: absence.alerts.length,
+        thresholdDays: NO_ATTENDANCE_ALERT_DAYS,
+        items: absence.alerts
+      },
+      inconsistencies: {
+        activeWithoutOpenPeriod: absence.activeWithoutOpenPeriod.length,
+        activeWithMultipleOpenPeriods: absence.activeWithMultipleOpenPeriods.length
       }
     },
     recent: {
@@ -466,6 +496,8 @@ export function dashboardDtoForRole(data: OperationalDashboard, role: SessionRol
 export async function getOperationalDashboard(role: SessionRole, referenceDate = new Date()) {
   const context = getAcademyDateContext(referenceDate);
   const attendanceToday = civilDateToPrisma(context.dateKey);
+  const attendanceYesterday = civilDateToPrisma(addCivilDays(context.dateKey, -1));
+  const overdueCutoff = civilDateToPrisma(addCivilDays(context.dateKey, -OVERDUE_FEE_ALERT_DAYS));
   const competencias = recentCompetencias(referenceDate, 12);
   const firstRange = academyMonthRange(competencias[0] ?? context.competencia);
   const lastRange = academyMonthRange(competencias[competencias.length - 1] ?? context.competencia);
@@ -477,8 +509,9 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
     activeStudents,
     openMensalidades,
     attendancesToday,
+    attendancesYesterday,
     appointmentsToday,
-    lastAttendances,
+    attendanceStudents,
     newStudents,
     paidMensalidades,
     expenses,
@@ -488,8 +521,11 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
     prisma.mensalidade.findMany({
       where: {
         OR: [
-          { competencia: context.competencia, status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO] } },
-          { status: MensalidadeStatus.ATRASADO }
+          { competencia: context.competencia, status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO, MensalidadeStatus.PARCIAL] } },
+          {
+            status: { in: [MensalidadeStatus.PENDENTE, MensalidadeStatus.ATRASADO, MensalidadeStatus.PARCIAL] },
+            vencimento: { lte: overdueCutoff }
+          }
         ]
       },
       select: {
@@ -497,15 +533,22 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
         alunoId: true,
         competencia: true,
         valor: true,
+        valorFinal: true,
         vencimento: true,
         dataPagamento: true,
         status: true,
+        pagamentos: { select: { valor: true, status: true } },
         aluno: { select: { nomeCompleto: true } }
       }
     }),
-    needsOperationalData ? prisma.presenca.count({
+    needsOperationalData ? prisma.presenca.groupBy({
+      by: ["alunoId"],
       where: { presente: true, data: attendanceToday }
-    }) : Promise.resolve(0),
+    }).then((rows) => rows.length) : Promise.resolve(0),
+    needsOperationalData ? prisma.presenca.groupBy({
+      by: ["alunoId"],
+      where: { presente: true, data: attendanceYesterday }
+    }).then((rows) => rows.length) : Promise.resolve(0),
     needsOperationalData ? prisma.agendaPersonal.count({
       where: {
         ativo: true,
@@ -514,10 +557,19 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
         OR: [{ alunoId: null }, { aluno: activeStudentWhere }]
       }
     }) : Promise.resolve(0),
-    needsOperationalData ? prisma.presenca.groupBy({
-      by: ["alunoId"],
-      where: { presente: true, aluno: activeStudentWhere },
-      _max: { data: true }
+    needsOperationalData ? prisma.aluno.findMany({
+      where: ACTIVE_STUDENT_DASHBOARD_WHERE,
+      select: {
+        id: true,
+        nomeCompleto: true,
+        fotoPath: true,
+        status: true,
+        presencas: { where: { presente: true }, orderBy: { data: "desc" }, take: 1, select: { data: true } },
+        periodosMatricula: {
+          where: { dataSaida: null, OR: [{ dataInicio: null }, { dataInicio: { lte: attendanceToday } }] },
+          select: { dataInicio: true, dataSaida: true }
+        }
+      }
     }) : Promise.resolve([]),
     needsOperationalData ? prisma.aluno.findMany({
       orderBy: { createdAt: "desc" },
@@ -562,8 +614,9 @@ export async function getOperationalDashboard(role: SessionRole, referenceDate =
     orders,
     expenses,
     attendancesToday,
+    attendancesYesterday,
     appointmentsToday,
-    lastAttendances,
+    attendanceStudents,
     newStudents
   });
   return dashboardDtoForRole(full, role);

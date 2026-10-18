@@ -11,6 +11,7 @@ import { getActiveSessionUser } from "@/lib/auth/server-session";
 import { hasCapability } from "@/lib/auth/capabilities";
 import { getOperationalDashboard, type DashboardRecentItem } from "@/lib/services/dashboard";
 import { ACADEMY_TIME_ZONE } from "@/lib/timezone";
+import { civilDateLabel } from "@/lib/attendance-date";
 
 function currency(value = 0) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -98,8 +99,9 @@ export default async function DashboardPage() {
       {dashboard.today ? (
         <Card aria-labelledby="today-title">
           <CardHeader><CardTitle id="today-title">Hoje</CardTitle><CardDescription>Operação do dia civil em {ACADEMY_TIME_ZONE}.</CardDescription></CardHeader>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {dashboard.today.attendances !== undefined ? <Metric label="Presenças" value={String(dashboard.today.attendances)} icon={<UserCheck className="h-4 w-4" />} /> : null}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {dashboard.today.attendances !== undefined ? <Metric label="Presenças hoje" value={String(dashboard.today.attendances)} icon={<UserCheck className="h-4 w-4" />} /> : null}
+            {dashboard.today.attendancesYesterday !== undefined ? <Metric label="Presenças ontem" value={String(dashboard.today.attendancesYesterday)} detail="Alunos distintos" icon={<UserCheck className="h-4 w-4" />} /> : null}
             {dashboard.today.appointments !== undefined ? <Metric label="Agendamentos" value={String(dashboard.today.appointments)} icon={<CalendarClock className="h-4 w-4" />} /> : null}
             {dashboard.today.due ? <Metric label="Vencendo hoje" value={String(dashboard.today.due.count)} detail={currency(dashboard.today.due.amount)} icon={<Clock3 className="h-4 w-4" />} /> : null}
             {dashboard.today.received !== undefined ? <Metric label="Recebido hoje" value={currency(dashboard.today.received)} icon={<CircleDollarSign className="h-4 w-4" />} /> : null}
@@ -112,8 +114,12 @@ export default async function DashboardPage() {
           <Card aria-labelledby="attention-title">
             <CardHeader><CardTitle id="attention-title">Precisa de atenção</CardTitle><CardDescription>Pendências que merecem acompanhamento.</CardDescription></CardHeader>
             <div className="grid gap-3 sm:grid-cols-2">
-              {dashboard.attention.overdue ? <Metric label="Alunos inadimplentes" value={String(dashboard.attention.overdue.students)} detail={`${currency(dashboard.attention.overdue.amount)} em aberto`} icon={<AlertTriangle className="h-4 w-4" />} /> : null}
-              {dashboard.attention.noRecentAttendance ? <Metric label={`Sem frequência há ${dashboard.attention.noRecentAttendance.thresholdDays} dias`} value={String(dashboard.attention.noRecentAttendance.students)} detail="Somente alunos ativos com histórico" icon={<UserCheck className="h-4 w-4" />} /> : null}
+              {dashboard.attention.overdue ? <Metric label={`Mensalidades atrasadas ≥ ${dashboard.attention.overdue.thresholdDays} dias`} value={String(dashboard.attention.overdue.items.length)} detail={`${currency(dashboard.attention.overdue.amount)} em aberto · ${dashboard.attention.overdue.students} alunos`} icon={<AlertTriangle className="h-4 w-4" />} /> : null}
+              {dashboard.attention.noRecentAttendance ? <Metric label={`Sem frequência há ${dashboard.attention.noRecentAttendance.thresholdDays} dias`} value={String(dashboard.attention.noRecentAttendance.students)} detail="Alunos ativos; inclui início da matrícula quando nunca houve presença" icon={<UserCheck className="h-4 w-4" />} /> : null}
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {dashboard.attention.overdue ? <div><h3 className="mb-2 text-sm font-bold text-ink">Mensalidades em atraso</h3>{dashboard.attention.overdue.items.length ? <ul className="divide-y divide-line">{dashboard.attention.overdue.items.map((item) => <li key={item.mensalidadeId} className="flex items-center justify-between gap-3 py-2 text-sm"><div className="min-w-0"><p className="truncate font-semibold text-ink">{item.nome}</p><p className="text-xs text-muted">{item.competencia} · venceu {civilDateLabel(item.vencimento)} · {item.diasAtraso} dias</p></div><strong className="shrink-0 text-danger">{currency(item.saldo)}</strong></li>)}</ul> : <p className="text-sm text-muted">Nenhuma mensalidade atingiu o limiar.</p>}</div> : null}
+              {dashboard.attention.noRecentAttendance ? <div><h3 className="mb-2 text-sm font-bold text-ink">Alunos ausentes</h3>{dashboard.attention.noRecentAttendance.items.length ? <ul className="divide-y divide-line">{dashboard.attention.noRecentAttendance.items.map((item) => <li key={item.alunoId} className="flex items-center justify-between gap-3 py-2 text-sm"><div className="min-w-0"><p className="truncate font-semibold text-ink">{item.nome}</p><p className="text-xs text-muted">{item.ultimaPresenca ? `Última presença ${civilDateLabel(item.ultimaPresenca)}` : `Matrícula iniciada em ${civilDateLabel(item.dataInicio!)}`}</p></div><strong className="shrink-0 text-warning">{item.diasSemPresenca} dias</strong></li>)}</ul> : <p className="text-sm text-muted">Nenhum aluno ativo atingiu o limiar.</p>}</div> : null}
             </div>
           </Card>
         ) : null}
