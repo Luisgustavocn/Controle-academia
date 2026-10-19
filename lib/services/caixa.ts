@@ -31,7 +31,8 @@ async function ensureEntradaCategoria(nome: string) {
     },
     select: {
       id: true,
-      tipo: true
+      tipo: true,
+      ativa: true
     }
   });
 
@@ -40,14 +41,7 @@ async function ensureEntradaCategoria(nome: string) {
       return undefined;
     }
 
-    await prisma.categoriaFinanceira.update({
-      where: { id: existing.id },
-      data: {
-        tipo: TipoMovimentacao.ENTRADA,
-        ativa: true
-      }
-    });
-    return existing.id;
+    return existing.ativa === false ? undefined : existing.id;
   }
 
   try {

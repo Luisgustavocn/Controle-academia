@@ -43,6 +43,8 @@ export async function ensureMensalidadeForActivity(
     where: { alunoId_competencia: { alunoId, competencia } }
   });
   if (existing) return { mensalidade: existing, created: false };
+  const operationalStudent = await client.aluno.findFirst({ where: { id: alunoId, arquivadoEm: null }, select: { id: true } });
+  if (!operationalStudent) return { mensalidade: null, created: false };
 
   const period = await findEnrollmentForCompetence(client, alunoId, competencia);
   if (!period) return { mensalidade: null, created: false };

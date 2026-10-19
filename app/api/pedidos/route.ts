@@ -66,8 +66,8 @@ async function loadProdutoOrFail(produtoId: string): Promise<ProdutoLookupResult
 }
 
 async function loadAlunoOrFail(alunoId: string): Promise<AlunoLookupResult> {
-  const aluno = await prisma.aluno.findUnique({
-    where: { id: alunoId },
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: alunoId, arquivadoEm: null },
     select: { id: true, nomeCompleto: true }
   });
 

@@ -52,7 +52,7 @@ test("student listing builds combined search, status, modality and financial fil
   }));
   const where = buildStudentWhere(params);
   assert.ok(Array.isArray(where.AND));
-  assert.equal(where.AND?.length, 4);
+  assert.equal(where.AND?.length, 5);
   assert.deepEqual(buildStudentOrderBy("name.asc")[0], { nomeCompleto: "asc" });
   assert.deepEqual(buildStudentOrderBy("dueDay.desc")[0], { vencimentoDia: "desc" });
 });

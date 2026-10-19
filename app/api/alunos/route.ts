@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
   const onlyActiveEnrollment = request.nextUrl.searchParams.get("matriculaAtiva") === "true";
 
   const where: Prisma.AlunoWhereInput = {
+    arquivadoEm: null,
     ...(onlyActiveEnrollment ? { AND: [{ status: AlunoStatus.ATIVO }, studentActiveOnDateWhere(academyToday())] } : {}),
     ...(status
       ? { status: status as never }

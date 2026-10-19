@@ -32,6 +32,7 @@ export type StudentProfileOverview = {
     birthDate: string | null;
     age: number | null;
     photoUrl: string | null;
+    archivedAt?: string | null;
     modality: { id: string; name: string } | null;
     activeEnrollment: boolean;
     hasOpenEnrollment: boolean;
@@ -111,6 +112,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
       observacoes: true,
       dataNascimento: true,
       fotoPath: true,
+      arquivadoEm: true,
       modalidade: { select: { id: true, nome: true } },
       periodosMatricula: {
         select: {
@@ -192,6 +194,7 @@ export async function getStudentProfileOverview(id: string, role: UserRole, refe
       birthDate: student.dataNascimento ? prismaDateToCivil(student.dataNascimento) : null,
       age: ageOnDate(student.dataNascimento ? prismaDateToCivil(student.dataNascimento) : null, academy.dateKey),
       photoUrl: student.fotoPath,
+      archivedAt: student.arquivadoEm?.toISOString() ?? null,
       modality: student.modalidade ? { id: student.modalidade.id, name: student.modalidade.nome } : null
       ,activeEnrollment,
       hasOpenEnrollment,

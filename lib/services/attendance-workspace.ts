@@ -62,8 +62,8 @@ export async function getAttendanceRoster(params: AttendanceRosterParams, client
     : {};
   const periodWhere = studentActiveOnDateWhere(params.date);
   const activeWhere: Prisma.AlunoWhereInput = params.date === academyToday(referenceDate)
-    ? { AND: [{ status: AlunoStatus.ATIVO }, periodWhere] }
-    : periodWhere;
+    ? { AND: [{ arquivadoEm: null }, { status: AlunoStatus.ATIVO }, periodWhere] }
+    : { AND: [{ arquivadoEm: null }, periodWhere] };
   const where: Prisma.AlunoWhereInput = { AND: [activeWhere, search] };
 
   const [activeStudents, presentToday, totalItems, students] = await Promise.all([

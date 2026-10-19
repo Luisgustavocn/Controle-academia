@@ -51,7 +51,7 @@ export function parseStudentListParams(searchParams: URLSearchParams): StudentLi
 }
 
 export function buildStudentWhere(params: StudentListParams, dateKey = academyToday()): Prisma.AlunoWhereInput {
-  const filters: Prisma.AlunoWhereInput[] = [];
+  const filters: Prisma.AlunoWhereInput[] = [{ arquivadoEm: null }];
   if (params.q) {
     filters.push({
       OR: [

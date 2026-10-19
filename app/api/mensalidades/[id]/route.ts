@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { syncAutomaticEntriesInCaixa } from "@/lib/services/caixa";
 import { validatePaymentTransition } from "@/lib/services/mensalidade-payment";
 import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
+import { deleteMonthlySafely, MonthlyDeletionError } from "@/lib/services/monthly-deletion";
 
 const MENSALIDADE_STATUS_VALUES = new Set<MensalidadeStatus>(Object.values(MensalidadeStatus));
 const MONTH_BY_PT_SHORT: Record<string, number> = {
@@ -178,6 +179,8 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const auth = requireCapability(request, "finance.monthlies.manage");
   if (auth instanceof Response) return auth;
 
-  await context.params;
-  return fail("Exclusão física de mensalidades está bloqueada para proteger o histórico. Ajuste o status ou os dados da cobrança.", 409);
+  const { id } = await context.params;
+  const body = await request.json().catch(() => ({})) as { motivo?: unknown };
+  try { return ok({ ok: true, ...(await deleteMonthlySafely(id, String(body.motivo ?? ""), auth.id)) }); }
+  catch (error) { if (error instanceof MonthlyDeletionError) return fail(error.message, error.status); throw error; }
 }

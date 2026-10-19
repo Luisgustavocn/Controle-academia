@@ -8,6 +8,7 @@ import { ModuleHeader } from "@/components/ui/module-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
+import { Input } from "@/components/ui/input";
 
 type CaixaItem = {
   id: string;
@@ -36,43 +37,27 @@ function aggregateByCategory(items: CaixaItem[]) {
 }
 
 export default function CaixaPage() {
+  const [visao, setVisao] = useState<"diaria" | "mensal" | "anual">("mensal");
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [ano, setAno] = useState(String(new Date().getFullYear()));
   const [competencia, setCompetencia] = useState(new Date().toISOString().slice(0, 7));
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [entradas, setEntradas] = useState<CaixaItem[]>([]);
   const [saidas, setSaidas] = useState<CaixaItem[]>([]);
+  const [summary, setSummary] = useState({ entradas: 0, saidas: 0, saldo: 0 });
+  const [monthly, setMonthly] = useState<Array<{ mes: number; entradas: number; saidas: number; saldo: number }>>([]);
 
   async function loadChartData() {
     setLoadingCharts(true);
     try {
-      const query = `competencia=${encodeURIComponent(competencia)}`;
-      const [entradasRes, saidasRes] = await Promise.all([
-        fetch(`/api/caixa?${query}&tipo=ENTRADA`, { cache: "no-store" }),
-        fetch(`/api/caixa?${query}&tipo=SAIDA`, { cache: "no-store" })
-      ]);
-
-      const [entradasPayload, saidasPayload] = await Promise.all([
-        entradasRes.json().catch(() => ({})),
-        saidasRes.json().catch(() => ({}))
-      ]);
-
-      if (!entradasRes.ok || !saidasRes.ok) {
-        throw new Error(
-          (entradasPayload as { error?: string }).error ||
-            (saidasPayload as { error?: string }).error ||
-            "Falha ao carregar gráficos de caixa"
-        );
-      }
-
-      setEntradas(
-        Array.isArray((entradasPayload as { items?: unknown[] }).items)
-          ? ((entradasPayload as { items: CaixaItem[] }).items ?? [])
-          : []
-      );
-      setSaidas(
-        Array.isArray((saidasPayload as { items?: unknown[] }).items)
-          ? ((saidasPayload as { items: CaixaItem[] }).items ?? [])
-          : []
-      );
+      const params = new URLSearchParams({ visao, pageSize: "100" });
+      if (visao === "diaria") params.set("data", data); else if (visao === "mensal") params.set("competencia", competencia); else params.set("ano", ano);
+      window.history.replaceState(null, "", `/caixa?${params}`);
+      const res = await fetch(`/api/caixa?${params}`, { cache: "no-store" });
+      const payload = await res.json().catch(() => ({})) as { error?: string; items?: CaixaItem[]; summary?: typeof summary; monthly?: typeof monthly };
+      if (!res.ok) throw new Error(payload.error ?? "Falha ao carregar caixa");
+      const items = payload.items ?? []; setEntradas(items.filter((item) => item.tipo === "ENTRADA")); setSaidas(items.filter((item) => item.tipo === "SAIDA"));
+      setSummary(payload.summary ?? { entradas: 0, saidas: 0, saldo: 0 }); setMonthly(payload.monthly ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Falha ao carregar gráficos de caixa";
       alert(message);
@@ -86,12 +71,12 @@ export default function CaixaPage() {
   useEffect(() => {
     void loadChartData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [competencia]);
+  }, [competencia, data, ano, visao]);
 
   const chartEntradas = useMemo(() => aggregateByCategory(entradas), [entradas]);
   const chartSaidas = useMemo(() => aggregateByCategory(saidas), [saidas]);
-  const totalEntradas = useMemo(() => entradas.reduce((acc, item) => acc + Number(item.valor), 0), [entradas]);
-  const totalSaidas = useMemo(() => saidas.reduce((acc, item) => acc + Number(item.valor), 0), [saidas]);
+  const totalEntradas = Number(summary.entradas);
+  const totalSaidas = Number(summary.saidas);
 
   return (
     <div className="space-y-4">
@@ -145,11 +130,12 @@ export default function CaixaPage() {
       </Card>
 
       <Card className="space-y-3">
+        <div className="flex gap-2">{(["diaria", "mensal", "anual"] as const).map((item) => <Button key={item} variant={visao === item ? "primary" : "secondary"} onClick={() => setVisao(item)}>{item === "diaria" ? "Diário" : item === "mensal" ? "Mensal" : "Anual"}</Button>)}</div>
         <div className="flex flex-wrap items-end gap-2">
-          <label className="w-full max-w-[220px] text-sm font-medium text-ink">
+          {visao === "mensal" ? <label className="w-full max-w-[220px] text-sm font-medium text-ink">
             Mês dos gráficos
             <MonthYearPicker value={competencia} onChange={setCompetencia} />
-          </label>
+          </label> : visao === "diaria" ? <label className="w-full max-w-[220px] text-sm font-medium text-ink">Data<Input type="date" value={data} onChange={(event) => setData(event.target.value)} /></label> : <label className="w-full max-w-[220px] text-sm font-medium text-ink">Ano<Input type="number" value={ano} onChange={(event) => setAno(event.target.value)} /></label>}
           <Button variant="secondary" onClick={() => void loadChartData()} disabled={loadingCharts}>
             {loadingCharts ? "Carregando..." : "Atualizar gráficos"}
           </Button>
@@ -157,12 +143,14 @@ export default function CaixaPage() {
 
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-[rgba(34,136,83,0.22)] bg-[rgba(230,249,239,0.85)] p-3 text-sm font-semibold text-[#1f6d44]">
-            Entradas no mês: {currency(totalEntradas)}
+            Entradas: {currency(totalEntradas)}
           </div>
           <div className="rounded-xl border border-[rgba(159,16,24,0.22)] bg-[rgba(253,236,239,0.88)] p-3 text-sm font-semibold text-accentDark">
-            Saídas no mês: {currency(totalSaidas)}
+            Saídas: {currency(totalSaidas)}
           </div>
+          <div className="rounded-xl border border-line bg-white p-3 text-sm font-semibold text-ink">Saldo: {currency(Number(summary.saldo))}</div>
         </div>
+        {visao === "anual" ? <div className="overflow-x-auto"><table><thead><tr><th>Mês</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr></thead><tbody>{monthly.map((item) => <tr key={item.mes}><td>{String(item.mes).padStart(2, "0")}</td><td>{currency(Number(item.entradas))}</td><td>{currency(Number(item.saidas))}</td><td>{currency(Number(item.saldo))}</td></tr>)}</tbody></table></div> : null}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">

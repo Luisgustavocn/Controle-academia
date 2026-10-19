@@ -3,9 +3,8 @@ import { NextRequest } from "next/server";
 import { requireCapability } from "@/lib/auth/guards";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { createBackupFile } from "@/lib/services/backup";
 import { academyToday, civilDateToPrisma, CivilDateValidationError, parseCivilDate } from "@/lib/attendance-date";
-import { StudentDeletionBlockedError, StudentDeletionNotFoundError, deleteStudentWithoutHistory, inspectStudentDeletion } from "@/lib/services/student-deletion";
+import { archiveStudent, StudentDeletionNotFoundError } from "@/lib/services/student-deletion";
 import {
   StudentRegistrationNotFoundError,
   updateStudentRegistration
@@ -152,14 +151,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
 
   const { id } = await context.params;
   try {
-    const inspection = await inspectStudentDeletion(id);
-    if (!inspection.canDelete) throw new StudentDeletionBlockedError(inspection.dependencies);
-    const backup = await createBackupFile();
-    await deleteStudentWithoutHistory(id, { id: auth.id, name: auth.name });
-    return ok({ ok: true, deleted: true, message: "Aluno excluído com sucesso", backupFilePath: backup.filePath });
+    await archiveStudent(id, { id: auth.id, name: auth.name });
+    return ok({ ok: true, archived: true, message: "Aluno removido das operações atuais; histórico preservado" });
   } catch (error) {
     if (error instanceof StudentDeletionNotFoundError) return fail(error.message, 404);
-    if (error instanceof StudentDeletionBlockedError) return fail(error.message, 409, { dependencies: error.dependencies });
     throw error;
   }
 }

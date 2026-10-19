@@ -111,6 +111,9 @@ async function validateReferences(tx: Prisma.TransactionClient, professor: strin
     select: { valor: true }
   });
   if (!configured) throw new PersonalScheduleError("Selecione um personal cadastrado");
+  if (alunoId && !await tx.aluno.findFirst({ where: { id: alunoId, arquivadoEm: null }, select: { id: true } })) {
+    throw new PersonalScheduleError("Aluno arquivado não pode receber novo agendamento");
+  }
   if (alunoId && !await isStudentActiveOnDate(tx, alunoId, date)) {
     throw new PersonalScheduleError("Aluno sem matrícula ativa na data não pode receber agendamento");
   }

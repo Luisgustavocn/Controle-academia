@@ -25,7 +25,7 @@ import {
 } from "@/lib/services/dashboard-alerts";
 export { NO_ATTENDANCE_ALERT_DAYS } from "@/lib/services/dashboard-alerts";
 
-export const ACTIVE_STUDENT_DASHBOARD_WHERE = { status: AlunoStatus.ATIVO } as const;
+export const ACTIVE_STUDENT_DASHBOARD_WHERE = { status: AlunoStatus.ATIVO, arquivadoEm: null } as const;
 
 export type DashboardKpis = {
   alunos_ativos: number;

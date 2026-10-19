@@ -150,6 +150,16 @@ export default function MensalidadesPage() {
     }
   }
 
+  async function deleteMonthly(item: MensalidadeItem) {
+    if (!window.confirm(`Excluir mensalidade de ${item.alunoNome} (${item.competencia})? Pagamentos e lançamentos de Caixa diretamente vinculados também serão removidos e auditados.`)) return;
+    const motivo = window.prompt("Motivo da exclusão:")?.trim();
+    if (!motivo) return;
+    const response = await fetch(`/api/mensalidades/${item.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }) });
+    const result = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) { window.alert(result.error ?? "Não foi possível excluir a mensalidade"); return; }
+    await fetchBoard();
+  }
+
   useEffect(() => {
     const timer = setTimeout(() => {
       void fetchBoard();
@@ -337,6 +347,7 @@ export default function MensalidadesPage() {
                             <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                               Editar
                             </Button>
+                            <Button variant="danger" className="ml-1 px-2.5 py-1.5 text-xs" onClick={() => void deleteMonthly(item)}>Excluir</Button>
                           </td> : null}
                         </tr>
                       ))
@@ -403,6 +414,7 @@ export default function MensalidadesPage() {
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                                 Editar
                               </Button>
+                              <Button variant="danger" className="px-2.5 py-1.5 text-xs" onClick={() => void deleteMonthly(item)}>Excluir</Button>
                             </div>
                           </td> : null}
                         </tr>
@@ -472,6 +484,7 @@ export default function MensalidadesPage() {
                               <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={() => openEdit(item)}>
                                 Editar
                               </Button>
+                              <Button variant="danger" className="px-2.5 py-1.5 text-xs" onClick={() => void deleteMonthly(item)}>Excluir</Button>
                             </div>
                           </td> : null}
                         </tr>

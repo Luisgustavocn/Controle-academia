@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { AlunoStatus, TipoMovimentacao, UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { deleteStudentWithoutHistory, inspectStudentDeletion, StudentDeletionBlockedError } from "../lib/services/student-deletion";
+import { archiveStudent, restoreStudent } from "../lib/services/student-deletion";
 
 async function createStudent(id: string) {
   await prisma.aluno.create({ data: { id, nomeCompleto: id, telefone: id, vencimentoDia: 10, status: AlunoStatus.ATIVO } });
@@ -20,16 +20,10 @@ async function main() {
     await prisma.movimentacaoCaixa.create({ data: { alunoId: ids[3]!, data: new Date(), tipo: TipoMovimentacao.ENTRADA, descricao: "Teste", valor: 10, competencia: "2026-10" } });
     await prisma.pedidoProduto.create({ data: { alunoId: ids[3]!, clienteNome: "Teste", quantidade: 1, valorUnitario: 10, valorTotal: 10 } });
 
-    assert.equal((await inspectStudentDeletion(ids[0]!)).canDelete, true);
-    await deleteStudentWithoutHistory(ids[0]!, { id: actorId, name: "Delete Admin" });
-    assert.equal(await prisma.aluno.count({ where: { id: ids[0] } }), 0);
-    for (const id of ids.slice(1)) {
-      const inspection = await inspectStudentDeletion(id);
-      assert.equal(inspection.canDelete, false);
-      await assert.rejects(() => deleteStudentWithoutHistory(id, { id: actorId, name: "Delete Admin" }), StudentDeletionBlockedError);
-      assert.equal(await prisma.aluno.count({ where: { id } }), 1);
-    }
-    console.log(JSON.stringify({ status: "ok", freshDeleted: true, historicalBlocked: 3 }));
+    for (const id of ids) { await archiveStudent(id, { id: actorId, name: "Delete Admin" }); assert.equal(await prisma.aluno.count({ where: { id, arquivadoEm: { not: null } } }), 1); }
+    await restoreStudent(ids[0]!, { id: actorId, name: "Delete Admin" });
+    assert.equal(await prisma.aluno.count({ where: { id: ids[0], arquivadoEm: null } }), 1);
+    console.log(JSON.stringify({ status: "ok", archived: 4, restored: 1 }));
   } finally {
     await prisma.logAuditoria.deleteMany({ where: { userId: actorId } });
     await prisma.aluno.deleteMany({ where: { id: { in: ids } } });

@@ -62,6 +62,7 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   logsAuditoria LogAuditoria[]
+  alunosArquivados Aluno[] @relation("AlunoArquivadoPor")
 }
 
 model Modalidade {
@@ -92,6 +93,8 @@ model Aluno {
   modalidadeId          String?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
+  arquivadoEm           DateTime?
+  arquivadoPorId        String?
 
   modalidade         Modalidade?         @relation(fields: [modalidadeId], references: [id])
   mensalidades       Mensalidade[]
@@ -102,10 +105,12 @@ model Aluno {
   pedidosProduto     PedidoProduto[]
   historicoPlanos    HistoricoPlano[]
   periodosMatricula  PeriodoMatricula[]
+  arquivadoPor        User? @relation("AlunoArquivadoPor", fields: [arquivadoPorId], references: [id], onDelete: SetNull)
 
   @@index([nomeCompleto])
   @@index([telefone])
   @@index([status])
+  @@index([arquivadoEm])
 }
 
 /// Um Aluno e a pessoa permanente; cada PeriodoMatricula e um vinculo contratual.
@@ -164,6 +169,7 @@ model Mensalidade {
 
   aluno      Aluno       @relation(fields: [alunoId], references: [id], onDelete: Cascade)
   pagamentos Pagamento[]
+  movimentacoesCaixa MovimentacaoCaixa[]
 
   @@unique([alunoId, competencia])
   @@index([competencia, status])
@@ -182,6 +188,7 @@ model Pagamento {
 
   aluno       Aluno        @relation(fields: [alunoId], references: [id], onDelete: Cascade)
   mensalidade Mensalidade? @relation(fields: [mensalidadeId], references: [id], onDelete: SetNull)
+  movimentacaoCaixa MovimentacaoCaixa?
 
   @@index([dataPagamento])
 }
@@ -207,6 +214,8 @@ model MovimentacaoCaixa {
   valor          Decimal          @db.Decimal(10, 2)
   origemDestino  String?
   alunoId        String?
+  pagamentoId    String?          @unique
+  mensalidadeId  String?
   formaPagamento String?
   competencia    String
   observacao     String?
@@ -215,8 +224,11 @@ model MovimentacaoCaixa {
 
   categoria CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
   aluno     Aluno?               @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+  pagamento Pagamento?           @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  mensalidade Mensalidade?       @relation(fields: [mensalidadeId], references: [id], onDelete: Restrict)
 
   @@index([competencia, tipo])
+  @@index([mensalidadeId])
 }
 
 model DespesaAcademia {

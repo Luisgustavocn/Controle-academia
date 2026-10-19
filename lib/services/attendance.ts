@@ -97,7 +97,7 @@ export async function confirmAttendance(
   const observacao = normalizeOptionalText(input.observacao, 500);
   const prismaDate = civilDateToPrisma(data);
 
-  const student = await prisma.aluno.findUnique({ where: { id: alunoId }, select: { id: true } });
+  const student = await prisma.aluno.findFirst({ where: { id: alunoId, arquivadoEm: null }, select: { id: true } });
   if (!student) throw new AttendanceNotFoundError("Aluno não encontrado");
   if (!await isStudentActiveOnDate(prisma, alunoId, data)) {
     throw new AttendanceValidationError("Aluno sem matrícula ativa nesta data");

@@ -20,8 +20,8 @@ afterEach(() => {
 });
 
 test("dashboard filter counts current ATIVO records and does not depend on enrollment joins", () => {
-  assert.deepEqual(ACTIVE_STUDENT_DASHBOARD_WHERE, { status: AlunoStatus.ATIVO });
-  assert.equal(Object.keys(ACTIVE_STUDENT_DASHBOARD_WHERE).length, 1);
+  assert.deepEqual(ACTIVE_STUDENT_DASHBOARD_WHERE, { status: AlunoStatus.ATIVO, arquivadoEm: null });
+  assert.equal(Object.keys(ACTIVE_STUDENT_DASHBOARD_WHERE).length, 2);
 });
 
 test("student listing removes only the redundant end-enrollment action", () => {

@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
     return fail("alunoId é obrigatório", 400);
   }
 
-  const aluno = await prisma.aluno.findUnique({
-    where: { id: alunoId },
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: alunoId, arquivadoEm: null },
     include: { modalidade: true }
   });
 

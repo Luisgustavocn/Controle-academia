@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { filterLookupOptionsForSearch } from "../components/forms/crud-module";
 import { shouldShowStudentExitDate } from "../components/students/student-form-dialog";
-import { inspectStudentDeletion } from "../lib/services/student-deletion";
+import { archiveStudent, restoreStudent } from "../lib/services/student-deletion";
 
 test("student exit date is shown only for non-active statuses", () => {
   assert.equal(shouldShowStudentExitDate("ATIVO"), false);
@@ -21,14 +21,11 @@ test("Personal lookup search finds the end of a long complete list", () => {
   assert.deepEqual(filterLookupOptionsForSearch(options, "11900000045"), [options[44]]);
 });
 
-test("student deletion inspection allows a fresh registration and blocks relevant history", async () => {
-  const client = (counts: Record<string, number>, periods: Array<{ dataSaida: Date | null }>) => ({
-    aluno: { findUnique: async () => ({ id: "student-1", nomeCompleto: "Aluno", _count: counts, periodosMatricula: periods }) }
-  });
-  const emptyCounts = { mensalidades: 0, pagamentos: 0, presencas: 0, movimentacoesCaixa: 0, agendaPersonal: 0, pedidosProduto: 0, historicoPlanos: 0, periodosMatricula: 1 };
-  const fresh = await inspectStudentDeletion("student-1", client(emptyCounts, [{ dataSaida: null }]) as never);
-  assert.equal(fresh.canDelete, true);
-  const historical = await inspectStudentDeletion("student-1", client({ ...emptyCounts, mensalidades: 1, presencas: 1 }, [{ dataSaida: null }]) as never);
-  assert.equal(historical.canDelete, false);
-  assert.deepEqual(historical.dependencies, ["mensalidades", "presenças"]);
+test("student archive and restore preserve status and do not create enrollment", async () => {
+  const state = { id: "student-1", status: "INATIVO", arquivadoEm: null as Date | null, arquivadoPorId: null as string | null };
+  const client = { $transaction: async (fn: (tx: never) => unknown) => fn({ user: { findUnique: async () => ({ id: "admin" }) }, aluno: { findUnique: async () => ({ ...state }), update: async ({ data }: { data: Partial<typeof state> }) => Object.assign(state, data) }, logAuditoria: { create: async () => ({}) } } as never) };
+  await archiveStudent("student-1", { id: "admin", name: "Admin" }, { client: client as never });
+  assert.ok(state.arquivadoEm); assert.equal(state.status, "INATIVO");
+  await restoreStudent("student-1", { id: "admin", name: "Admin" }, { client: client as never });
+  assert.equal(state.arquivadoEm, null); assert.equal(state.status, "INATIVO");
 });

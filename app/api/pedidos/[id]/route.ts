@@ -35,8 +35,8 @@ function parseOptionalDate(value: unknown) {
 }
 
 async function loadAlunoOrFail(alunoId: string) {
-  const aluno = await prisma.aluno.findUnique({
-    where: { id: alunoId },
+  const aluno = await prisma.aluno.findFirst({
+    where: { id: alunoId, arquivadoEm: null },
     select: { id: true, nomeCompleto: true }
   });
 

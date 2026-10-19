@@ -71,10 +71,11 @@ function statusForBalance(balance: Prisma.Decimal, vencimento: Date, reference =
 async function receiptCategory(tx: Prisma.TransactionClient) {
   const existing = await tx.categoriaFinanceira.findFirst({
     where: { nome: { equals: "Mensalidades", mode: Prisma.QueryMode.insensitive } },
-    select: { id: true, tipo: true }
+    select: { id: true, tipo: true, ativa: true }
   });
   if (existing) {
     if (existing.tipo && existing.tipo !== TipoMovimentacao.ENTRADA) throw new MonthlyPaymentError("Categoria Mensalidades não aceita entradas");
+    if (existing.ativa === false) throw new MonthlyPaymentError("Categoria Mensalidades está inativa; reative-a antes de registrar pagamentos");
     return existing.id;
   }
   const created = await tx.categoriaFinanceira.create({ data: { nome: "Mensalidades", tipo: TipoMovimentacao.ENTRADA, ativa: true }, select: { id: true } });
@@ -107,9 +108,10 @@ export async function registerMonthlyPayment(input: MonthlyPaymentInput, options
 
     const monthly = await tx.mensalidade.findUnique({
       where: { id: input.mensalidadeId },
-      include: { aluno: { select: { nomeCompleto: true } }, pagamentos: true }
+      include: { aluno: { select: { nomeCompleto: true, arquivadoEm: true } }, pagamentos: true }
     });
     if (!monthly) throw new MonthlyPaymentError("Mensalidade não encontrada", 404);
+    if (monthly.aluno.arquivadoEm) throw new MonthlyPaymentError("Aluno arquivado não pode receber novo pagamento", 409);
     if (monthly.status === MensalidadeStatus.PAGO) throw new MonthlyPaymentError("Mensalidade já está paga", 409);
 
     const current = monthlyAmounts(monthly);
@@ -171,6 +173,8 @@ export async function registerMonthlyPayment(input: MonthlyPaymentInput, options
         alunoId: monthly.alunoId,
         formaPagamento: paymentMethod,
         competencia: toCompetencia(paidAt),
+        pagamentoId: payment.id,
+        mensalidadeId: monthly.id,
         observacao: `Pagamento ${payment.id}`
       }
     });

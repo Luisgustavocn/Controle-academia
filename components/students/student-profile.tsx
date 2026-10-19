@@ -126,7 +126,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
   }
 
   async function deleteStudent() {
-    if (!window.confirm(`Excluir definitivamente ${student.name}? Esta ação só será permitida se não houver histórico relevante.`)) return;
+    if (!window.confirm(`Excluir aluno ${student.name}? Este aluno será removido das listas e operações atuais, mas seu histórico de presenças, mensalidades e pagamentos será preservado.`)) return;
     setActionMessage("");
     const response = await fetch(`/api/alunos/${student.id}`, { method: "DELETE" });
     const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
@@ -139,6 +139,13 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
     router.refresh();
   }
 
+  async function restoreArchivedStudent() {
+    const response = await fetch(`/api/alunos/${student.id}/restaurar`, { method: "POST" });
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    if (!response.ok) { setActionMessage(payload.error ?? "Não foi possível restaurar o aluno."); return; }
+    router.refresh();
+  }
+
   function Actions() {
     return (
       <DropdownMenu trigger={<><MoreHorizontal className="h-4 w-4" aria-hidden="true" /><span>Ações</span></>} label={`Ações de ${student.name}`}>
@@ -148,7 +155,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
         {capabilities.changeStatus ? <DropdownMenuSeparator /> : null}
         {capabilities.reactivate ? <DropdownMenuItem onSelect={() => setResumeOpen(true)}>Retomar matrícula</DropdownMenuItem> : null}
         {capabilities.changeStatus && student.activeEnrollment ? <DropdownMenuItem destructive onSelect={() => setEndOpen(true)}>Encerrar matrícula</DropdownMenuItem> : null}
-        {capabilities.delete ? <><DropdownMenuSeparator /><DropdownMenuItem destructive onSelect={() => void deleteStudent()}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Excluir aluno</DropdownMenuItem></> : null}
+        {capabilities.delete ? <><DropdownMenuSeparator />{student.archivedAt ? <DropdownMenuItem onSelect={() => void restoreArchivedStudent()}>Restaurar aluno</DropdownMenuItem> : <DropdownMenuItem destructive onSelect={() => void deleteStudent()}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Excluir aluno</DropdownMenuItem>}</> : null}
       </DropdownMenu>
     );
   }
