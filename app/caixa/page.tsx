@@ -254,6 +254,19 @@ export default function CaixaPage() {
         createCapability="finance.cash.manage"
         updateCapability="finance.cash.manage"
         deleteCapability="finance.cash.manage"
+        deleteReasonRequired
+        deleteLabel={(item) => {
+          if (item.origem === "PAGAMENTO_MENSALIDADE" || item.pagamentoId || String(item.id).startsWith("auto_pagamento_") || String(item.id).startsWith("auto_mensalidade_")) return "Desfazer pagamento";
+          if (item.origem === "DESPESA") return "Desfazer pagamento da despesa";
+          if (item.origem === "PEDIDO" || item.pedidoProdutoId || String(item.id).startsWith("auto_pedido_")) return "Desfazer pagamento da venda";
+          return "Excluir lançamento";
+        }}
+        deleteConfirmation={(item) => {
+          if (item.origem === "PAGAMENTO_MENSALIDADE" || item.pagamentoId || String(item.id).startsWith("auto_pagamento_") || String(item.id).startsWith("auto_mensalidade_")) return "Desfazer pagamento? Este pagamento será removido e a mensalidade será recalculada.";
+          if (item.origem === "DESPESA") return "Desfazer pagamento da despesa? Ela voltará para Pendente/Atrasada.";
+          if (item.origem === "PEDIDO" || item.pedidoProdutoId || String(item.id).startsWith("auto_pedido_")) return "Desfazer pagamento da venda? O pedido voltará para não pago.";
+          return "Excluir lançamento? Este lançamento será removido do Caixa.";
+        }}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">

@@ -1,10 +1,11 @@
-import { TipoMovimentacao } from "@prisma/client";
+import { MovimentacaoCaixaOrigem, TipoMovimentacao } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { requireCapability } from "@/lib/auth/guards";
 import { toCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { CashDeletionError, deleteCashMovement } from "@/lib/services/cash-deletion";
 import { isAutoCaixaEntryId } from "@/lib/services/caixa";
 import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
@@ -103,6 +104,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   if (!previous) {
     return fail("Movimentação não encontrada", 404);
   }
+  if (previous.origem !== MovimentacaoCaixaOrigem.MANUAL && previous.origem !== MovimentacaoCaixaOrigem.AJUSTE) {
+    return fail("Lançamentos automáticos ou legados devem ser corrigidos pela ação de reversão, não por edição direta.", 409);
+  }
 
   try {
     const data = body.data === undefined ? previous.data : parseDate(body.data, "data");
@@ -160,6 +164,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const auth = requireCapability(request, "finance.cash.manage");
   if (auth instanceof Response) return auth;
 
-  await context.params;
-  return fail("Exclusão física de lançamentos do caixa está bloqueada para proteger o histórico. Faça um ajuste compensatório.", 409);
+  const { id } = await context.params;
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  try {
+    const result = await deleteCashMovement({ movementId: id, reason: String(body.motivo ?? ""), actorId: auth.id });
+    return ok({ ok: true, ...result });
+  } catch (error) {
+    if (error instanceof CashDeletionError) return fail(error.message, error.status);
+    return fail("Não foi possível excluir o lançamento com segurança.", 500);
+  }
 }

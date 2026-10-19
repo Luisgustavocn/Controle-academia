@@ -1,4 +1,8 @@
 import { createListCreateHandlers } from "@/lib/api/crud";
+import { NextRequest } from "next/server";
+import { requireCapability } from "@/lib/auth/guards";
+import { fail, ok } from "@/lib/http";
+import { createExpense, ExpensePaymentError } from "@/lib/services/expense-payments";
 import { expenseRequiresPaymentMethod, resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
 function toCompetencia(dateLike: unknown) {
@@ -25,7 +29,7 @@ function toCompetencia(dateLike: unknown) {
   return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export const { GET, POST } = createListCreateHandlers({
+const handlers = createListCreateHandlers({
   model: "despesaAcademia",
   module: "despesas-academia",
   readCapability: "finance.expenses.read",
@@ -70,3 +74,17 @@ export const { GET, POST } = createListCreateHandlers({
     };
   }
 });
+
+export const GET = handlers.GET;
+
+export async function POST(request: NextRequest) {
+  const auth = requireCapability(request, "finance.expenses.manage");
+  if (auth instanceof Response) return auth;
+  try {
+    const item = await createExpense((await request.json()) as Record<string, unknown>, auth.id);
+    return ok({ item }, 201);
+  } catch (error) {
+    if (error instanceof ExpensePaymentError) return fail(error.message, error.status);
+    return fail("Erro ao criar despesa", 500);
+  }
+}

@@ -1,4 +1,4 @@
-import { Prisma, TipoMovimentacao } from "@prisma/client";
+import { MovimentacaoCaixaOrigem, Prisma, TipoMovimentacao } from "@prisma/client";
 import { NextRequest } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { requireCapability } from "@/lib/auth/guards";
@@ -187,7 +187,8 @@ export async function POST(request: NextRequest) {
         alunoId: optionalString(body.alunoId),
         formaPagamento,
         competencia: toCompetencia(data),
-        observacao: optionalString(body.observacao)
+        observacao: optionalString(body.observacao),
+        origem: MovimentacaoCaixaOrigem.MANUAL
       }
     });
 

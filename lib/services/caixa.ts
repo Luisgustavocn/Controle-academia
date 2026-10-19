@@ -1,4 +1,4 @@
-import { MensalidadeStatus, Prisma, TipoMovimentacao } from "@prisma/client";
+import { MensalidadeStatus, MovimentacaoCaixaOrigem, Prisma, TipoMovimentacao } from "@prisma/client";
 import { toCompetencia } from "@/lib/competencia";
 import { prisma } from "@/lib/prisma";
 
@@ -135,7 +135,9 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
         alunoId: mensalidade.alunoId,
         formaPagamento: mensalidade.formaPagamento ?? null,
         competencia: toCompetencia(data),
-        observacao: "Lançamento automático (mensalidade)"
+        observacao: "Lançamento automático (mensalidade)",
+        origem: MovimentacaoCaixaOrigem.PAGAMENTO_MENSALIDADE,
+        mensalidadeId: mensalidade.id
       },
       update: {
         data,
@@ -170,7 +172,9 @@ export async function syncAutomaticEntriesInCaixa(force = false) {
         alunoId: pedido.alunoId,
         formaPagamento: null,
         competencia: toCompetencia(data),
-        observacao: "Lançamento automático (pedido)"
+        observacao: "Lançamento automático (pedido)",
+        origem: MovimentacaoCaixaOrigem.PEDIDO,
+        pedidoProdutoId: pedido.id
       },
       update: {
         data,

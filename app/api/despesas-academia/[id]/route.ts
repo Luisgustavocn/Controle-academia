@@ -1,27 +1,21 @@
-import { createByIdHandlers } from "@/lib/api/crud";
-import { expenseRequiresPaymentMethod, resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
+import { NextRequest } from "next/server";
+import { requireCapability } from "@/lib/auth/guards";
+import { fail, ok } from "@/lib/http";
+import { ExpensePaymentError, updateExpense } from "@/lib/services/expense-payments";
 
-export const { PUT, DELETE } = createByIdHandlers({
-  model: "despesaAcademia",
-  module: "despesas-academia",
-  writeCapability: "finance.expenses.manage",
-  numericFields: ["valorPrevisto", "valorPago"],
-  dateFields: ["dataVencimento", "dataPagamento"],
-  validateAsync: async (data, _mode, previous) => {
-    try {
-      const status = data.status ?? previous?.status;
-      const valorPago = data.valorPago ?? previous?.valorPago;
-      const wasAlreadyPaid = expenseRequiresPaymentMethod(previous?.status, previous?.valorPago);
-      data.formaPagamento = await resolvePaymentMethodForWrite({
-        value: data.formaPagamento,
-        previousValue: typeof previous?.formaPagamento === "string" ? previous.formaPagamento : null,
-        application: "DESPESA",
-        required: !wasAlreadyPaid && expenseRequiresPaymentMethod(status, valorPago)
-      });
-      return null;
-    } catch (error) {
-      return error instanceof Error ? error.message : "Forma de pagamento inválida";
-    }
-  },
-  deleteBlockedReason: "Exclusão física de despesas está bloqueada para proteger o histórico. Ajuste o status ou os valores."
-});
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = requireCapability(request, "finance.expenses.manage");
+  if (auth instanceof Response) return auth;
+  const { id } = await context.params;
+  try {
+    const item = await updateExpense(id, (await request.json()) as Record<string, unknown>, auth.id);
+    return ok({ item });
+  } catch (error) {
+    if (error instanceof ExpensePaymentError) return fail(error.message, error.status);
+    return fail("Erro ao atualizar despesa", 500);
+  }
+}
+
+export async function DELETE() {
+  return fail("Exclusão física de despesas permanece bloqueada; reverta a baixa pelo Caixa.", 409);
+}

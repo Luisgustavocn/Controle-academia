@@ -40,10 +40,20 @@ enum TipoMovimentacao {
   SAIDA
 }
 
+enum MovimentacaoCaixaOrigem {
+  MANUAL
+  PAGAMENTO_MENSALIDADE
+  DESPESA
+  PEDIDO
+  IMPORTACAO
+  AJUSTE
+}
+
 enum DespesaStatus {
   PENDENTE
   PAGO
   PARCIAL
+  ATRASADO
 }
 
 enum FormaPagamentoAplicacao {
@@ -53,16 +63,16 @@ enum FormaPagamentoAplicacao {
 }
 
 model User {
-  id            String         @id @default(cuid())
-  name          String
-  email         String         @unique
-  passwordHash  String
-  role          UserRole
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  logsAuditoria LogAuditoria[]
-  alunosArquivados Aluno[] @relation("AlunoArquivadoPor")
+  id               String         @id @default(cuid())
+  name             String
+  email            String         @unique
+  passwordHash     String
+  role             UserRole
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  logsAuditoria    LogAuditoria[]
+  alunosArquivados Aluno[]        @relation("AlunoArquivadoPor")
 }
 
 model Modalidade {
@@ -105,7 +115,7 @@ model Aluno {
   pedidosProduto     PedidoProduto[]
   historicoPlanos    HistoricoPlano[]
   periodosMatricula  PeriodoMatricula[]
-  arquivadoPor        User? @relation("AlunoArquivadoPor", fields: [arquivadoPorId], references: [id], onDelete: SetNull)
+  arquivadoPor       User?               @relation("AlunoArquivadoPor", fields: [arquivadoPorId], references: [id], onDelete: SetNull)
 
   @@index([nomeCompleto])
   @@index([telefone])
@@ -167,8 +177,8 @@ model Mensalidade {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  aluno      Aluno       @relation(fields: [alunoId], references: [id], onDelete: Cascade)
-  pagamentos Pagamento[]
+  aluno              Aluno               @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  pagamentos         Pagamento[]
   movimentacoesCaixa MovimentacaoCaixa[]
 
   @@unique([alunoId, competencia])
@@ -186,8 +196,8 @@ model Pagamento {
   observacao     String?
   createdAt      DateTime        @default(now())
 
-  aluno       Aluno        @relation(fields: [alunoId], references: [id], onDelete: Cascade)
-  mensalidade Mensalidade? @relation(fields: [mensalidadeId], references: [id], onDelete: SetNull)
+  aluno             Aluno              @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  mensalidade       Mensalidade?       @relation(fields: [mensalidadeId], references: [id], onDelete: SetNull)
   movimentacaoCaixa MovimentacaoCaixa?
 
   @@index([dataPagamento])
@@ -206,29 +216,35 @@ model CategoriaFinanceira {
 }
 
 model MovimentacaoCaixa {
-  id             String           @id @default(cuid())
-  data           DateTime
-  tipo           TipoMovimentacao
-  categoriaId    String?
-  descricao      String
-  valor          Decimal          @db.Decimal(10, 2)
-  origemDestino  String?
-  alunoId        String?
-  pagamentoId    String?          @unique
-  mensalidadeId  String?
-  formaPagamento String?
-  competencia    String
-  observacao     String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id                String                   @id @default(cuid())
+  data              DateTime
+  tipo              TipoMovimentacao
+  categoriaId       String?
+  descricao         String
+  valor             Decimal                  @db.Decimal(10, 2)
+  origemDestino     String?
+  alunoId           String?
+  pagamentoId       String?                  @unique
+  mensalidadeId     String?
+  despesaAcademiaId String?                  @unique
+  pedidoProdutoId   String?                  @unique
+  origem            MovimentacaoCaixaOrigem?
+  formaPagamento    String?
+  competencia       String
+  observacao        String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
-  categoria CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
-  aluno     Aluno?               @relation(fields: [alunoId], references: [id], onDelete: SetNull)
-  pagamento Pagamento?           @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
-  mensalidade Mensalidade?       @relation(fields: [mensalidadeId], references: [id], onDelete: Restrict)
+  categoria       CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  aluno           Aluno?               @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+  pagamento       Pagamento?           @relation(fields: [pagamentoId], references: [id], onDelete: Restrict)
+  mensalidade     Mensalidade?         @relation(fields: [mensalidadeId], references: [id], onDelete: Restrict)
+  despesaAcademia DespesaAcademia?     @relation(fields: [despesaAcademiaId], references: [id], onDelete: Restrict)
+  pedidoProduto   PedidoProduto?       @relation(fields: [pedidoProdutoId], references: [id], onDelete: Restrict)
 
   @@index([competencia, tipo])
   @@index([mensalidadeId])
+  @@index([origem])
 }
 
 model DespesaAcademia {
@@ -246,7 +262,8 @@ model DespesaAcademia {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  categoria CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  categoria         CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+  movimentacaoCaixa MovimentacaoCaixa?
 
   @@index([competencia, status])
 }
@@ -254,14 +271,14 @@ model DespesaAcademia {
 /// Catalogo administravel usado em novos lancamentos. Os campos textuais nas
 /// entidades financeiras continuam preservando o valor historico registrado.
 model FormaPagamento {
-  id              String                   @id @default(cuid())
+  id              String                  @id @default(cuid())
   nome            String
-  nomeNormalizado String                   @unique
-  ativo           Boolean                  @default(true)
+  nomeNormalizado String                  @unique
+  ativo           Boolean                 @default(true)
   aplicacao       FormaPagamentoAplicacao
-  ordem           Int                      @default(0)
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  ordem           Int                     @default(0)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
 
   @@index([ativo, aplicacao, ordem])
 }
@@ -295,7 +312,7 @@ model ControleMensalAlunos {
 }
 
 model AgendaPersonal {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   professor  String
   diaSemana  Int
   horario    String
@@ -305,10 +322,10 @@ model AgendaPersonal {
   alunoNome  String?
   tipoAula   String
   observacao String?
-  ativo      Boolean  @default(true)
+  ativo      Boolean   @default(true)
   semanaRef  String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   aluno Aluno? @relation(fields: [alunoId], references: [id], onDelete: SetNull)
 
@@ -348,8 +365,9 @@ model PedidoProduto {
   observacao    String?
   createdAt     DateTime @default(now())
 
-  aluno Aluno?       @relation(fields: [alunoId], references: [id], onDelete: SetNull)
-  itens PedidoItem[]
+  aluno             Aluno?             @relation(fields: [alunoId], references: [id], onDelete: SetNull)
+  itens             PedidoItem[]
+  movimentacaoCaixa MovimentacaoCaixa?
 
   @@index([dataPedido])
 }

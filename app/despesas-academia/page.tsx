@@ -40,7 +40,8 @@ export default function DespesasAcademiaPage() {
             options: [
               { label: "Pendente", value: "PENDENTE" },
               { label: "Pago", value: "PAGO" },
-              { label: "Parcial", value: "PARCIAL" }
+              { label: "Parcial", value: "PARCIAL" },
+              { label: "Atrasado", value: "ATRASADO" }
             ]
           },
           { key: "dataPagamento", label: "Data pagamento", type: "date" },

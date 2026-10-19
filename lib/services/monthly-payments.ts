@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MensalidadeStatus, PagamentoStatus, Prisma, TipoMovimentacao } from "@prisma/client";
+import { MensalidadeStatus, MovimentacaoCaixaOrigem, PagamentoStatus, Prisma, TipoMovimentacao } from "@prisma/client";
 import { logAudit } from "@/lib/audit";
 import { academyToday, parseCivilDate, prismaDateToCivil } from "@/lib/attendance-date";
 import { toCompetencia } from "@/lib/competencia";
@@ -175,7 +175,8 @@ export async function registerMonthlyPayment(input: MonthlyPaymentInput, options
         competencia: toCompetencia(paidAt),
         pagamentoId: payment.id,
         mensalidadeId: monthly.id,
-        observacao: `Pagamento ${payment.id}`
+        observacao: `Pagamento ${payment.id}`,
+        origem: MovimentacaoCaixaOrigem.PAGAMENTO_MENSALIDADE
       }
     });
 

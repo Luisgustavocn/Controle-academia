@@ -36,6 +36,9 @@ type CrudModuleProps = {
   createCapability?: Capability;
   updateCapability?: Capability;
   deleteCapability?: Capability;
+  deleteLabel?: (item: Record<string, unknown>) => string;
+  deleteConfirmation?: (item: Record<string, unknown>) => string;
+  deleteReasonRequired?: boolean;
 };
 
 type LookupConfig = {
@@ -365,7 +368,10 @@ export function CrudModule({
   refreshKey,
   createCapability,
   updateCapability,
-  deleteCapability
+  deleteCapability,
+  deleteLabel,
+  deleteConfirmation,
+  deleteReasonRequired = false
 }: CrudModuleProps) {
   const canCreate = useHasCapability(createCapability);
   const canUpdate = useHasCapability(updateCapability);
@@ -858,13 +864,22 @@ export function CrudModule({
     setOpenActions(null);
   }
 
-  async function remove(id: unknown) {
-    const normalizedId = String(id);
-    const confirmed = window.confirm("Excluir registro?");
+  async function remove(item: Record<string, unknown>) {
+    const normalizedId = String(item.id);
+    const confirmed = window.confirm(deleteConfirmation?.(item) ?? "Excluir registro?");
     if (!confirmed) {
       return;
     }
-    const res = await fetch(`${endpoint}/${normalizedId}`, { method: "DELETE" });
+    const motivo = deleteReasonRequired ? window.prompt("Informe o motivo da exclusão/reversão:") : null;
+    if (deleteReasonRequired && !motivo?.trim()) {
+      alert("Motivo é obrigatório.");
+      return;
+    }
+    const res = await fetch(`${endpoint}/${normalizedId}`, {
+      method: "DELETE",
+      headers: deleteReasonRequired ? { "Content-Type": "application/json" } : undefined,
+      body: deleteReasonRequired ? JSON.stringify({ motivo: motivo?.trim() }) : undefined
+    });
     if (!res.ok) {
       const err = await res.json();
       alert(err.error ?? "Erro ao excluir");
@@ -1127,9 +1142,9 @@ export function CrudModule({
                   type="button"
                   variant="danger"
                   className="justify-start"
-                  onClick={() => void remove(openActions.item.id)}
+                  onClick={() => void remove(openActions.item)}
                 >
-                  Excluir
+                  {deleteLabel?.(openActions.item) ?? "Excluir"}
                 </Button> : null}
               </div>,
               document.body
