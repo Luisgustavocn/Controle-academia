@@ -109,13 +109,13 @@ export function LayoutShell({ children, user, branding }: PropsWithChildren<{ us
   return (
     <CapabilityProvider capabilities={capabilities}>
     <div className="min-h-screen bg-bg text-ink">
-      <aside className={clsx("fixed inset-y-0 left-0 z-40 hidden overflow-visible border-r border-sidebarLine bg-sidebar text-white md:flex md:w-20 md:flex-col", collapsed ? "xl:w-20" : "xl:w-72")}>
+      <aside className={clsx("fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-sidebarLine bg-sidebar text-white lg:flex lg:w-20 lg:flex-col", collapsed ? "xl:w-20" : "xl:w-72")}>
         <div className={clsx("flex h-16 items-center border-b border-white/10 px-3", collapsed ? "justify-center" : "justify-center xl:justify-start xl:gap-3 xl:px-5")}>
           <Avatar src={branding.logoUrl} name={branding.academyName} alt={branding.academyName} size="sm" className="border-white/20" />
           {!collapsed ? <div className="hidden min-w-0 xl:block"><p className="truncate text-sm font-semibold text-white">{branding.academyName}</p><p className="text-xs text-white/50">Painel de gestão</p></div> : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-visible px-3 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
           <div className={clsx(!collapsed && "xl:hidden")}><ShellNavigation groups={groups} pathname={pathname} compact dense /></div>
           {!collapsed ? <div className="hidden xl:block"><ShellNavigation groups={groups} pathname={pathname} dense /></div> : null}
         </div>
@@ -134,10 +134,10 @@ export function LayoutShell({ children, user, branding }: PropsWithChildren<{ us
         </div>
       </aside>
 
-      <div className={clsx("min-h-screen md:ml-20", collapsed ? "xl:ml-20" : "xl:ml-72")}>
+      <div className={clsx("min-h-screen lg:ml-20", collapsed ? "xl:ml-20" : "xl:ml-72")}>
         <header className="sticky top-0 z-30 flex min-h-[4.75rem] items-center justify-between gap-3 border-b border-line bg-card/95 px-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu principal"><Menu className="h-5 w-5" aria-hidden="true" /></Button>
+            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Abrir menu principal"><Menu className="h-5 w-5" aria-hidden="true" /></Button>
             <div className="min-w-0">
               {current ? <p className="text-xs font-medium text-muted">{current.group}</p> : null}
               <h1 className="truncate text-lg font-semibold tracking-tight text-ink">{current?.label ?? branding.academyName}</h1>

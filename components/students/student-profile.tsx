@@ -17,6 +17,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { Dialog } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MonthlyPaymentDialog, type PayableMonthly } from "@/components/monthlies/monthly-payment-dialog";
@@ -88,6 +89,9 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
   const [endOpen, setEndOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [payingMonthly, setPayingMonthly] = useState<FinancialData["monthly"][number] | null>(null);
+  const [paymentSelectionOpen, setPaymentSelectionOpen] = useState(false);
+  const [attendanceConfirmationOpen, setAttendanceConfirmationOpen] = useState(false);
+  const [registeringAttendance, setRegisteringAttendance] = useState(false);
 
   const student = overview.student;
   const capabilities = overview.capabilities;
@@ -125,6 +129,60 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
     void loadSection(section);
   }
 
+  function todayInAcademy() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: ACADEMY_TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date());
+  }
+
+  async function openPaymentFlow() {
+    setActionMessage("");
+    try {
+      let data = financial;
+      if (!data) {
+        const response = await fetch(`/api/alunos/${student.id}/perfil?section=financial`, { cache: "no-store" });
+        const payload = await response.json() as { data?: FinancialData; error?: string };
+        if (!response.ok || !payload.data) throw new Error(payload.error ?? "Não foi possível carregar as mensalidades");
+        data = payload.data;
+        setFinancial(data);
+      }
+      const eligible = data.monthly.filter((item) => item.balance > 0 && item.status !== "PAGO" && item.status !== "ISENTO");
+      if (eligible.length === 0) {
+        setActionMessage("Este aluno não possui mensalidades elegíveis para pagamento.");
+      } else if (eligible.length === 1) {
+        setPayingMonthly(eligible[0]);
+      } else {
+        setPaymentSelectionOpen(true);
+      }
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Não foi possível carregar as mensalidades.");
+    }
+  }
+
+  async function registerAttendance() {
+    setRegisteringAttendance(true);
+    setActionMessage("");
+    try {
+      const response = await fetch("/api/presencas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alunoId: student.id, data: todayInAcademy(), tipoAula: displayModality })
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string; created?: boolean };
+      if (!response.ok) throw new Error(payload.error ?? "Não foi possível registrar a presença");
+      setAttendanceConfirmationOpen(false);
+      setActionMessage(payload.created === false ? "Presença de hoje já registrada." : "Presença registrada com sucesso.");
+      await Promise.all([fetchOverview(), loadSection("attendance", true)]);
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Não foi possível registrar a presença.");
+    } finally {
+      setRegisteringAttendance(false);
+    }
+  }
+
   async function deleteStudent() {
     if (!window.confirm(`Excluir aluno ${student.name}? Este aluno será removido das listas e operações atuais, mas seu histórico de presenças, mensalidades e pagamentos será preservado.`)) return;
     setActionMessage("");
@@ -150,12 +208,13 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
     return (
       <DropdownMenu trigger={<><MoreHorizontal className="h-4 w-4" aria-hidden="true" /><span>Ações</span></>} label={`Ações de ${student.name}`}>
         {capabilities.edit ? <DropdownMenuItem onSelect={() => setEditOpen(true)}><Edit3 className="mr-2 h-4 w-4" aria-hidden="true" />Editar</DropdownMenuItem> : null}
-        {capabilities.manageFinancial ? <DropdownMenuItem onSelect={() => router.push("/mensalidades")}><CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />Registrar pagamento</DropdownMenuItem> : null}
-        {capabilities.writeAttendance ? <DropdownMenuItem onSelect={() => router.push("/frequencia")}><CalendarCheck2 className="mr-2 h-4 w-4" aria-hidden="true" />Abrir frequência</DropdownMenuItem> : null}
+        {capabilities.manageFinancial ? <DropdownMenuItem onSelect={() => void openPaymentFlow()}><CreditCard className="mr-2 h-4 w-4" aria-hidden="true" />Registrar pagamento</DropdownMenuItem> : null}
+        {capabilities.writeAttendance && !student.archivedAt && student.activeEnrollment ? <DropdownMenuItem disabled={attendanceRegisteredToday} onSelect={() => setAttendanceConfirmationOpen(true)}><CalendarCheck2 className="mr-2 h-4 w-4" aria-hidden="true" />{attendanceRegisteredToday ? "Presença de hoje já registrada" : "Registrar frequência"}</DropdownMenuItem> : null}
         {capabilities.changeStatus ? <DropdownMenuSeparator /> : null}
         {capabilities.reactivate ? <DropdownMenuItem onSelect={() => setResumeOpen(true)}>Retomar matrícula</DropdownMenuItem> : null}
         {capabilities.changeStatus && student.activeEnrollment ? <DropdownMenuItem destructive onSelect={() => setEndOpen(true)}>Encerrar matrícula</DropdownMenuItem> : null}
-        {capabilities.delete ? <><DropdownMenuSeparator />{student.archivedAt ? <DropdownMenuItem onSelect={() => void restoreArchivedStudent()}>Restaurar aluno</DropdownMenuItem> : <DropdownMenuItem destructive onSelect={() => void deleteStudent()}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Excluir aluno</DropdownMenuItem>}</> : null}
+        {capabilities.delete ? <DropdownMenuSeparator /> : null}
+        {capabilities.delete ? (student.archivedAt ? <DropdownMenuItem onSelect={() => void restoreArchivedStudent()}>Restaurar aluno</DropdownMenuItem> : <DropdownMenuItem destructive onSelect={() => void deleteStudent()}><Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />Excluir aluno</DropdownMenuItem>) : null}
       </DropdownMenu>
     );
   }
@@ -166,6 +225,8 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
   const displayModality = enrollment?.modality?.name ?? student.modality?.name ?? "Sem modalidade";
   const displayStatus = student.activeEnrollment ? "Ativo" : student.status === "ATIVO" ? "Inativo" : (STATUS_LABEL[student.status] ?? "Inativo");
   const financialLabel = financialSummary ? ({ EM_DIA: "Em dia", EM_ATRASO: "Em atraso", PARCIAL: "Parcial", SEM_PENDENCIAS: "Sem pendências", COM_PENDENCIA: "Com pendência" } as const)[financialSummary.status] : null;
+  const attendanceRegisteredToday = attendanceSummary?.lastAttendanceAt === todayInAcademy();
+  const actionSucceeded = actionMessage.includes("sucesso") || actionMessage.includes("já registrada");
 
   return (
     <div className="space-y-5">
@@ -184,7 +245,7 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
           </div>
         </div>
       </Card>
-      {actionMessage ? <p role="alert" className="rounded-ds-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-semibold text-danger">{actionMessage}</p> : null}
+      {actionMessage ? <p role="status" className={actionSucceeded ? "rounded-ds-lg border border-success/30 bg-success/5 px-4 py-3 text-sm font-semibold text-success" : "rounded-ds-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-semibold text-danger"}>{actionMessage}</p> : null}
 
       <section aria-labelledby="student-summary-title">
         <h2 id="student-summary-title" className="sr-only">Resumo operacional</h2>
@@ -243,6 +304,39 @@ export function StudentProfile({ initialOverview, returnTo }: { initialOverview:
         monthly={payingMonthly ? ({ ...payingMonthly, studentName: student.name } satisfies PayableMonthly) : null}
         onSaved={async () => { setPayingMonthly(null); await Promise.all([fetchOverview(), loadSection("financial", true)]); }}
       />
+      <Dialog
+        open={attendanceConfirmationOpen}
+        onOpenChange={(open) => { if (!registeringAttendance) setAttendanceConfirmationOpen(open); }}
+        title="Registrar frequência"
+        description="Confirme a presença de hoje antes de continuar."
+        footer={<><Button variant="ghost" disabled={registeringAttendance} onClick={() => setAttendanceConfirmationOpen(false)}>Cancelar</Button><Button loading={registeringAttendance} onClick={() => void registerAttendance()}>Confirmar presença</Button></>}
+      >
+        <dl className="grid gap-3 rounded-ds-lg border border-line bg-surface/60 p-4 text-sm sm:grid-cols-2">
+          <div><dt className="text-muted">Aluno</dt><dd className="mt-1 font-semibold text-ink">{student.name}</dd></div>
+          <div><dt className="text-muted">Data</dt><dd className="mt-1 font-semibold text-ink">{civilDateLabel(todayInAcademy())}</dd></div>
+          <div className="sm:col-span-2"><dt className="text-muted">Modalidade</dt><dd className="mt-1 font-semibold text-ink">{displayModality}</dd></div>
+        </dl>
+      </Dialog>
+      <Dialog
+        open={paymentSelectionOpen}
+        onOpenChange={setPaymentSelectionOpen}
+        title="Registrar pagamento"
+        description={`Selecione uma mensalidade de ${student.name}.`}
+      >
+        <div className="space-y-2">
+          {financial?.monthly.filter((item) => item.balance > 0 && item.status !== "PAGO" && item.status !== "ISENTO").map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => { setPaymentSelectionOpen(false); setPayingMonthly(item); }}
+              className="flex w-full flex-col gap-2 rounded-ds-lg border border-line p-4 text-left transition hover:border-accent hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span><span className="block font-semibold text-ink">Competência {item.competence}</span><span className="mt-1 block text-helper text-muted">Vencimento {date(item.dueAt)} · original {currency(item.originalValue)} · pago {currency(item.totalPaid)}</span></span>
+              <span className="shrink-0"><span className="block text-helper text-muted">Saldo</span><strong className="text-ink">{currency(item.balance)}</strong></span>
+            </button>
+          ))}
+        </div>
+      </Dialog>
       <ResumeEnrollmentDialog open={resumeOpen} onOpenChange={setResumeOpen} student={student} onResumed={async () => { await fetchOverview(); setHistory(null); }} />
       <EndEnrollmentDialog open={endOpen} onOpenChange={setEndOpen} studentId={student.id} onEnded={async () => { await fetchOverview(); setHistory(null); }} />
     </div>

@@ -138,3 +138,55 @@ test("tabs remain keyboard accessible", async () => {
   await user.keyboard("{ArrowRight}");
   assert.equal(screen.getByRole("tab", { name: "Financeiro" }).getAttribute("aria-selected"), "true");
 });
+
+test("attendance is confirmed inside the profile and refreshes its data", async () => {
+  const user = userEvent.setup({ document });
+  const attendanceBodies: Array<Record<string, unknown>> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/presencas") {
+      attendanceBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(JSON.stringify({ created: true, item: { id: "attendance-1" } }), { status: 201, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("section=attendance")) {
+      return new Response(JSON.stringify({ data: { items: [{ id: "attendance-1", date: "2026-10-20", time: null, classType: "Musculação" }], periodDays: 60, hasMore: false } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ data: overview("ADMIN") }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  renderProfile(overview("ADMIN"));
+  await user.click(screen.getByRole("button", { name: /Ações de Ana Teste/ }));
+  await user.click(screen.getByRole("menuitem", { name: /Registrar frequência/ }));
+  assert.ok(screen.getByRole("dialog", { name: "Registrar frequência" }));
+  await user.click(screen.getByRole("button", { name: "Confirmar presença" }));
+  await waitFor(() => assert.ok(screen.getByText("Presença registrada com sucesso.")));
+  assert.equal(attendanceBodies[0]?.alunoId, "student-1");
+  assert.equal(attendanceBodies[0]?.tipoAula, "Musculação");
+  assert.match(String(attendanceBodies[0]?.data), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("payment action selects among the student's eligible monthly fees without navigation", async () => {
+  const user = userEvent.setup({ document });
+  const monthly = (id: string, competence: string) => ({
+    id, competence, value: 120, originalValue: 120, finalValue: null, adjustmentReason: null,
+    totalPaid: 20, balance: 100, dueAt: `${competence}-10T03:00:00.000Z`, paidAt: null,
+    paymentMethod: null, status: "PARCIAL"
+  });
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("section=financial")) {
+      return new Response(JSON.stringify({ data: { monthly: [monthly("m-1", "2026-10"), monthly("m-2", "2026-09")], payments: [], limits: { monthly: 12, payments: 12 } } }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (url.includes("/api/formas-pagamento")) {
+      return new Response(JSON.stringify({ items: [{ id: "cash", nome: "Dinheiro", ativo: true }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500, headers: { "Content-Type": "application/json" } });
+  };
+  renderProfile(overview("ADMIN"));
+  await user.click(screen.getByRole("button", { name: /Ações de Ana Teste/ }));
+  await user.click(screen.getByRole("menuitem", { name: /Registrar pagamento/ }));
+  assert.ok(await screen.findByRole("dialog", { name: "Registrar pagamento" }));
+  await user.click(screen.getByRole("button", { name: /Competência 2026-10/ }));
+  assert.ok(await screen.findByRole("dialog", { name: "Dar baixa na mensalidade" }));
+  assert.ok(screen.getAllByText(/Ana Teste/).length >= 1);
+  assert.ok(screen.getAllByText(/2026-10/).length >= 1);
+});
