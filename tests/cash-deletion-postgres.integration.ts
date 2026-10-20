@@ -7,7 +7,7 @@ import {
   UserRole
 } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { CashDeletionError, deleteCashMovement } from "../lib/services/cash-deletion";
+import { CashDeletionError, deleteCashMovement, deleteLegacyCashMovement } from "../lib/services/cash-deletion";
 import { createExpense } from "../lib/services/expense-payments";
 import { registerMonthlyPayment } from "../lib/services/monthly-payments";
 
@@ -56,7 +56,23 @@ async function main() {
     await prisma.movimentacaoCaixa.create({ data: { id: unknownId, data: new Date(), tipo: TipoMovimentacao.SAIDA, descricao: "Legado", valor: 5, competencia: "2026-10" } });
     await assert.rejects(() => deleteCashMovement({ movementId: unknownId, reason: "Teste legado", actorId }), (error: unknown) => error instanceof CashDeletionError && error.status === 409);
     assert.equal(await prisma.movimentacaoCaixa.count({ where: { id: unknownId } }), 1);
-    console.log(JSON.stringify({ status: "ok", manual: true, payment: true, expense: true, order: true, legacyBlocked: true }));
+    const beforeLegacy = {
+      monthly: await prisma.mensalidade.count(),
+      payments: await prisma.pagamento.count(),
+      expenses: await prisma.despesaAcademia.count(),
+      orders: await prisma.pedidoProduto.count()
+    };
+    await deleteLegacyCashMovement({ movementId: unknownId, reason: "Exclusão administrativa controlada", actorId });
+    assert.equal(await prisma.movimentacaoCaixa.count({ where: { id: unknownId } }), 0);
+    assert.deepEqual({
+      monthly: await prisma.mensalidade.count(),
+      payments: await prisma.pagamento.count(),
+      expenses: await prisma.despesaAcademia.count(),
+      orders: await prisma.pedidoProduto.count()
+    }, beforeLegacy);
+    assert.equal(await prisma.logAuditoria.count({ where: { userId: actorId, acao: "DELETE_LEGACY_CASH", entidadeId: unknownId } }), 1);
+    await assert.rejects(() => deleteLegacyCashMovement({ movementId: unknownId, reason: "Repetição", actorId }), (error: unknown) => error instanceof CashDeletionError && error.status === 404);
+    console.log(JSON.stringify({ status: "ok", manual: true, payment: true, expense: true, order: true, legacyBlocked: true, legacyAdminDeleted: true }));
   } finally {
     await prisma.logAuditoria.deleteMany({ where: { userId: actorId } });
     await prisma.movimentacaoCaixa.deleteMany({ where: { OR: [{ id: { in: [manualId, unknownId, `auto_pedido_${orderId}`] } }, { mensalidadeId: monthlyId }, ...(expenseId ? [{ despesaAcademiaId: expenseId }] : [])] } });

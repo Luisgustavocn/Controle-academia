@@ -5,7 +5,7 @@ import { requireCapability } from "@/lib/auth/guards";
 import { toCompetencia } from "@/lib/competencia";
 import { fail, ok } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
-import { CashDeletionError, deleteCashMovement } from "@/lib/services/cash-deletion";
+import { CashDeletionError, deleteCashMovement, deleteLegacyCashMovement } from "@/lib/services/cash-deletion";
 import { isAutoCaixaEntryId } from "@/lib/services/caixa";
 import { resolvePaymentMethodForWrite } from "@/lib/services/payment-methods";
 
@@ -161,16 +161,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const auth = requireCapability(request, "finance.cash.manage");
+  const forceLegacy = request.nextUrl.searchParams.get("forceLegacy") === "true";
+  const auth = requireCapability(request, forceLegacy ? "finance.cash.legacy.delete" : "finance.cash.manage");
   if (auth instanceof Response) return auth;
 
   const { id } = await context.params;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   try {
-    const result = await deleteCashMovement({ movementId: id, reason: String(body.motivo ?? ""), actorId: auth.id });
+    if (forceLegacy && body.confirmacao !== true) return fail("Confirmação explícita é obrigatória", 400);
+    const input = { movementId: id, reason: String(body.motivo ?? ""), actorId: auth.id };
+    const result = forceLegacy ? await deleteLegacyCashMovement(input) : await deleteCashMovement(input);
     return ok({ ok: true, ...result });
   } catch (error) {
-    if (error instanceof CashDeletionError) return fail(error.message, error.status);
+    if (error instanceof CashDeletionError) return fail(error.message, error.status, error.code ? { code: error.code } : undefined);
     return fail("Não foi possível excluir o lançamento com segurança.", 500);
   }
 }

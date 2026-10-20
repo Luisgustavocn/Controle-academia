@@ -27,6 +27,8 @@ test.after(() => {
 test("role capability matrix prevents numeric inheritance", () => {
   assert.equal(hasCapability("ADMIN", "settings.manage"), true);
   assert.equal(hasCapability("FINANCEIRO", "finance.cash.manage"), true);
+  assert.equal(hasCapability("ADMIN", "finance.cash.legacy.delete"), true);
+  assert.equal(hasCapability("FINANCEIRO", "finance.cash.legacy.delete"), false);
   assert.equal(hasCapability("FINANCEIRO", "attendance.write"), false);
   assert.equal(hasCapability("ADMIN", "students.delete"), true);
   assert.equal(hasCapability("RECEPCAO", "students.delete"), false);

@@ -15,7 +15,7 @@ const MONTHLY_PREFIX = "auto_mensalidade_";
 const ORDER_PREFIX = "auto_pedido_";
 
 export class CashDeletionError extends Error {
-  constructor(message: string, readonly status = 409) {
+  constructor(message: string, readonly status = 409, readonly code?: string) {
     super(message);
   }
 }
@@ -148,10 +148,19 @@ async function operation(tx: Prisma.TransactionClient, input: Input) {
     case MovimentacaoCaixaOrigem.IMPORTACAO:
       throw new CashDeletionError("Lançamentos importados não podem ser excluídos automaticamente nesta etapa.");
     case null:
-      if (movement.id.startsWith(PAYMENT_PREFIX)) return reversePayment(tx, movement, movement.id.slice(PAYMENT_PREFIX.length), input);
-      if (movement.id.startsWith(MONTHLY_PREFIX)) return reverseLegacyMonthly(tx, movement, movement.id.slice(MONTHLY_PREFIX.length), input);
-      if (movement.id.startsWith(ORDER_PREFIX)) return reverseOrder(tx, movement, movement.id.slice(ORDER_PREFIX.length), input);
-      throw new CashDeletionError("Este lançamento é anterior ao rastreamento de origem e não pode ser excluído automaticamente com segurança.");
+      if (movement.id.startsWith(PAYMENT_PREFIX)) {
+        const id = movement.id.slice(PAYMENT_PREFIX.length);
+        if (await tx.pagamento.findUnique({ where: { id }, select: { id: true } })) return reversePayment(tx, movement, id, input);
+      }
+      if (movement.id.startsWith(MONTHLY_PREFIX)) {
+        const id = movement.id.slice(MONTHLY_PREFIX.length);
+        if (await tx.mensalidade.findUnique({ where: { id }, select: { id: true } })) return reverseLegacyMonthly(tx, movement, id, input);
+      }
+      if (movement.id.startsWith(ORDER_PREFIX)) {
+        const id = movement.id.slice(ORDER_PREFIX.length);
+        if (await tx.pedidoProduto.findUnique({ where: { id }, select: { id: true } })) return reverseOrder(tx, movement, id, input);
+      }
+      throw new CashDeletionError("Este lançamento é anterior ao rastreamento de origem e não possui vínculo automático identificável.", 409, "LEGACY_UNIDENTIFIED");
   }
 }
 
@@ -161,6 +170,59 @@ export async function deleteCashMovement(input: Input) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await prisma.$transaction((tx) => operation(tx, { ...input, reason }), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2034" || attempt === 2) throw error;
+    }
+  }
+  throw new CashDeletionError("Não foi possível concluir a exclusão concorrente.");
+}
+
+async function legacyOperation(tx: Prisma.TransactionClient, input: Input) {
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "MovimentacaoCaixa" WHERE "id" = ${input.movementId} FOR UPDATE`);
+  const movement = await tx.movimentacaoCaixa.findUnique({ where: { id: input.movementId } });
+  if (!movement) throw new CashDeletionError("Movimentação não encontrada", 404);
+  if (movement.origem || movement.pagamentoId || movement.mensalidadeId || movement.despesaAcademiaId || movement.pedidoProdutoId) {
+    throw new CashDeletionError("Este lançamento possui origem ou vínculo conhecido e deve usar a reversão financeira normal.");
+  }
+
+  if (movement.id.startsWith(PAYMENT_PREFIX)) {
+    const payment = await tx.pagamento.findUnique({ where: { id: movement.id.slice(PAYMENT_PREFIX.length) }, select: { id: true } });
+    if (payment) throw new CashDeletionError("Pagamento reconhecido deve usar a reversão financeira normal.");
+  }
+  if (movement.id.startsWith(MONTHLY_PREFIX)) {
+    const monthly = await tx.mensalidade.findUnique({ where: { id: movement.id.slice(MONTHLY_PREFIX.length) }, select: { id: true } });
+    if (monthly) throw new CashDeletionError("Mensalidade reconhecida deve usar a reversão financeira normal.");
+  }
+  if (movement.id.startsWith(ORDER_PREFIX)) {
+    const order = await tx.pedidoProduto.findUnique({ where: { id: movement.id.slice(ORDER_PREFIX.length) }, select: { id: true } });
+    if (order) throw new CashDeletionError("Pedido reconhecido deve usar a reversão financeira normal.");
+  }
+
+  await logAudit({
+    userId: input.actorId,
+    modulo: "caixa",
+    entidade: "MovimentacaoCaixa",
+    entidadeId: movement.id,
+    acao: "DELETE_LEGACY_CASH",
+    antes: movement,
+    depois: {
+      removidoSomenteDoCaixa: true,
+      origemAnterior: null,
+      exclusaoAdministrativa: true,
+      motivo: input.reason,
+      solicitadoEm: new Date().toISOString()
+    }
+  }, tx);
+  await tx.movimentacaoCaixa.delete({ where: { id: movement.id } });
+  return { action: "DELETE_LEGACY_CASH" };
+}
+
+export async function deleteLegacyCashMovement(input: Input) {
+  const reason = input.reason.trim();
+  if (!reason) throw new CashDeletionError("Motivo é obrigatório", 400);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction((tx) => legacyOperation(tx, { ...input, reason }), { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2034" || attempt === 2) throw error;
     }

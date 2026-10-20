@@ -255,6 +255,8 @@ export default function CaixaPage() {
         updateCapability="finance.cash.manage"
         deleteCapability="finance.cash.manage"
         deleteReasonRequired
+        legacyDeleteCapability="finance.cash.legacy.delete"
+        isLegacyDelete={(item) => item.origem == null && !item.pagamentoId && !item.mensalidadeId && !item.despesaAcademiaId && !item.pedidoProdutoId && !String(item.id).startsWith("auto_pagamento_") && !String(item.id).startsWith("auto_mensalidade_") && !String(item.id).startsWith("auto_pedido_")}
         deleteLabel={(item) => {
           if (item.origem === "PAGAMENTO_MENSALIDADE" || item.pagamentoId || String(item.id).startsWith("auto_pagamento_") || String(item.id).startsWith("auto_mensalidade_")) return "Desfazer pagamento";
           if (item.origem === "DESPESA") return "Desfazer pagamento da despesa";

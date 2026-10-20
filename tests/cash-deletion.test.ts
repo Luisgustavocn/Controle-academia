@@ -87,3 +87,23 @@ test("auditoria e interface contextual substituem o bloqueio genérico", () => {
   assert.match(crud, /deleteReasonRequired/);
   assert.doesNotMatch(route, /ajuste compensatório/i);
 });
+
+test("exclusão administrativa de legado exige intenção forte e capability exclusiva", () => {
+  const service = read("lib/services/cash-deletion.ts");
+  const route = read("app/api/caixa/[id]/route.ts");
+  const page = read("app/caixa/page.tsx");
+  const crud = read("components/forms/crud-module.tsx");
+  const capabilities = read("lib/auth/capabilities.ts");
+  assert.match(service, /DELETE_LEGACY_CASH/);
+  assert.match(service, /origemAnterior: null/);
+  assert.match(service, /removidoSomenteDoCaixa: true/);
+  assert.match(route, /forceLegacy/);
+  assert.match(route, /finance\.cash\.legacy\.delete/);
+  assert.match(route, /Confirmação explícita é obrigatória/);
+  assert.match(page, /legacyDeleteCapability="finance\.cash\.legacy\.delete"/);
+  assert.match(crud, /Entendo que somente o lançamento do Caixa será removido/);
+  assert.match(crud, /Motivo da exclusão/);
+  assert.match(capabilities, /"finance\.cash\.legacy\.delete"/);
+  const financeiroBlock = capabilities.match(/FINANCEIRO:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
+  assert.doesNotMatch(financeiroBlock, /finance\.cash\.legacy\.delete/);
+});

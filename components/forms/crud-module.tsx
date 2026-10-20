@@ -39,6 +39,8 @@ type CrudModuleProps = {
   deleteLabel?: (item: Record<string, unknown>) => string;
   deleteConfirmation?: (item: Record<string, unknown>) => string;
   deleteReasonRequired?: boolean;
+  legacyDeleteCapability?: Capability;
+  isLegacyDelete?: (item: Record<string, unknown>) => boolean;
 };
 
 type LookupConfig = {
@@ -371,11 +373,14 @@ export function CrudModule({
   deleteCapability,
   deleteLabel,
   deleteConfirmation,
-  deleteReasonRequired = false
+  deleteReasonRequired = false,
+  legacyDeleteCapability,
+  isLegacyDelete
 }: CrudModuleProps) {
   const canCreate = useHasCapability(createCapability);
   const canUpdate = useHasCapability(updateCapability);
   const canDelete = useHasCapability(deleteCapability);
+  const canDeleteLegacy = useHasCapability(legacyDeleteCapability);
   const hasRowActions = canUpdate || canDelete;
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
@@ -394,6 +399,11 @@ export function CrudModule({
   const [lookupError, setLookupError] = useState<Record<string, string>>({});
   const [lookupSearch, setLookupSearch] = useState<Record<string, string>>({});
   const [openActions, setOpenActions] = useState<RowActionsMenuState | null>(null);
+  const [legacyDeleteItem, setLegacyDeleteItem] = useState<Record<string, unknown> | null>(null);
+  const [legacyDeleteReason, setLegacyDeleteReason] = useState("");
+  const [legacyDeleteAcknowledged, setLegacyDeleteAcknowledged] = useState(false);
+  const [legacyDeleteError, setLegacyDeleteError] = useState("");
+  const [legacyDeleteLoading, setLegacyDeleteLoading] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const firstListFetchRef = useRef(true);
@@ -881,13 +891,46 @@ export function CrudModule({
       body: deleteReasonRequired ? JSON.stringify({ motivo: motivo?.trim() }) : undefined
     });
     if (!res.ok) {
-      const err = await res.json();
+      const err = (await res.json()) as { error?: string; code?: string };
+      if (err.code === "LEGACY_UNIDENTIFIED" && canDeleteLegacy) {
+        setLegacyDeleteItem(item);
+        setLegacyDeleteReason("");
+        setLegacyDeleteAcknowledged(false);
+        setLegacyDeleteError("");
+        setOpenActions(null);
+        return;
+      }
       alert(err.error ?? "Erro ao excluir");
       return;
     }
     await fetchItems();
     await notifyDataChanged();
     setOpenActions(null);
+  }
+
+  async function removeLegacy() {
+    if (!legacyDeleteItem || !legacyDeleteReason.trim() || !legacyDeleteAcknowledged) return;
+    setLegacyDeleteLoading(true);
+    setLegacyDeleteError("");
+    try {
+      const response = await fetch(`${endpoint}/${String(legacyDeleteItem.id)}?forceLegacy=true`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: legacyDeleteReason.trim(), confirmacao: true })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        setLegacyDeleteError(payload.error ?? "Não foi possível excluir o lançamento legado");
+        return;
+      }
+      setLegacyDeleteItem(null);
+      setLegacyDeleteReason("");
+      setLegacyDeleteAcknowledged(false);
+      await fetchItems();
+      await notifyDataChanged();
+    } finally {
+      setLegacyDeleteLoading(false);
+    }
   }
 
   async function patchItem(id: unknown, data: Record<string, unknown>) {
@@ -1138,7 +1181,7 @@ export function CrudModule({
                   </Button>
                 ) : null}
 
-                {canDelete ? <Button
+                {canDelete && !isLegacyDelete?.(openActions.item) ? <Button
                   type="button"
                   variant="danger"
                   className="justify-start"
@@ -1146,12 +1189,59 @@ export function CrudModule({
                 >
                   {deleteLabel?.(openActions.item) ?? "Excluir"}
                 </Button> : null}
+                {canDeleteLegacy && isLegacyDelete?.(openActions.item) ? <Button
+                  type="button"
+                  variant="danger"
+                  className="justify-start"
+                  onClick={() => {
+                    setLegacyDeleteItem(openActions.item);
+                    setLegacyDeleteReason("");
+                    setLegacyDeleteAcknowledged(false);
+                    setLegacyDeleteError("");
+                    setOpenActions(null);
+                  }}
+                >
+                  Excluir lançamento legado
+                </Button> : null}
               </div>,
               document.body
             )
           : null}
 
       </Card>
+
+      {legacyDeleteItem ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[rgba(20,14,17,0.68)] p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="legacy-delete-title">
+          <Card className="w-full max-w-xl space-y-5 p-6">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-danger">Ação administrativa</p>
+              <h3 id="legacy-delete-title" className="mt-1 text-xl font-black text-ink">Excluir lançamento legado?</h3>
+              <p className="mt-2 text-sm text-muted">Este lançamento não possui origem vinculada no sistema antigo. A exclusão removerá somente o lançamento do Caixa. Nenhuma mensalidade, pagamento, despesa ou venda será alterada automaticamente.</p>
+              <p className="mt-2 text-sm font-semibold text-ink">Use esta opção somente quando tiver certeza de que o lançamento deve ser removido.</p>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 rounded-xl bg-surfaceSoft p-4 text-sm">
+              <div><dt className="text-muted">Valor</dt><dd className="font-semibold text-ink">{toCurrency(legacyDeleteItem.valor)}</dd></div>
+              <div><dt className="text-muted">Tipo</dt><dd className="font-semibold text-ink">{normalizeValue(legacyDeleteItem.tipo)}</dd></div>
+              <div><dt className="text-muted">Data</dt><dd className="font-semibold text-ink">{normalizeValue(legacyDeleteItem.data)}</dd></div>
+              <div><dt className="text-muted">Categoria</dt><dd className="font-semibold text-ink">{normalizeValue((legacyDeleteItem.categoria as { nome?: unknown } | null)?.nome)}</dd></div>
+              <div className="col-span-2"><dt className="text-muted">Descrição</dt><dd className="font-semibold text-ink">{normalizeValue(legacyDeleteItem.descricao)}</dd></div>
+            </dl>
+            <label className="block text-sm font-semibold text-ink">
+              Motivo da exclusão
+              <textarea className="mt-2 min-h-24 w-full rounded-xl border border-line bg-white p-3 font-normal outline-none focus:border-accent focus:ring-2 focus:ring-accent/20" value={legacyDeleteReason} onChange={(event) => setLegacyDeleteReason(event.target.value)} required />
+            </label>
+            <label className="flex items-start gap-3 text-sm text-ink">
+              <input type="checkbox" className="mt-1 h-4 w-4" checked={legacyDeleteAcknowledged} onChange={(event) => setLegacyDeleteAcknowledged(event.target.checked)} />
+              <span>Entendo que somente o lançamento do Caixa será removido.</span>
+            </label>
+            {legacyDeleteError ? <p role="alert" className="text-sm font-semibold text-danger">{legacyDeleteError}</p> : null}
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="secondary" disabled={legacyDeleteLoading} onClick={() => setLegacyDeleteItem(null)}>Cancelar</Button>
+              <Button type="button" variant="danger" loading={legacyDeleteLoading} disabled={!legacyDeleteReason.trim() || !legacyDeleteAcknowledged} onClick={() => void removeLegacy()}>Excluir lançamento legado</Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       {formOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(20,14,17,0.62)] p-4 backdrop-blur-[2px]">

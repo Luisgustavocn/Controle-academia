@@ -16,6 +16,7 @@ export const CAPABILITIES = [
   "finance.monthlies.manage",
   "finance.cash.read",
   "finance.cash.manage",
+  "finance.cash.legacy.delete",
   "finance.expenses.read",
   "finance.expenses.manage",
   "products.read",
